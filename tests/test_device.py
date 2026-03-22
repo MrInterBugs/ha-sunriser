@@ -118,6 +118,82 @@ async def test_read_pwm_config(session):
 
 
 # ---------------------------------------------------------------------------
+# Maintenance mode
+# ---------------------------------------------------------------------------
+
+async def _put_state(session, payload: dict) -> tuple[int, dict | str]:
+    """PUT /state helper — returns (status_code, decoded_body)."""
+    body = msgpack.packb(payload, use_bin_type=True)
+    async with session.put(
+        f"{BASE_URL}/state",
+        data=body,
+        headers={"Content-Type": "application/x-msgpack"},
+        timeout=TIMEOUT,
+    ) as resp:
+        raw = await resp.read()
+        try:
+            decoded = msgpack.unpackb(raw, raw=False)
+        except Exception:
+            decoded = raw.decode(errors="replace")
+        return resp.status, decoded
+
+
+async def _get_service_mode(session) -> object:
+    async with session.get(f"{BASE_URL}/state", timeout=TIMEOUT) as resp:
+        state = msgpack.unpackb(await resp.read(), raw=False)
+    return state.get("service_mode")
+
+
+@pytest.mark.asyncio
+async def test_maintenance_mode_integer(session):
+    """Enable maintenance mode with integer 1, disable with integer 0.
+
+    The device initialises service_mode as integer 0 so it likely expects
+    integers rather than msgpack booleans.
+    """
+    initial = await _get_service_mode(session)
+    print(f"\nservice_mode before: {initial!r}")
+
+    # Enable with integer 1
+    status, body = await _put_state(session, {"service_mode": 1})
+    print(f"PUT service_mode=1 → {status} {body!r}")
+    assert status == 200, f"Enable failed with {status}: {body}"
+
+    after_on = await _get_service_mode(session)
+    print(f"service_mode after enable: {after_on!r}")
+    assert after_on, f"Expected truthy service_mode after enable, got {after_on!r}"
+
+    # Disable with integer 0
+    status, body = await _put_state(session, {"service_mode": 0})
+    print(f"PUT service_mode=0 → {status} {body!r}")
+    assert status == 200, f"Disable failed with {status}: {body}"
+
+    after_off = await _get_service_mode(session)
+    print(f"service_mode after disable: {after_off!r}")
+    assert not after_off, f"Expected falsy service_mode after disable, got {after_off!r}"
+
+
+@pytest.mark.asyncio
+async def test_maintenance_mode_boolean(session):
+    """Try enabling maintenance mode with msgpack boolean True.
+
+    This may return 500 on real firmware — if so, use integers instead.
+    """
+    status, body = await _put_state(session, {"service_mode": True})
+    print(f"\nPUT service_mode=True → {status} {body!r}")
+
+    if status == 500:
+        # Disable cleanly if somehow it got set
+        await _put_state(session, {"service_mode": 0})
+        pytest.skip("Device returned 500 for boolean — use integers (see test_maintenance_mode_integer)")
+
+    assert status == 200
+
+    # Clean up
+    await _put_state(session, {"service_mode": 0})
+
+
+# ---------------------------------------------------------------------------
 # Sensor read
 # ---------------------------------------------------------------------------
 

@@ -122,7 +122,8 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         When disabled it stores 0.
         """
         session = self._get_session()
-        body = msgpack.packb({"service_mode": enabled}, use_bin_type=True)
+        # Device expects integer 1/0 — msgpack boolean True causes a 500.
+        body = msgpack.packb({"service_mode": 1 if enabled else 0}, use_bin_type=True)
         async with session.put(
             f"{self.base_url}/state",
             data=body,
