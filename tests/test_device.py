@@ -64,6 +64,8 @@ async def test_read_config(session):
         for k, v in result.items():
             print(f"  {k}: {v!r}")
         assert "pwm_count" in result, "pwm_count missing from config response"
+        assert "save_version" in result, "save_version missing (used for firmware version sensor)"
+        assert "hostname" in result, "hostname missing (used for hostname sensor)"
 
 
 # ---------------------------------------------------------------------------
@@ -81,6 +83,7 @@ async def test_read_state(session):
         for k, v in result.items():
             print(f"  {k}: {v!r}")
         assert "pwms" in result, "pwms key missing from state response"
+        assert "uptime" in result, "uptime missing from state (used for uptime sensor)"
 
 
 # ---------------------------------------------------------------------------
@@ -183,8 +186,12 @@ async def test_maintenance_mode_boolean(session):
     print(f"\nPUT service_mode=True → {status} {body!r}")
 
     if status == 500:
-        # Disable cleanly if somehow it got set
-        await _put_state(session, {"service_mode": 0})
+        # Device resets the TCP connection after a 500, so the cleanup call may
+        # also fail — ignore errors here and skip the test regardless.
+        try:
+            await _put_state(session, {"service_mode": 0})
+        except Exception:
+            pass
         pytest.skip("Device returned 500 for boolean — use integers (see test_maintenance_mode_integer)")
 
     assert status == 200

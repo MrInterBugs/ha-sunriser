@@ -3,7 +3,6 @@ from __future__ import annotations
 from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -49,13 +48,7 @@ class SunRiserLight(CoordinatorEntity[SunRiserCoordinator], LightEntity):
         self._pwm_num = pwm_num
         self._attr_unique_id = f"{entry.entry_id}_pwm_{pwm_num}"
         self._attr_name = coordinator.pwm_name(pwm_num)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=coordinator.config.get("name") or coordinator.host,
-            model=coordinator.config.get("model"),
-            sw_version=coordinator.config.get("save_version"),
-            manufacturer="LEDaquaristik",
-        )
+        self._attr_device_info = coordinator.device_info
 
     @property
     def is_on(self) -> bool:

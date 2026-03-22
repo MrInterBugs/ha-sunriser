@@ -8,7 +8,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -27,7 +27,11 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunRiserCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities: list[SensorEntity] = [SunRiserUptimeSensor(coordinator, entry)]
+    entities: list[SensorEntity] = [
+        SunRiserUptimeSensor(coordinator),
+        SunRiserFirmwareSensor(coordinator),
+        SunRiserHostnameSensor(coordinator),
+    ]
 
     # Add temperature sensors discovered in the initial state poll.
     if coordinator.data and coordinator.data.get("sensors"):
@@ -39,16 +43,6 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-def _device_info(coordinator: SunRiserCoordinator, entry: ConfigEntry) -> DeviceInfo:
-    return DeviceInfo(
-        identifiers={(DOMAIN, entry.entry_id)},
-        name=coordinator.config.get("name") or coordinator.host,
-        model=coordinator.config.get("model"),
-        sw_version=coordinator.config.get("save_version"),
-        manufacturer="LEDaquaristik",
-    )
-
-
 class SunRiserUptimeSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity):
     """Device uptime in seconds."""
 
@@ -57,17 +51,54 @@ class SunRiserUptimeSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity)
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = "s"
     _attr_icon = "mdi:timer-outline"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(self, coordinator: SunRiserCoordinator, entry: ConfigEntry) -> None:
+    def __init__(self, coordinator: SunRiserCoordinator) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = f"{entry.entry_id}_uptime"
-        self._attr_device_info = _device_info(coordinator, entry)
+        self._attr_unique_id = f"{coordinator._entry_id}_uptime"
+        self._attr_device_info = coordinator.device_info
 
     @property
     def native_value(self) -> int | None:
         if self.coordinator.data is None:
             return None
         return self.coordinator.data.get("uptime")
+
+
+class SunRiserFirmwareSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity):
+    """Firmware version reported by the device."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Firmware Version"
+    _attr_icon = "mdi:chip"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: SunRiserCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator._entry_id}_firmware"
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    def native_value(self) -> str | None:
+        return self.coordinator.config.get("save_version") or None
+
+
+class SunRiserHostnameSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity):
+    """Hostname configured on the device."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Hostname"
+    _attr_icon = "mdi:network"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: SunRiserCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator._entry_id}_hostname"
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    def native_value(self) -> str | None:
+        return self.coordinator.config.get("hostname") or None
 
 
 class SunRiserTemperatureSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity):
@@ -88,7 +119,7 @@ class SunRiserTemperatureSensor(CoordinatorEntity[SunRiserCoordinator], SensorEn
         self._rom = rom
         self._attr_unique_id = f"{entry.entry_id}_sensor_{rom}"
         self._attr_name = coordinator.sensor_name(rom)
-        self._attr_device_info = _device_info(coordinator, entry)
+        self._attr_device_info = coordinator.device_info
 
     @property
     def native_value(self) -> float | None:

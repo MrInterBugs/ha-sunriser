@@ -9,9 +9,10 @@ import msgpack
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import COLOR_NAMES, DEFAULT_PORT, DEFAULT_SCAN_INTERVAL, DOMAIN, PWM_MAX
+from .const import COLOR_NAMES, CONF_SCAN_INTERVAL, DEFAULT_PORT, DEFAULT_SCAN_INTERVAL, DOMAIN, PWM_MAX
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -20,12 +21,14 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
     """Coordinator that polls /state and holds device config."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
+            update_interval=timedelta(seconds=scan_interval),
         )
+        self._entry_id = entry.entry_id
         self.host: str = entry.data[CONF_HOST]
         self.port: int = entry.data.get(CONF_PORT, DEFAULT_PORT)
         self.password: str | None = entry.data.get(CONF_PASSWORD)
@@ -38,6 +41,17 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
     @property
     def base_url(self) -> str:
         return f"http://{self.host}:{self.port}"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry_id)},
+            name=self.config.get("name") or self.host,
+            model=self.config.get("model"),
+            sw_version=self.config.get("save_version"),
+            manufacturer="LEDaquaristik",
+            configuration_url=self.base_url,
+        )
 
     # ------------------------------------------------------------------
     # Session / auth
@@ -192,6 +206,8 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
             state = await self.async_get_state()
         except aiohttp.ClientError as err:
             raise UpdateFailed(f"Error communicating with SunRiser at {self.host}: {err}") from err
+        except Exception as err:
+            raise UpdateFailed(f"Unexpected error from SunRiser at {self.host}: {err}") from err
 
         # Fetch config for any sensors that have appeared since last update.
         if state.get("sensors"):
