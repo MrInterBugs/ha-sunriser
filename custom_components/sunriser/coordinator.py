@@ -147,7 +147,12 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         base = await self.async_get_config(base_keys)
         self.config.update(base)
 
-        pwm_count: int = base.get("pwm_count", 8)
+        # pwm_count may be None on some firmware versions; derive it from
+        # the actual pwms dict in state instead, which is always accurate.
+        state = await self.async_get_state()
+        pwm_count: int = base.get("pwm_count") or len(state.get("pwms", {})) or 8
+        self.config["pwm_count"] = pwm_count
+
         pwm_keys: list[str] = []
         for i in range(1, pwm_count + 1):
             pwm_keys += [
@@ -198,7 +203,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
 
     @property
     def pwm_count(self) -> int:
-        return self.config.get("pwm_count", 8)
+        return self.config.get("pwm_count") or 8
 
     def pwm_name(self, pwm_num: int) -> str:
         return self.config.get(f"pwm#{pwm_num}#name") or f"PWM {pwm_num}"
@@ -210,17 +215,17 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         """Current PWM value (0–1000) from latest state."""
         if self.data is None:
             return 0
-        return self.data.get("pwms", {}).get(str(pwm_num), 0)
+        return self.data.get("pwms", {}).get(str(pwm_num)) or 0
 
     def sensor_name(self, rom: str) -> str:
         return self.config.get(f"sensors#sensor#{rom}#name") or rom
 
     def sensor_unit(self, rom: str) -> int:
         """0 = raw, 1 = celsius."""
-        return self.config.get(f"sensors#sensor#{rom}#unit", 0)
+        return self.config.get(f"sensors#sensor#{rom}#unit") or 0
 
     def sensor_unitcomma(self, rom: str) -> int:
-        return self.config.get(f"sensors#sensor#{rom}#unitcomma", 0)
+        return self.config.get(f"sensors#sensor#{rom}#unitcomma") or 0
 
     def sensor_value(self, rom: str) -> float | None:
         """Decoded sensor reading, or None if unavailable."""

@@ -1,18 +1,30 @@
 from __future__ import annotations
 
+import logging
+
+import aiohttp
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import DOMAIN, PLATFORMS
 from .coordinator import SunRiserCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = SunRiserCoordinator(hass, entry)
 
-    # Fetch static device config (PWM names, on/off flags) before entity setup.
-    await coordinator.async_load_device_config()
-    # Fetch initial state.
+    try:
+        await coordinator.async_load_device_config()
+    except aiohttp.ClientError as err:
+        raise ConfigEntryNotReady(f"Cannot connect to SunRiser at {coordinator.host}: {err}") from err
+    except Exception as err:
+        _LOGGER.exception("Unexpected error loading SunRiser device config")
+        raise ConfigEntryNotReady(f"Unexpected error: {err}") from err
+
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
