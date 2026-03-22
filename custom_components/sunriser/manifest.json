@@ -1,0 +1,10 @@
+{
+  "domain": "sunriser",
+  "name": "SunRiser",
+  "version": "0.1.0",
+  "documentation": "https://github.com/LEDaquaristik/sunriser",
+  "requirements": ["msgpack>=1.0.0"],
+  "config_flow": true,
+  "iot_class": "local_polling",
+  "codeowners": []
+}
