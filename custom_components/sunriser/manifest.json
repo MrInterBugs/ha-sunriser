@@ -1,7 +1,7 @@
 {
   "domain": "sunriser",
   "name": "SunRiser",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "documentation": "https://github.com/MrInterBugs/ha-sunriser",
   "issue_tracker": "https://github.com/MrInterBugs/ha-sunriser/issues",
   "requirements": ["msgpack>=1.0.0"],

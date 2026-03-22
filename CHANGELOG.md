@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.1] - 2026-03-22
+
+### Changed
+
+- Added `issue_tracker` and `integration_type` fields to `manifest.json` for HACS compliance
+- Added HACS validation GitHub Actions workflow (runs on push and pull request)
+- Added brand icon (`custom_components/sunriser/brand/icon.png`) so HACS displays an icon
+- Added attribution section to README for CC BY 4.0 compliance with the upstream SunRiser source
+
 ## [1.0.0] - 2026-03-22
 
 Initial release.
