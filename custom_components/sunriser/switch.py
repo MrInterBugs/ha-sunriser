@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from homeassistant.components.switch import SwitchEntity
+from homeassistant.components.switch import SwitchEntity, SwitchDeviceClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -18,11 +18,48 @@ async def async_setup_entry(
 ) -> None:
     coordinator: SunRiserCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    async_add_entities(
+    entities: list[SwitchEntity] = [SunRiserMaintenanceSwitch(coordinator, entry)]
+    entities += [
         SunRiserSwitch(coordinator, entry, pwm_num)
         for pwm_num in range(1, coordinator.pwm_count + 1)
         if coordinator.pwm_is_onoff(pwm_num)
-    )
+    ]
+    async_add_entities(entities)
+
+
+class SunRiserMaintenanceSwitch(CoordinatorEntity[SunRiserCoordinator], SwitchEntity):
+    """Maintenance mode switch — freezes all PWM channels on the device."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Maintenance Mode"
+    _attr_device_class = SwitchDeviceClass.SWITCH
+    _attr_icon = "mdi:wrench"
+
+    def __init__(self, coordinator: SunRiserCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_maintenance"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=coordinator.config.get("name") or coordinator.host,
+            model=coordinator.config.get("model"),
+            sw_version=coordinator.config.get("save_version"),
+            manufacturer="LEDaquaristik",
+        )
+
+    @property
+    def is_on(self) -> bool:
+        if self.coordinator.data is None:
+            return False
+        # service_mode is 0 when off, or a Unix timestamp when on
+        return bool(self.coordinator.data.get("service_mode"))
+
+    async def async_turn_on(self, **kwargs: object) -> None:
+        await self.coordinator.async_set_service_mode(True)
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self, **kwargs: object) -> None:
+        await self.coordinator.async_set_service_mode(False)
+        await self.coordinator.async_request_refresh()
 
 
 class SunRiserSwitch(CoordinatorEntity[SunRiserCoordinator], SwitchEntity):

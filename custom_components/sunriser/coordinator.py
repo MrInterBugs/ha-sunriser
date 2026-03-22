@@ -114,6 +114,23 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
             resp.raise_for_status()
             return msgpack.unpackb(await resp.read(), raw=False)
 
+    async def async_set_service_mode(self, enabled: bool) -> None:
+        """PUT /state — enable or disable maintenance mode.
+
+        When enabled the device stores the current timestamp in service_mode
+        and freezes all PWM channels (except those with pwm#X#nomaint = true).
+        When disabled it stores 0.
+        """
+        session = self._get_session()
+        body = msgpack.packb({"service_mode": enabled}, use_bin_type=True)
+        async with session.put(
+            f"{self.base_url}/state",
+            data=body,
+            headers={"Content-Type": "application/x-msgpack"},
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as resp:
+            resp.raise_for_status()
+
     async def async_set_pwms(self, pwm_values: dict[str, int]) -> None:
         """PUT /state — set PWM channels immediately.
 
