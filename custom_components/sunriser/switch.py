@@ -22,7 +22,7 @@ async def async_setup_entry(
     entities += [
         SunRiserSwitch(coordinator, entry, pwm_num)
         for pwm_num in range(1, coordinator.pwm_count + 1)
-        if coordinator.pwm_is_onoff(pwm_num)
+        if coordinator.pwm_is_onoff(pwm_num) and not coordinator.pwm_is_unused(pwm_num)
     ]
     async_add_entities(entities)
 

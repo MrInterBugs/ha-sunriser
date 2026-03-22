@@ -28,7 +28,7 @@ async def async_setup_entry(
     async_add_entities(
         SunRiserLight(coordinator, entry, pwm_num)
         for pwm_num in range(1, coordinator.pwm_count + 1)
-        if not coordinator.pwm_is_onoff(pwm_num)
+        if not coordinator.pwm_is_onoff(pwm_num) and not coordinator.pwm_is_unused(pwm_num)
     )
 
 

@@ -22,7 +22,11 @@ CONFIG_KEYS = ["name", "model", "model_id", "pwm_count", "hostname", "factory_ve
 
 @pytest_asyncio.fixture
 async def session():
-    async with aiohttp.ClientSession() as s:
+    # force_close=True because the device closes the TCP connection after each
+    # response without sending Connection: close — aiohttp would otherwise try
+    # to reuse the socket and get a ConnectionResetError on the next request.
+    connector = aiohttp.TCPConnector(force_close=True)
+    async with aiohttp.ClientSession(connector=connector) as s:
         yield s
 
 
@@ -85,23 +89,14 @@ async def test_read_state(session):
 
 @pytest.mark.asyncio
 async def test_read_pwm_config(session):
-    """Read per-channel config for all PWMs."""
-    # First get pwm_count
-    body = msgpack.packb(["pwm_count"], use_bin_type=True)
-    async with session.post(
-        f"{BASE_URL}/",
-        data=body,
-        headers={"Content-Type": "application/x-msgpack"},
-        timeout=TIMEOUT,
-    ) as resp:
-        base = msgpack.unpackb(await resp.read(), raw=False)
+    """Read name, color, onoff, and max for all PWM channels in a single request.
 
-    pwm_count = base.get("pwm_count") or 8
-    print(f"\npwm_count: {pwm_count}")
-
-    pwm_keys = []
-    for i in range(1, pwm_count + 1):
-        pwm_keys += [f"pwm#{i}#name", f"pwm#{i}#onoff", f"pwm#{i}#max"]
+    We request up to 10 channels (the max for SunRiser 10) to avoid needing
+    a separate pwm_count lookup which would require a second TCP connection.
+    """
+    pwm_keys = ["pwm_count"]
+    for i in range(1, 11):
+        pwm_keys += [f"pwm#{i}#name", f"pwm#{i}#color", f"pwm#{i}#onoff", f"pwm#{i}#max"]
 
     body = msgpack.packb(pwm_keys, use_bin_type=True)
     async with session.post(
@@ -112,9 +107,14 @@ async def test_read_pwm_config(session):
     ) as resp:
         assert resp.status == 200
         result = msgpack.unpackb(await resp.read(), raw=False)
-        print("PWM config:")
-        for k, v in result.items():
-            print(f"  {k}: {v!r}")
+
+    pwm_count = result.get("pwm_count") or 10
+    print(f"\npwm_count: {pwm_count}")
+    for i in range(1, pwm_count + 1):
+        name = result.get(f"pwm#{i}#name")
+        color = result.get(f"pwm#{i}#color")
+        onoff = result.get(f"pwm#{i}#onoff")
+        print(f"  pwm#{i}: name={name!r}  color={color!r}  onoff={onoff!r}")
 
 
 # ---------------------------------------------------------------------------

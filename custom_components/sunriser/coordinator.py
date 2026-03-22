@@ -11,7 +11,7 @@ from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DEFAULT_PORT, DEFAULT_SCAN_INTERVAL, DOMAIN, PWM_MAX
+from .const import COLOR_NAMES, DEFAULT_PORT, DEFAULT_SCAN_INTERVAL, DOMAIN, PWM_MAX
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -224,10 +224,18 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         return self.config.get("pwm_count") or 8
 
     def pwm_name(self, pwm_num: int) -> str:
-        return self.config.get(f"pwm#{pwm_num}#name") or f"PWM {pwm_num}"
+        color_id = self.config.get(f"pwm#{pwm_num}#color") or ""
+        return (
+            self.config.get(f"pwm#{pwm_num}#name")
+            or COLOR_NAMES.get(color_id)
+            or f"PWM {pwm_num}"
+        )
 
     def pwm_is_onoff(self, pwm_num: int) -> bool:
         return bool(self.config.get(f"pwm#{pwm_num}#onoff", False))
+
+    def pwm_is_unused(self, pwm_num: int) -> bool:
+        return not (self.config.get(f"pwm#{pwm_num}#color") or "")
 
     def pwm_value(self, pwm_num: int) -> int:
         """Current PWM value (0–1000) from latest state."""
