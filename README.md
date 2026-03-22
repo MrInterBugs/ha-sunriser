@@ -4,10 +4,12 @@ A Home Assistant custom integration for the [SunRiser 8/10](https://www.ledaquar
 
 ## Features
 
-- **Light** — Control each PWM channel as a dimmable light (brightness 0–100%)
-- **Switch** — On/off control for PWM channels configured as on/off only
-- **Sensor** — DS1820 temperature sensors and device uptime
+- **Light** — Dimmable control (0–100%) for each PWM channel configured as a light
+- **Switch** — On/off control for PWM channels configured as on/off, plus a **Maintenance Mode** switch
+- **Sensor** — DS1820 temperature sensors; diagnostic sensors for Uptime, Firmware Version, and Hostname
+- **Options** — Configurable poll interval (5–3600 seconds, default 30s) without re-adding the integration
 - Auto-discovery of PWM channels and sensors from the device
+- "Visit device" link in the device page opens the SunRiser web UI directly from HA
 
 ## Requirements
 
@@ -37,9 +39,9 @@ The integration will automatically detect all PWM channels and temperature senso
 
 ## Notes
 
-- PWM values are polled every 30 seconds
-- Manually setting a PWM brightness from HA overrides the active program for approximately 1 minute, after which the device's own schedule resumes. If you want permanent manual control, disable the dayplanner/weekplanner program on the device.
-- New temperature sensors that appear after initial setup require a reload of the integration to create their entities (**Settings → Devices & Services → SunRiser → Reload**)
+- PWM values are polled every 30 seconds by default. Change this under **Settings → Devices & Services → SunRiser → Configure**.
+- Manually setting a PWM brightness from HA overrides the active program for approximately 1 minute, after which the device's own schedule resumes. For permanent manual control, disable the dayplanner/weekplanner on the device.
+- New temperature sensors that appear after initial setup require a reload of the integration to create their entities (**Settings → Devices & Services → SunRiser → Reload**).
 
 ## Links
 
