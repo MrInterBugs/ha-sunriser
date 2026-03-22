@@ -43,6 +43,10 @@ The integration will automatically detect all PWM channels and temperature senso
 - Manually setting a PWM brightness from HA overrides the active program for approximately 1 minute, after which the device's own schedule resumes. For permanent manual control, disable the dayplanner/weekplanner on the device.
 - New temperature sensors that appear after initial setup require a reload of the integration to create their entities (**Settings → Devices & Services → SunRiser → Reload**).
 
+## Attribution
+
+This integration is based on the [SunRiser source code](https://github.com/LEDaquaristik/sunriser) by [LEDaquaristik](https://www.ledaquaristik.de/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The API documentation, configuration schema, and web client code were used as reference material to build this integration.
+
 ## Links
 
 - [SunRiser source code](https://github.com/LEDaquaristik/sunriser)
