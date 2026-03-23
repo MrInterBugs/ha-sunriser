@@ -27,8 +27,11 @@ def _pack(data):
 
 
 @pytest.fixture
-def coord(hass, mock_config_entry):
-    return SunRiserCoordinator(hass, mock_config_entry)
+async def coord(hass, mock_config_entry):
+    coordinator = SunRiserCoordinator(hass, mock_config_entry)
+    yield coordinator
+    if coordinator._session and not coordinator._session.closed:
+        await coordinator._session.close()
 
 
 # ---------------------------------------------------------------------------
