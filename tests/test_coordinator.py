@@ -212,7 +212,9 @@ async def test_async_set_config(coord):
         m.put(f"{BASE}/", status=200)
         await coord.async_set_config({"pwm#1#color": "6500k"})
 
-    sent = msgpack.unpackb(m.requests[("PUT", URL(f"{BASE}/"))][0].kwargs["data"], raw=False)
+    sent = msgpack.unpackb(
+        m.requests[("PUT", URL(f"{BASE}/"))][0].kwargs["data"], raw=False
+    )
     assert sent["pwm#1#color"] == "6500k"
     assert sent["save_version"] == "1.005"
 
@@ -223,7 +225,9 @@ async def test_async_set_service_mode_on(coord):
         m.put(f"{BASE}/state", status=200)
         await coord.async_set_service_mode(True)
 
-    sent = msgpack.unpackb(m.requests[("PUT", URL(f"{BASE}/state"))][0].kwargs["data"], raw=False)
+    sent = msgpack.unpackb(
+        m.requests[("PUT", URL(f"{BASE}/state"))][0].kwargs["data"], raw=False
+    )
     assert sent["service_mode"] == 1
     assert type(sent["service_mode"]) is int
 
@@ -234,7 +238,9 @@ async def test_async_set_service_mode_off(coord):
         m.put(f"{BASE}/state", status=200)
         await coord.async_set_service_mode(False)
 
-    sent = msgpack.unpackb(m.requests[("PUT", URL(f"{BASE}/state"))][0].kwargs["data"], raw=False)
+    sent = msgpack.unpackb(
+        m.requests[("PUT", URL(f"{BASE}/state"))][0].kwargs["data"], raw=False
+    )
     assert sent["service_mode"] == 0
     assert type(sent["service_mode"]) is int
 
@@ -244,7 +250,9 @@ async def test_async_set_pwms(coord):
         m.put(f"{BASE}/state", status=200)
         await coord.async_set_pwms({"1": 750})
 
-    sent = msgpack.unpackb(m.requests[("PUT", URL(f"{BASE}/state"))][0].kwargs["data"], raw=False)
+    sent = msgpack.unpackb(
+        m.requests[("PUT", URL(f"{BASE}/state"))][0].kwargs["data"], raw=False
+    )
     assert sent["pwms"] == {"1": 750}
 
 
