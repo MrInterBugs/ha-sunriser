@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.2] - 2026-03-23
+
+### Fixed
+
+- Day Planner card now works after HACS installation with no manual steps — the card JS has moved from `www/` (ignored by HACS) into `custom_components/sunriser/www/` and is registered automatically via `async_setup` using `add_extra_js_url`; no Lovelace resource entry required
+
 ## [1.4.1] - 2026-03-23
 
 ### Fixed

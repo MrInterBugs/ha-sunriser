@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import logging
+import pathlib
 
 import aiohttp
 import voluptuous as vol
 
+from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
@@ -14,6 +16,9 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, PLATFORMS
 from .coordinator import SunRiserCoordinator
+
+_CARD_URL = "/sunriser/sunriser-dayplan-card.js"
+_CARD_PATH = pathlib.Path(__file__).parent / "www" / "sunriser-dayplan-card.js"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,6 +61,13 @@ _SET_DAYPLANNER_SCHEMA = vol.Schema(
         ),
     }
 )
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Register the Day Planner card as a frontend resource."""
+    hass.http.register_static_path(_CARD_URL, str(_CARD_PATH), cache_headers=False)
+    add_extra_js_url(hass, _CARD_URL)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
