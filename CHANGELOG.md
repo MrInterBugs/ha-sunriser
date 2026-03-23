@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.4] - 2026-03-23
+
+### Added
+
+- Unit test suite covering all integration modules (brightness, config flow, coordinator, init, light, sensor, switch)
+- GitHub Actions CI job to run the test suite on every push
+
+### Fixed
+
+- Fixed unclosed `aiohttp.ClientSession` resource leak on entry unload
+
 ## [1.0.3] - 2026-03-23
 
 ### Fixed
