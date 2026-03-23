@@ -31,3 +31,14 @@ jobs:
           python-version: "3.12"
       - run: pip install black
       - run: black --check custom_components/
+
+  tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: pytest tests/ --ignore=tests/test_device.py --cov=custom_components/sunriser --cov-report=term-missing

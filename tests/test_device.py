@@ -11,8 +11,12 @@ import pytest_asyncio
 import aiohttp
 import msgpack
 
-HOST = "192.168.0.13"
-PORT = 80
+import os
+
+# Override with env vars to target the Docker simulator:
+#   SUNRISER_HOST=127.0.0.1 SUNRISER_PORT=8080 pytest tests/test_device.py -v -s
+HOST = os.environ.get("SUNRISER_HOST", "192.168.0.13")
+PORT = int(os.environ.get("SUNRISER_PORT", "80"))
 BASE_URL = f"http://{HOST}:{PORT}"
 TIMEOUT = aiohttp.ClientTimeout(total=10)
 
