@@ -86,7 +86,11 @@ def mock_http_frontend(hass):
     """Mock the HTTP static-path registration and add_extra_js_url called by
     async_setup so all tests that trigger component load don't need a real
     HTTP server."""
-    from unittest.mock import AsyncMock as _AsyncMock, MagicMock as _MagicMock, patch as _patch
+    from unittest.mock import (
+        AsyncMock as _AsyncMock,
+        MagicMock as _MagicMock,
+        patch as _patch,
+    )
 
     mock_http = _MagicMock()
     mock_http.async_register_static_paths = _AsyncMock()
