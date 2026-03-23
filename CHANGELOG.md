@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.5] - 2026-03-23
+
+### Added
+
+- **Weather simulation sensor** — new `SunRiserWeatherSensor` entity reading from `GET /weather`; reports the active weather program state per device (endpoint is still under development, failures are non-fatal)
+- Expanded unit test coverage for coordinator weather fetching (`test_coordinator.py`), device helper (`test_device.py`), and sensor entities (`test_sensor.py`)
+
+### Fixed
+
+- `manifest.json` version bumped to match CHANGELOG (was stuck at 1.0.3 after the 1.0.4 release)
+
 ## [1.0.4] - 2026-03-23
 
 ### Added
