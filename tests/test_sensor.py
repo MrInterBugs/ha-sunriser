@@ -259,6 +259,7 @@ def test_weather_channel_tick_nonzero_produces_datetime(coordinator):
     assert attrs["moon_next_change_at"] is not None
     # Should be an ISO datetime string approximately 1000 s from now
     from datetime import datetime, timezone
+
     dt = datetime.fromisoformat(attrs["moon_next_change_at"])
     assert dt.tzinfo is not None
 

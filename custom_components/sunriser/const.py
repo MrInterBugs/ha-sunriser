@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 DOMAIN = "sunriser"
 
-PLATFORMS = ["light", "sensor", "switch"]
+PLATFORMS = ["button", "light", "sensor", "switch"]
 
 DEFAULT_PORT = 80
 DEFAULT_SCAN_INTERVAL = 30

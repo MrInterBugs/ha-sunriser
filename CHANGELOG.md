@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.0] - 2026-03-23
+
+### Added
+
+- **Reboot button** — new `button` entity (`Reboot`) that calls `GET /reboot` to restart the device directly from HA; uses `ButtonDeviceClass.RESTART` and `EntityCategory.CONFIG`
+- **`sunriser.backup` service** — calls `GET /backup`, saves the full device configuration as a `.msgpack` file in `/config/`, and returns `{"path": "..."}` for use in automations
+- **`sunriser.restore` service** — reads a `.msgpack` backup file and calls `PUT /restore`, which applies the config and triggers a deep device restart; requires `file_path` parameter
+- **`sunriser.get_errors` service** — calls `GET /errors` and returns `{"content": "..."}` with the device error log
+- **`sunriser.get_log` service** — calls `GET /log` and returns `{"content": "..."}` with the device diagnostic log
+- `services.yaml` with descriptions and field selectors for all four new services
+
 ## [1.1.1] - 2026-03-23
 
 ### Added

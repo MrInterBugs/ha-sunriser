@@ -195,6 +195,59 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         ) as resp:
             resp.raise_for_status()
 
+    async def async_reboot(self) -> None:
+        """GET /reboot — initiate a device reboot."""
+        session = self._get_session()
+        async with session.get(
+            f"{self.base_url}/reboot",
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as resp:
+            resp.raise_for_status()
+
+    async def async_get_backup(self) -> bytes:
+        """GET /backup — download complete device configuration as msgpack bytes."""
+        session = self._get_session()
+        async with session.get(
+            f"{self.base_url}/backup",
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as resp:
+            resp.raise_for_status()
+            return await resp.read()
+
+    async def async_restore(self, data: bytes) -> None:
+        """PUT /restore — restore device configuration from msgpack backup bytes.
+
+        Unlike PUT /, this triggers a deeper device restart after applying config.
+        """
+        session = self._get_session()
+        async with session.put(
+            f"{self.base_url}/restore",
+            data=data,
+            headers={"Content-Type": "application/x-msgpack"},
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as resp:
+            resp.raise_for_status()
+
+    async def async_get_errors(self) -> str:
+        """GET /errors — retrieve the device error log."""
+        session = self._get_session()
+        async with session.get(
+            f"{self.base_url}/errors",
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as resp:
+            resp.raise_for_status()
+            return await resp.text()
+
+    async def async_get_log(self) -> str:
+        """GET /log — retrieve the device diagnostic log."""
+        session = self._get_session()
+        async with session.get(
+            f"{self.base_url}/log",
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as resp:
+            resp.raise_for_status()
+            return await resp.text()
+
     # ------------------------------------------------------------------
     # Setup
     # ------------------------------------------------------------------

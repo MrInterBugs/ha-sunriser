@@ -1,0 +1,38 @@
+backup:
+  name: Download Backup
+  description: >
+    Download a complete backup of all device configuration and save it as a
+    .msgpack file in your Home Assistant /config directory. Returns the saved
+    file path so you can use it with the restore service later.
+  fields: {}
+
+restore:
+  name: Restore Backup
+  description: >
+    Restore device configuration from a previously downloaded backup file.
+    The device performs a deep restart after applying the config. Use the
+    file path returned by the backup service.
+  fields:
+    file_path:
+      name: File path
+      description: >
+        Absolute path to the .msgpack backup file
+        (e.g. /config/sunriser_backup_20260323_120000.msgpack).
+      required: true
+      example: /config/sunriser_backup_20260323_120000.msgpack
+      selector:
+        text: {}
+
+get_errors:
+  name: Get Error Log
+  description: >
+    Retrieve the device error log. Returns a dict with a "content" key
+    containing the raw log text.
+  fields: {}
+
+get_log:
+  name: Get Diagnostic Log
+  description: >
+    Retrieve the device diagnostic log. Returns a dict with a "content" key
+    containing the raw log text.
+  fields: {}

@@ -209,9 +209,7 @@ async def test_dhcp_confirm_creates_entry(hass):
         "custom_components.sunriser.config_flow._test_connection", return_value=None
     ), patch("custom_components.sunriser.async_setup_entry", return_value=True):
         result = await _start_dhcp_flow(hass)
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {}
-        )
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
 
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_HOST] == "192.168.0.50"

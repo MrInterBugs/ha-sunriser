@@ -406,3 +406,46 @@ def test_pwm_count_property(coordinator):
 def test_pwm_count_fallback(coordinator):
     coordinator.config["pwm_count"] = None
     assert coordinator.pwm_count == 8
+
+
+# ---------------------------------------------------------------------------
+# async_reboot / async_get_backup / async_restore / async_get_errors / async_get_log
+# ---------------------------------------------------------------------------
+
+
+async def test_async_reboot(coord):
+    with aioresponses() as m:
+        m.get(f"{BASE}/reboot", status=200)
+        await coord.async_reboot()
+    assert ("GET", URL(f"{BASE}/reboot")) in m.requests
+
+
+async def test_async_get_backup_returns_bytes(coord):
+    payload = b"\x82\xa4name\xa8SunRiser"
+    with aioresponses() as m:
+        m.get(f"{BASE}/backup", body=payload)
+        result = await coord.async_get_backup()
+    assert result == payload
+
+
+async def test_async_restore_sends_bytes(coord):
+    payload = b"\x82\xa4name\xa8SunRiser"
+    with aioresponses() as m:
+        m.put(f"{BASE}/restore", status=200)
+        await coord.async_restore(payload)
+    sent = m.requests[("PUT", URL(f"{BASE}/restore"))][0].kwargs["data"]
+    assert sent == payload
+
+
+async def test_async_get_errors_returns_text(coord):
+    with aioresponses() as m:
+        m.get(f"{BASE}/errors", body=b"error line 1\nerror line 2")
+        result = await coord.async_get_errors()
+    assert "error line 1" in result
+
+
+async def test_async_get_log_returns_text(coord):
+    with aioresponses() as m:
+        m.get(f"{BASE}/log", body=b"log entry 1\nlog entry 2")
+        result = await coord.async_get_log()
+    assert "log entry 1" in result
