@@ -131,6 +131,9 @@ async def test_step_user_shows_form(hass):
 async def test_step_user_success(hass):
     with patch(
         "custom_components.sunriser.config_flow._test_connection", return_value=None
+    ), patch(
+        "custom_components.sunriser.coordinator.SunRiserCoordinator.async_load_device_config",
+        new=AsyncMock(),
     ):
         result = await _start_flow(hass)
         result = await hass.config_entries.flow.async_configure(
