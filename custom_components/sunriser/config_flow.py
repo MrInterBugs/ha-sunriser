@@ -6,7 +6,12 @@ import logging
 import aiohttp
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT
 from homeassistant.core import callback
 
@@ -28,7 +33,9 @@ async def _test_connection(host: str, port: int, password: str) -> str | None:
     url = f"http://{host}:{port}/ok"
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            async with session.get(
+                url, timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
                 if resp.status != 200:
                     return "cannot_connect"
                 text = await resp.text()
@@ -54,9 +61,7 @@ class SunRiserConfigFlow(ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(config_entry: ConfigEntry) -> SunRiserOptionsFlow:
         return SunRiserOptionsFlow(config_entry)
 
-    async def async_step_user(
-        self, user_input: dict | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_user(self, user_input: dict | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -93,13 +98,13 @@ class SunRiserOptionsFlow(OptionsFlow):
     def __init__(self, entry: ConfigEntry) -> None:
         self._entry = entry
 
-    async def async_step_init(
-        self, user_input: dict | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_init(self, user_input: dict | None = None) -> ConfigFlowResult:
         if user_input is not None:
             return self.async_create_entry(data=user_input)
 
-        current_interval = self._entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        current_interval = self._entry.options.get(
+            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+        )
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(

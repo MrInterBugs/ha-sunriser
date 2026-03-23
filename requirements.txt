@@ -1,0 +1,10 @@
+# Runtime
+msgpack>=1.0.0
+
+# Testing
+aiohttp>=3.0.0
+pytest>=9.0.0
+pytest-asyncio>=1.0.0
+
+# Linting
+black>=24.0.0

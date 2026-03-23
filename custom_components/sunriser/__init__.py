@@ -21,7 +21,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         await coordinator.async_load_device_config()
     except aiohttp.ClientError as err:
-        raise ConfigEntryNotReady(f"Cannot connect to SunRiser at {coordinator.host}: {err}") from err
+        raise ConfigEntryNotReady(
+            f"Cannot connect to SunRiser at {coordinator.host}: {err}"
+        ) from err
     except Exception as err:
         _LOGGER.exception("Unexpected error loading SunRiser device config")
         raise ConfigEntryNotReady(f"Unexpected error: {err}") from err

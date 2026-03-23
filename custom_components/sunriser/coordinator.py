@@ -13,7 +13,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import COLOR_NAMES, CONF_SCAN_INTERVAL, DEFAULT_PORT, DEFAULT_SCAN_INTERVAL, DOMAIN, PWM_MAX
+from .const import (
+    COLOR_NAMES,
+    CONF_SCAN_INTERVAL,
+    DEFAULT_PORT,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    PWM_MAX,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -175,8 +182,15 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         """
         await self.async_authenticate()
 
-        base_keys = ["name", "model", "model_id", "pwm_count", "hostname",
-                     "factory_version", "save_version"]
+        base_keys = [
+            "name",
+            "model",
+            "model_id",
+            "pwm_count",
+            "hostname",
+            "factory_version",
+            "save_version",
+        ]
         base = await self.async_get_config(base_keys)
         self.config.update(base)
 
@@ -206,14 +220,19 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         try:
             state = await self.async_get_state()
         except aiohttp.ClientError as err:
-            raise UpdateFailed(f"Error communicating with SunRiser at {self.host}: {err}") from err
+            raise UpdateFailed(
+                f"Error communicating with SunRiser at {self.host}: {err}"
+            ) from err
         except Exception as err:
-            raise UpdateFailed(f"Unexpected error from SunRiser at {self.host}: {err}") from err
+            raise UpdateFailed(
+                f"Unexpected error from SunRiser at {self.host}: {err}"
+            ) from err
 
         # Fetch config for any sensors that have appeared since last update.
         if state.get("sensors"):
             new_roms = [
-                rom for rom in state["sensors"]
+                rom
+                for rom in state["sensors"]
                 if f"sensors#sensor#{rom}#name" not in self.config
             ]
             if new_roms:
@@ -279,4 +298,4 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
             return None
         raw = entry[1]
         comma = self.sensor_unitcomma(rom)
-        return raw / (10 ** comma) if comma else float(raw)
+        return raw / (10**comma) if comma else float(raw)

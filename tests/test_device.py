@@ -17,7 +17,15 @@ BASE_URL = f"http://{HOST}:{PORT}"
 TIMEOUT = aiohttp.ClientTimeout(total=10)
 
 # Keys to read during the config test
-CONFIG_KEYS = ["name", "model", "model_id", "pwm_count", "hostname", "factory_version", "save_version"]
+CONFIG_KEYS = [
+    "name",
+    "model",
+    "model_id",
+    "pwm_count",
+    "hostname",
+    "factory_version",
+    "save_version",
+]
 
 
 @pytest_asyncio.fixture
@@ -34,6 +42,7 @@ async def session():
 # Connectivity
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_ping(session):
     """GET /ok should return the text OK."""
@@ -46,6 +55,7 @@ async def test_ping(session):
 # ---------------------------------------------------------------------------
 # Config read
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_read_config(session):
@@ -64,13 +74,16 @@ async def test_read_config(session):
         for k, v in result.items():
             print(f"  {k}: {v!r}")
         assert "pwm_count" in result, "pwm_count missing from config response"
-        assert "save_version" in result, "save_version missing (used for firmware version sensor)"
+        assert (
+            "save_version" in result
+        ), "save_version missing (used for firmware version sensor)"
         assert "hostname" in result, "hostname missing (used for hostname sensor)"
 
 
 # ---------------------------------------------------------------------------
 # State read
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_read_state(session):
@@ -90,6 +103,7 @@ async def test_read_state(session):
 # PWM config read (uses pwm_count from config)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_read_pwm_config(session):
     """Read name, color, onoff, and max for all PWM channels in a single request.
@@ -99,7 +113,12 @@ async def test_read_pwm_config(session):
     """
     pwm_keys = ["pwm_count"]
     for i in range(1, 11):
-        pwm_keys += [f"pwm#{i}#name", f"pwm#{i}#color", f"pwm#{i}#onoff", f"pwm#{i}#max"]
+        pwm_keys += [
+            f"pwm#{i}#name",
+            f"pwm#{i}#color",
+            f"pwm#{i}#onoff",
+            f"pwm#{i}#max",
+        ]
 
     body = msgpack.packb(pwm_keys, use_bin_type=True)
     async with session.post(
@@ -123,6 +142,7 @@ async def test_read_pwm_config(session):
 # ---------------------------------------------------------------------------
 # Maintenance mode
 # ---------------------------------------------------------------------------
+
 
 async def _put_state(session, payload: dict) -> tuple[int, dict | str]:
     """PUT /state helper — returns (status_code, decoded_body)."""
@@ -173,7 +193,9 @@ async def test_maintenance_mode_integer(session):
 
     after_off = await _get_service_mode(session)
     print(f"service_mode after disable: {after_off!r}")
-    assert not after_off, f"Expected falsy service_mode after disable, got {after_off!r}"
+    assert (
+        not after_off
+    ), f"Expected falsy service_mode after disable, got {after_off!r}"
 
 
 @pytest.mark.asyncio
@@ -192,7 +214,9 @@ async def test_maintenance_mode_boolean(session):
             await _put_state(session, {"service_mode": 0})
         except Exception:
             pass
-        pytest.skip("Device returned 500 for boolean — use integers (see test_maintenance_mode_integer)")
+        pytest.skip(
+            "Device returned 500 for boolean — use integers (see test_maintenance_mode_integer)"
+        )
 
     assert status == 200
 
@@ -203,6 +227,7 @@ async def test_maintenance_mode_boolean(session):
 # ---------------------------------------------------------------------------
 # Sensor read
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_sensors_in_state(session):
