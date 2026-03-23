@@ -186,5 +186,25 @@ class SunRiserWeatherChannelSensor(
         ch = self._channel_data()
         if not ch:
             return {}
+        _rename = {
+            "clouds_state": "clouds_state",
+            "cloudticks": "cloud_ticks",
+            "clouds_next_state_tick": "clouds_next_state_tick",
+            "rainmins": "rain_duration_mins",
+            "rainfront_start": "rainfront_start_tick",
+            "rainfront_length": "rainfront_length_ticks",
+            "stormfront_start": "stormfront_start_tick",
+            "stormfront_length": "stormfront_length_ticks",
+            "rain_next_tick": "rain_next_tick",
+            "thunder_state": "thunder_state",
+            "thunder_next_state_tick": "thunder_next_state_tick",
+            "moon_state": "moon_state",
+            "moon_next_state_tick": "moon_next_state_tick",
+            "daycount": "day_count",
+        }
         exclude = {"weather_program_id"}
-        return {k: v for k, v in ch.items() if k not in exclude}
+        return {
+            _rename.get(k, k): v
+            for k, v in ch.items()
+            if k not in exclude
+        }
