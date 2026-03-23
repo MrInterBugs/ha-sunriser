@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.4.3] - 2026-03-23
+
+### Added
+
+- Unit tests for `async_get_dayplanner` and `async_set_dayplanner` coordinator methods
+- Unit tests for `get_dayplanner_schedule` and `set_dayplanner_schedule` service handlers
+- Unit test for `async_setup` static path registration and `add_extra_js_url` call
+- `mock_http_frontend` autouse fixture in `conftest.py` so all tests work after `async_setup` was introduced
+
+Coverage remains at 100% (145 tests, 623 statements).
+
 ## [1.4.2] - 2026-03-23
 
 ### Fixed
