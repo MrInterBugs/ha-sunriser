@@ -1,6 +1,6 @@
 # SunRiser Home Assistant Integration
 
-A Home Assistant custom integration for the [SunRiser 8/10](https://www.ledaquaristik.de/) LED aquarium controller by LEDaquaristik.
+A Home Assistant custom integration for the [SunRiser 8/10](https://www.ledaquaristik.de/SunRiser-10-Dimmsteuerung-und-Tagessimulation-mit-WLAN/150-00) LED aquarium controller by LEDaquaristik.
 
 ## Features
 
@@ -45,7 +45,7 @@ The integration will automatically detect all PWM channels and temperature senso
 
 ## Attribution
 
-This integration is based on the [SunRiser source code](https://github.com/LEDaquaristik/sunriser) by [LEDaquaristik](https://www.ledaquaristik.de/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The API documentation, configuration schema, and web client code were used as reference material to build this integration.
+This integration was built using the [SunRiser source code](https://github.com/LEDaquaristik/sunriser) by [LEDaquaristik](https://www.ledaquaristik.de/) as reference material. The source code and configuration files from that project are licensed under the [GNU GPL v3](http://www.gnu.org/licenses/gpl-3.0). Other assets (graphics etc.) are licensed under [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/).
 
 ## Links
 
