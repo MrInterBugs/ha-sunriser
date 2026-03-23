@@ -249,7 +249,9 @@ async def test_update_data_weather_unexpected_error_logs_debug_and_returns_empty
     coord, monkeypatch, caplog
 ):
     coord.config = dict(FAKE_CONFIG)
-    monkeypatch.setattr(coord, "async_get_weather", AsyncMock(side_effect=ValueError("boom")))
+    monkeypatch.setattr(
+        coord, "async_get_weather", AsyncMock(side_effect=ValueError("boom"))
+    )
 
     with aioresponses() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))

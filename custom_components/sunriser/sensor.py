@@ -145,7 +145,9 @@ class SunRiserTemperatureSensor(CoordinatorEntity[SunRiserCoordinator], SensorEn
 # ---------------------------------------------------------------------------
 
 
-class SunRiserWeatherChannelSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity):
+class SunRiserWeatherChannelSensor(
+    CoordinatorEntity[SunRiserCoordinator], SensorEntity
+):
     """Weather simulation state for a single PWM channel.
 
     State = weather_program_id (which program is running on this channel).

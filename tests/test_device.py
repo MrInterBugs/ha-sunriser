@@ -272,7 +272,9 @@ async def test_read_weather(session):
     unpacker.feed(raw)
     channels = next(iter(unpacker), None)
 
-    assert isinstance(channels, list), f"Expected list as first object, got {type(channels)}"
+    assert isinstance(
+        channels, list
+    ), f"Expected list as first object, got {type(channels)}"
     print(f"\nWeather channels ({len(channels)} total):")
     for i, ch in enumerate(channels):
         print(f"  channel {i + 1}: {ch!r}")

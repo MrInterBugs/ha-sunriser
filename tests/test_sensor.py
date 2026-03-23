@@ -30,7 +30,9 @@ async def test_setup_creates_diagnostic_sensors(hass, coordinator, mock_config_e
     assert "SunRiserHostnameSensor" in types
 
 
-async def test_setup_creates_weather_channel_sensors(hass, coordinator, mock_config_entry):
+async def test_setup_creates_weather_channel_sensors(
+    hass, coordinator, mock_config_entry
+):
     coordinator.data = {
         **coordinator.data,
         "weather": [None, {"weather_program_id": 2}, {"weather_program_id": 5}],
