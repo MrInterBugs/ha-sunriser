@@ -248,6 +248,38 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
             resp.raise_for_status()
             return await resp.text()
 
+    async def async_get_dayplanner(self, pwm: int) -> list[dict]:
+        """Read the dayplanner schedule for a PWM channel.
+
+        Returns a list of markers in the form [{"time": "HH:MM", "percent": N}, ...],
+        sorted by time. Returns an empty list if no schedule is set.
+        """
+        result = await self.async_get_config([f"dayplanner#marker#{pwm}"])
+        flat = result.get(f"dayplanner#marker#{pwm}") or []
+        markers = []
+        for i in range(0, len(flat) - 1, 2):
+            daymin = int(flat[i])
+            markers.append(
+                {
+                    "time": f"{daymin // 60:02d}:{daymin % 60:02d}",
+                    "percent": int(flat[i + 1]),
+                }
+            )
+        markers.sort(key=lambda m: m["time"])
+        return markers
+
+    async def async_set_dayplanner(self, pwm: int, markers: list[dict]) -> None:
+        """Write the dayplanner schedule for a PWM channel.
+
+        Each marker must have "time" (HH:MM) and "percent" (0–100).
+        The flat array sent to the device is [daymin, percent, daymin, percent, ...].
+        """
+        flat: list[int] = []
+        for m in markers:
+            h, mn = map(int, m["time"].split(":"))
+            flat.extend([h * 60 + mn, int(m["percent"])])
+        await self.async_set_config({f"dayplanner#marker#{pwm}": flat})
+
     # ------------------------------------------------------------------
     # Setup
     # ------------------------------------------------------------------

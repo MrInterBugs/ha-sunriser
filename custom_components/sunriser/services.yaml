@@ -36,3 +36,55 @@ get_log:
     Retrieve the device diagnostic log. Returns a dict with a "content" key
     containing the raw log text.
   fields: {}
+
+get_dayplanner_schedule:
+  name: Get Day Planner Schedule
+  description: >
+    Read the current day planner schedule for a PWM channel. Returns a dict
+    with "pwm" and "markers" keys. Each marker has "time" (HH:MM) and
+    "percent" (0–100).
+  fields:
+    pwm:
+      name: PWM channel
+      description: PWM channel number (1–10).
+      required: true
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 10
+          mode: box
+
+set_dayplanner_schedule:
+  name: Set Day Planner Schedule
+  description: >
+    Replace the day planner schedule for a PWM channel. The device will follow
+    the new schedule from the next minute boundary. Provide at least one marker.
+  fields:
+    pwm:
+      name: PWM channel
+      description: PWM channel number (1–10).
+      required: true
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 10
+          mode: box
+    markers:
+      name: Markers
+      description: >
+        List of schedule markers. Each marker needs "time" (HH:MM, 24-hour)
+        and "percent" (0–100). The device interpolates linearly between markers.
+      required: true
+      example:
+        - time: "06:00"
+          percent: 0
+        - time: "08:00"
+          percent: 100
+        - time: "20:00"
+          percent: 100
+        - time: "22:00"
+          percent: 0
+      selector:
+        object: {}

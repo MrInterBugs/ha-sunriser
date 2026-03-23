@@ -8,7 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from homeassistant.exceptions import HomeAssistantError
 
 from tests.conftest import ENTRY_ID, FAKE_STATE
-from custom_components.sunriser import _async_reload_entry, _get_coordinator, _register_services
+from custom_components.sunriser import (
+    _async_reload_entry,
+    _get_coordinator,
+    _register_services,
+)
 from custom_components.sunriser.const import DOMAIN
 
 
@@ -189,6 +193,7 @@ async def test_service_backup(hass, setup_entry):
     coordinator.async_get_backup = AsyncMock(return_value=b"\x80")
 
     from unittest.mock import mock_open as _mock_open
+
     m = _mock_open()
     with patch("builtins.open", m):
         result = await hass.services.async_call(
@@ -206,6 +211,7 @@ async def test_service_restore(hass, setup_entry):
     coordinator.async_restore = AsyncMock()
 
     from unittest.mock import mock_open as _mock_open
+
     m = _mock_open(read_data=b"\x80")
     with (
         patch.object(hass.config, "is_allowed_path", return_value=True),

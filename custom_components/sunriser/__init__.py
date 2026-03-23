@@ -21,14 +21,41 @@ _SERVICE_BACKUP = "backup"
 _SERVICE_RESTORE = "restore"
 _SERVICE_GET_ERRORS = "get_errors"
 _SERVICE_GET_LOG = "get_log"
+_SERVICE_GET_DAYPLANNER = "get_dayplanner_schedule"
+_SERVICE_SET_DAYPLANNER = "set_dayplanner_schedule"
 _ALL_SERVICES = (
     _SERVICE_BACKUP,
     _SERVICE_RESTORE,
     _SERVICE_GET_ERRORS,
     _SERVICE_GET_LOG,
+    _SERVICE_GET_DAYPLANNER,
+    _SERVICE_SET_DAYPLANNER,
 )
 
 _RESTORE_SCHEMA = vol.Schema({vol.Required("file_path"): cv.string})
+
+_GET_DAYPLANNER_SCHEMA = vol.Schema(
+    {vol.Required("pwm"): vol.All(int, vol.Range(min=1, max=10))}
+)
+
+_MARKER_SCHEMA = vol.Schema(
+    {
+        vol.Required("time"): vol.All(
+            cv.string,
+            vol.Match(r"^\d{1,2}:\d{2}$"),
+        ),
+        vol.Required("percent"): vol.All(int, vol.Range(min=0, max=100)),
+    }
+)
+_SET_DAYPLANNER_SCHEMA = vol.Schema(
+    {
+        vol.Required("pwm"): vol.All(int, vol.Range(min=1, max=10)),
+        vol.Required("markers"): vol.All(
+            [_MARKER_SCHEMA],
+            vol.Length(min=1),
+        ),
+    }
+)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -147,4 +174,28 @@ def _register_services(hass: HomeAssistant) -> None:
         _SERVICE_GET_LOG,
         handle_get_log,
         supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    async def handle_get_dayplanner(call: ServiceCall) -> dict:
+        coordinator = _get_coordinator(hass)
+        pwm: int = call.data["pwm"]
+        markers = await coordinator.async_get_dayplanner(pwm)
+        return {"pwm": pwm, "markers": markers}
+
+    async def handle_set_dayplanner(call: ServiceCall) -> None:
+        coordinator = _get_coordinator(hass)
+        await coordinator.async_set_dayplanner(call.data["pwm"], call.data["markers"])
+
+    hass.services.async_register(
+        DOMAIN,
+        _SERVICE_GET_DAYPLANNER,
+        handle_get_dayplanner,
+        schema=_GET_DAYPLANNER_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        _SERVICE_SET_DAYPLANNER,
+        handle_set_dayplanner,
+        schema=_SET_DAYPLANNER_SCHEMA,
     )

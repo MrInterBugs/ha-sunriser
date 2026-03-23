@@ -152,6 +152,135 @@ async def test_read_pwm_config(session):
 
 
 # ---------------------------------------------------------------------------
+# Dayplanner read
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_read_dayplanner(session):
+    """Read dayplanner#marker#X for all PWM channels and verify the format.
+
+    Each value should be either None (no schedule) or a flat list of
+    alternating [daymin, percent, ...] pairs.
+    """
+    keys = [f"dayplanner#marker#{i}" for i in range(1, 11)]
+    body = msgpack.packb(keys, use_bin_type=True)
+    async with session.post(
+        f"{BASE_URL}/",
+        data=body,
+        headers={"Content-Type": "application/x-msgpack"},
+        timeout=TIMEOUT,
+    ) as resp:
+        assert resp.status == 200, f"Expected 200, got {resp.status}"
+        result = msgpack.unpackb(await resp.read(), raw=False, strict_map_key=False)
+
+    assert isinstance(result, dict), f"Expected dict, got {type(result)}"
+    print("\nDayplanner schedules:")
+    for i in range(1, 11):
+        key = f"dayplanner#marker#{i}"
+        flat = result.get(key)
+        if flat is None:
+            print(f"  pwm#{i}: no schedule")
+            continue
+        assert isinstance(
+            flat, list
+        ), f"pwm#{i}: expected list, got {type(flat)}: {flat!r}"
+        assert len(flat) % 2 == 0, f"pwm#{i}: flat list length {len(flat)} is not even"
+        markers = []
+        for j in range(0, len(flat), 2):
+            daymin = int(flat[j])
+            percent = int(flat[j + 1])
+            assert 0 <= daymin <= 1439, f"pwm#{i}: daymin {daymin} out of range"
+            assert 0 <= percent <= 100, f"pwm#{i}: percent {percent} out of range"
+            markers.append(f"{daymin // 60:02d}:{daymin % 60:02d}={percent}%")
+        print(f"  pwm#{i}: {', '.join(markers)}")
+
+
+# ---------------------------------------------------------------------------
+# Dayplanner write (real device only — always restores original)
+# ---------------------------------------------------------------------------
+
+_REAL_ONLY = pytest.mark.skipif(
+    PORT == 8080,
+    reason="Real device only — simulator does not persist config writes",
+)
+
+
+async def _read_config(session, keys: list) -> dict:
+    body = msgpack.packb(keys, use_bin_type=True)
+    async with session.post(
+        f"{BASE_URL}/",
+        data=body,
+        headers={"Content-Type": "application/x-msgpack"},
+        timeout=TIMEOUT,
+    ) as resp:
+        resp.raise_for_status()
+        return msgpack.unpackb(await resp.read(), raw=False, strict_map_key=False)
+
+
+async def _write_config(session, params: dict) -> None:
+    body = msgpack.packb(params, use_bin_type=True)
+    async with session.put(
+        f"{BASE_URL}/",
+        data=body,
+        headers={"Content-Type": "application/x-msgpack"},
+        timeout=TIMEOUT,
+    ) as resp:
+        resp.raise_for_status()
+
+
+@_REAL_ONLY
+@pytest.mark.asyncio
+async def test_write_dayplanner(session):
+    """Write a test schedule to pwm#1, verify it, then restore the original.
+
+    Uses pwm#1 — always restores via finally so the device is never left
+    in a modified state even if an assertion fails.
+    """
+    TEST_PWM = 1
+    marker_key = f"dayplanner#marker#{TEST_PWM}"
+
+    # Step 1: capture current state + factory_version (needed for PUT /)
+    result = await _read_config(session, [marker_key, "factory_version"])
+    original_flat = result.get(marker_key)
+    factory_version = result.get("factory_version")
+    print(f"\nOriginal flat markers: {original_flat!r}")
+    print(f"factory_version: {factory_version!r}")
+
+    # Test schedule: two markers, clearly different from any real schedule
+    test_flat = [720, 42, 900, 88]  # 12:00=42%, 15:00=88%
+
+    try:
+        # Step 2: write test schedule
+        payload = {marker_key: test_flat}
+        if factory_version:
+            payload["save_version"] = factory_version
+        await _write_config(session, payload)
+        print(f"Wrote test markers: {test_flat!r}")
+
+        # Step 3: read back and verify
+        verify = await _read_config(session, [marker_key])
+        written = verify.get(marker_key)
+        print(f"Read back markers: {written!r}")
+        assert (
+            written == test_flat
+        ), f"Round-trip mismatch: sent {test_flat!r}, got {written!r}"
+        print("Round-trip OK")
+
+    finally:
+        # Step 4: always restore original
+        restore_payload = {marker_key: original_flat}
+        if factory_version:
+            restore_payload["save_version"] = factory_version
+        await _write_config(session, restore_payload)
+        print(f"Restored original markers: {original_flat!r}")
+
+        # The device reloads config after a PUT / and drops the TCP connection —
+        # a 200 from the write is sufficient proof the restore succeeded.
+        print("Restore write returned 200 — OK")
+
+
+# ---------------------------------------------------------------------------
 # Maintenance mode
 # ---------------------------------------------------------------------------
 

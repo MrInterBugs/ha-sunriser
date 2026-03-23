@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1] - 2026-03-23
+
+### Added
+
+- **`sunriser.get_dayplanner_schedule` service** — reads the day planner schedule for a PWM channel; returns `{"pwm": N, "markers": [{"time": "HH:MM", "percent": N}, ...]}` sorted by time
+- **`sunriser.set_dayplanner_schedule` service** — writes a new day planner schedule for a PWM channel; accepts a list of `{time, percent}` markers which the device interpolates linearly; changes persist across reboots (unlike direct PWM state writes which revert after ~1 minute)
+- Both services documented in `services.yaml` with HA UI selectors
+
 ## [1.2.1] - 2026-03-23
 
 ### Fixed
