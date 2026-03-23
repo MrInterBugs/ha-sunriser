@@ -4,7 +4,6 @@ msgpack>=1.0.0
 # Testing
 aiohttp>=3.0.0
 pytest-homeassistant-custom-component>=0.13.0
-pytest-cov>=7.0.0
 aioresponses>=0.7.0
 
 # Linting
