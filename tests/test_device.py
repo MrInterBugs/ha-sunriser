@@ -10,6 +10,7 @@ import pytest
 import pytest_asyncio
 import aiohttp
 import msgpack
+import pytest_socket
 
 import os
 
@@ -19,6 +20,9 @@ HOST = os.environ.get("SUNRISER_HOST", "192.168.0.13")
 PORT = int(os.environ.get("SUNRISER_PORT", "80"))
 BASE_URL = f"http://{HOST}:{PORT}"
 TIMEOUT = aiohttp.ClientTimeout(total=10)
+
+# Allow real network connections for this file — pytest-socket (bundled with
+# pytest-homeassistant-custom-component) blocks sockets by default.
 
 # Keys to read during the config test
 CONFIG_KEYS = [
@@ -33,7 +37,11 @@ CONFIG_KEYS = [
 
 
 @pytest_asyncio.fixture
-async def session():
+async def session(socket_enabled):
+    # pytest-homeassistant-custom-component keeps a host allowlist active even
+    # when sockets are enabled, so standalone LAN tests must opt the target host
+    # in explicitly.
+    pytest_socket.socket_allow_hosts([HOST, "127.0.0.1", "localhost"])
     # force_close=True because the device closes the TCP connection after each
     # response without sending Connection: close — aiohttp would otherwise try
     # to reuse the socket and get a ConnectionResetError on the next request.
@@ -246,3 +254,56 @@ async def test_sensors_in_state(session):
             print(f"  {rom}: device_type={data[0]}, raw_value={data[1]}")
     else:
         print("\nNo sensors present on device")
+
+
+# ---------------------------------------------------------------------------
+# Weather simulation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_read_weather(session):
+    """GET /weather should return a msgpack stream whose first object is a list."""
+    async with session.get(f"{BASE_URL}/weather", timeout=TIMEOUT) as resp:
+        assert resp.status == 200, f"Expected 200, got {resp.status}"
+        raw = await resp.read()
+
+    unpacker = msgpack.Unpacker(raw=False)
+    unpacker.feed(raw)
+    channels = next(iter(unpacker), None)
+
+    assert isinstance(channels, list), f"Expected list as first object, got {type(channels)}"
+    print(f"\nWeather channels ({len(channels)} total):")
+    for i, ch in enumerate(channels):
+        print(f"  channel {i + 1}: {ch!r}")
+
+
+@pytest.mark.asyncio
+async def test_weather_channel_schema(session):
+    """Active weather channels must contain the expected keys."""
+    async with session.get(f"{BASE_URL}/weather", timeout=TIMEOUT) as resp:
+        raw = await resp.read()
+
+    unpacker = msgpack.Unpacker(raw=False)
+    unpacker.feed(raw)
+    channels = next(iter(unpacker), None) or []
+
+    active = [ch for ch in channels if ch is not None]
+    if not active:
+        pytest.skip("No active weather channels on device")
+
+    required_keys = {
+        "weather_program_id",
+        "clouds_state",
+        "cloudticks",
+        "clouds_next_state_tick",
+        "rainfront_start",
+        "rainfront_length",
+        "rainmins",
+        "rain_next_tick",
+    }
+    for i, ch in enumerate(active):
+        assert isinstance(ch, dict), f"Channel {i} is not a dict: {ch!r}"
+        missing = required_keys - ch.keys()
+        assert not missing, f"Channel {i} missing keys: {missing}"
+        print(f"\nChannel {i + 1} keys present: {sorted(ch.keys())}")

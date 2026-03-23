@@ -5,6 +5,7 @@ import aiohttp
 import logging
 import msgpack
 import pytest
+from unittest.mock import AsyncMock
 from aioresponses import aioresponses
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -154,8 +155,10 @@ async def test_update_data_success(coord):
     coord.config = dict(FAKE_CONFIG)
     with aioresponses() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        m.get(f"{BASE}/weather", body=_pack([None, {"weather_program_id": 1}]))
         data = await coord._async_update_data()
     assert data["uptime"] == 12345
+    assert data["weather"] == [None, {"weather_program_id": 1}]
 
 
 async def test_update_data_fetches_new_sensor_config(coord):
@@ -172,6 +175,7 @@ async def test_update_data_fetches_new_sensor_config(coord):
     with aioresponses() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
         m.post(f"{BASE}/", body=_pack(sensor_cfg))
+        m.get(f"{BASE}/weather", body=_pack([]))
         data = await coord._async_update_data()
 
     assert coord.config["sensors#sensor#AABBCCDDEEFF#name"] == "Water Temp"
@@ -199,11 +203,61 @@ async def test_update_data_sensor_config_fetch_error_logs_warning(coord, caplog)
     with aioresponses() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
         m.post(f"{BASE}/", exception=aiohttp.ClientConnectionError("down"))
+        m.get(f"{BASE}/weather", body=_pack([]))
         with caplog.at_level(logging.WARNING, logger="custom_components.sunriser"):
             data = await coord._async_update_data()
 
     assert data["uptime"] == 12345  # main data still returned despite the fetch failure
     assert "Could not fetch sensor config" in caplog.text
+
+
+async def test_async_get_weather_returns_first_msgpack_object(coord):
+    weather = [None, {"weather_program_id": 3, "clouds_state": 0}]
+    body = _pack(weather) + _pack({"ignored": True})
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/weather", body=body)
+        result = await coord.async_get_weather()
+
+    assert result == weather
+
+
+async def test_async_get_weather_returns_empty_list_for_empty_stream(coord):
+    with aioresponses() as m:
+        m.get(f"{BASE}/weather", body=b"")
+        result = await coord.async_get_weather()
+
+    assert result == []
+
+
+async def test_update_data_weather_client_error_logs_debug_and_returns_empty_weather(
+    coord, caplog
+):
+    coord.config = dict(FAKE_CONFIG)
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        m.get(f"{BASE}/weather", exception=aiohttp.ClientConnectionError("down"))
+        with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
+            data = await coord._async_update_data()
+
+    assert data["weather"] == {}
+    assert "Could not fetch weather data" in caplog.text
+
+
+async def test_update_data_weather_unexpected_error_logs_debug_and_returns_empty_weather(
+    coord, monkeypatch, caplog
+):
+    coord.config = dict(FAKE_CONFIG)
+    monkeypatch.setattr(coord, "async_get_weather", AsyncMock(side_effect=ValueError("boom")))
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
+            data = await coord._async_update_data()
+
+    assert data["weather"] == {}
+    assert "Unexpected error fetching weather data" in caplog.text
 
 
 # ---------------------------------------------------------------------------

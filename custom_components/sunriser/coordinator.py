@@ -141,6 +141,25 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
             resp.raise_for_status()
             return msgpack.unpackb(await resp.read(), raw=False)
 
+    async def async_get_weather(self) -> list:
+        """GET /weather — returns per-channel weather simulation state.
+
+        The response is a msgpack stream whose first object is a list with one
+        entry per PWM channel.  Each entry is either None (no weather program
+        assigned) or a dict with keys such as weather_program_id, clouds_state,
+        cloudticks, clouds_next_state_tick, rainfront_start, rainfront_length,
+        rainmins, rain_next_tick, moon_state, moon_next_state_tick.
+        """
+        session = self._get_session()
+        async with session.get(
+            f"{self.base_url}/weather",
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as resp:
+            resp.raise_for_status()
+            unpacker = msgpack.Unpacker(raw=False)
+            unpacker.feed(await resp.read())
+            return next(iter(unpacker), None) or []
+
     async def async_set_service_mode(self, enabled: bool) -> None:
         """PUT /state — enable or disable maintenance mode.
 
@@ -253,6 +272,16 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
                     self.config.update(sensor_config)
                 except aiohttp.ClientError as err:
                     _LOGGER.warning("Could not fetch sensor config: %s", err)
+
+        # Fetch weather data — non-fatal; endpoint is still under development.
+        try:
+            state["weather"] = await self.async_get_weather()
+        except aiohttp.ClientError as err:
+            _LOGGER.debug("Could not fetch weather data: %s", err)
+            state["weather"] = {}
+        except Exception as err:
+            _LOGGER.debug("Unexpected error fetching weather data: %s", err)
+            state["weather"] = {}
 
         return state
 

@@ -41,6 +41,8 @@ async def async_setup_entry(
             if device_type == _DS1820:
                 entities.append(SunRiserTemperatureSensor(coordinator, entry, rom))
 
+    entities.append(SunRiserWeatherSensor(coordinator))
+
     async_add_entities(entities)
 
 
@@ -132,3 +134,52 @@ class SunRiserTemperatureSensor(CoordinatorEntity[SunRiserCoordinator], SensorEn
         if self.coordinator.sensor_unit(self._rom) == _UNIT_CELSIUS:
             return UnitOfTemperature.CELSIUS
         return "raw"
+
+
+# ---------------------------------------------------------------------------
+# Weather simulation sensor (GET /weather — API still under development)
+# ---------------------------------------------------------------------------
+
+
+class SunRiserWeatherSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity):
+    """Weather simulation state for the device.
+
+    /weather returns a list with one entry per PWM channel — either None
+    (no weather program assigned) or a dict with keys:
+      weather_program_id, clouds_state, cloudticks, clouds_next_state_tick,
+      rainfront_start, rainfront_length, rainmins, rain_next_tick,
+      moon_state (optional), moon_next_state_tick (optional).
+
+    State = number of channels with an active weather program.
+    Full per-channel data is in extra_state_attributes.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Weather Simulation"
+    _attr_icon = "mdi:weather-partly-cloudy"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: SunRiserCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator._entry_id}_weather"
+        self._attr_device_info = coordinator.device_info
+
+    def _channels(self) -> list:
+        if self.coordinator.data is None:
+            return []
+        return self.coordinator.data.get("weather") or []
+
+    @property
+    def native_value(self) -> int | None:
+        channels = self._channels()
+        if not channels:
+            return None
+        return sum(1 for ch in channels if ch is not None)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {
+            f"channel_{i + 1}": ch
+            for i, ch in enumerate(self._channels())
+            if ch is not None
+        }
