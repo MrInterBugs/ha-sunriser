@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.3] - 2026-03-23
+
+### Fixed
+
+- Fixed brightness scaling: only PWM 1000 reports 100%, and PWM 1–3 no longer reports 0% when on
+- Fixed `manifest.json` key ordering (`quality_scale` before `requirements`) to pass hassfest
+
+### Added
+
+- `quality_scale: "bronze"` in `manifest.json`
+- `single_config_entry: true` in `manifest.json` — prevents duplicate device entries
+
 ## [1.0.2] - 2026-03-23
 
 ### Changed
