@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.1.1] - 2026-03-23
+
+### Added
+
+- **DHCP discovery** — devices with a hostname matching `sunriser*` are automatically discovered when they join the network; HA shows a confirmation prompt before adding the entry
+- MAC address used as unique ID so a device IP change is handled silently (existing entry updated, no user action needed)
+
+### Fixed
+
+- `DhcpServiceInfo` imported from `homeassistant.helpers.service_info.dhcp` instead of the full DHCP component, avoiding the `aiodhcpwatcher` dependency in tests
+
 ## [1.1.0] - 2026-03-23
 
 ### Changed
