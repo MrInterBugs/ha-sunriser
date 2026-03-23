@@ -98,8 +98,12 @@ def _register_services(hass: HomeAssistant) -> None:
         return {"path": path}
 
     async def handle_restore(call: ServiceCall) -> None:
+        from pathlib import Path
+
         file_path: str = call.data["file_path"]
-        if not hass.config.is_allowed_path(file_path):
+        config_dir = Path(hass.config.config_dir).resolve()
+        in_config_dir = Path(file_path).resolve().is_relative_to(config_dir)
+        if not in_config_dir and not hass.config.is_allowed_path(file_path):
             raise HomeAssistantError(f"Path not allowed by Home Assistant: {file_path}")
 
         def _read() -> bytes:

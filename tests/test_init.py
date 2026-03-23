@@ -2,10 +2,13 @@
 """Tests for custom_components/sunriser/__init__.py (setup and unload)."""
 
 import aiohttp
+import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from homeassistant.exceptions import HomeAssistantError
+
 from tests.conftest import ENTRY_ID, FAKE_STATE
-from custom_components.sunriser import _async_reload_entry
+from custom_components.sunriser import _async_reload_entry, _get_coordinator, _register_services
 from custom_components.sunriser.const import DOMAIN
 
 
@@ -134,3 +137,112 @@ async def test_unload_entry(hass, mock_config_entry):
 
     assert result is True
     assert ENTRY_ID not in hass.data.get(DOMAIN, {})
+
+
+# ---------------------------------------------------------------------------
+# Helpers for service tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def setup_entry(hass, mock_config_entry):
+    """Set up the integration entry and return the coordinator."""
+    mock_config_entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.sunriser.coordinator.SunRiserCoordinator.async_load_device_config",
+            new=AsyncMock(),
+        ),
+        patch(
+            "custom_components.sunriser.coordinator.SunRiserCoordinator._async_update_data",
+            new=AsyncMock(return_value=FAKE_STATE),
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+    return hass.data[DOMAIN][ENTRY_ID]
+
+
+# ---------------------------------------------------------------------------
+# _get_coordinator / _register_services
+# ---------------------------------------------------------------------------
+
+
+async def test_get_coordinator_raises_when_not_loaded(hass):
+    with pytest.raises(HomeAssistantError, match="not loaded"):
+        _get_coordinator(hass)
+
+
+async def test_register_services_is_reentrant(hass, setup_entry):
+    """Calling _register_services a second time must be a no-op."""
+    _register_services(hass)
+    assert hass.services.has_service(DOMAIN, "backup")
+
+
+# ---------------------------------------------------------------------------
+# Service handlers
+# ---------------------------------------------------------------------------
+
+
+async def test_service_backup(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_get_backup = AsyncMock(return_value=b"\x80")
+
+    from unittest.mock import mock_open as _mock_open
+    m = _mock_open()
+    with patch("builtins.open", m):
+        result = await hass.services.async_call(
+            DOMAIN, "backup", {}, blocking=True, return_response=True
+        )
+
+    coordinator.async_get_backup.assert_awaited_once()
+    m().write.assert_called_once_with(b"\x80")
+    assert "path" in result
+    assert result["path"].endswith(".msgpack")
+
+
+async def test_service_restore(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_restore = AsyncMock()
+
+    from unittest.mock import mock_open as _mock_open
+    m = _mock_open(read_data=b"\x80")
+    with (
+        patch.object(hass.config, "is_allowed_path", return_value=True),
+        patch("builtins.open", m),
+    ):
+        await hass.services.async_call(
+            DOMAIN, "restore", {"file_path": "/config/backup.msgpack"}, blocking=True
+        )
+
+    coordinator.async_restore.assert_awaited_once_with(b"\x80")
+
+
+async def test_service_restore_disallowed_path(hass, setup_entry):
+    with patch.object(hass.config, "is_allowed_path", return_value=False):
+        with pytest.raises(HomeAssistantError, match="not allowed"):
+            await hass.services.async_call(
+                DOMAIN, "restore", {"file_path": "/etc/passwd"}, blocking=True
+            )
+
+
+async def test_service_get_errors(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_get_errors = AsyncMock(return_value="error log content")
+
+    result = await hass.services.async_call(
+        DOMAIN, "get_errors", {}, blocking=True, return_response=True
+    )
+
+    assert result == {"content": "error log content"}
+
+
+async def test_service_get_log(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_get_log = AsyncMock(return_value="diagnostic log content")
+
+    result = await hass.services.async_call(
+        DOMAIN, "get_log", {}, blocking=True, return_response=True
+    )
+
+    assert result == {"content": "diagnostic log content"}

@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.1] - 2026-03-23
+
+### Fixed
+
+- `sunriser.restore` now accepts backup files saved by `sunriser.backup` — HA's `allowlist_external_dirs` does not include the config directory by default, so the path check now also allows any file inside the HA config directory
+
 ## [1.2.0] - 2026-03-23
 
 ### Added
