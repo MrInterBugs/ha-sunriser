@@ -11,7 +11,7 @@ pycares==5.0.1
 aioresponses==0.7.8
 pytest==9.0.0
 pytest-cov==7.0.0
-pytest-homeassistant-custom-component==0.13.205
+pytest-homeassistant-custom-component==0.13.319
 
 # Linting
 black==26.3.1
