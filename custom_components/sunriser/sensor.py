@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+from datetime import timedelta
+
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -12,6 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import SunRiserCoordinator
@@ -186,25 +189,41 @@ class SunRiserWeatherChannelSensor(
         ch = self._channel_data()
         if not ch:
             return {}
+
+        uptime_ms = ((self.coordinator.data or {}).get("uptime") or 0) * 1000
+
+        # *_next_state_tick / *_next_tick fields are milliseconds from device
+        # boot; convert to seconds until the next state transition.
+        _tick_to_seconds = {
+            "clouds_next_state_tick": "clouds_next_change_at",
+            "rain_next_tick": "rain_next_at",
+            "thunder_next_state_tick": "thunder_next_change_at",
+            "moon_next_state_tick": "moon_next_change_at",
+        }
         _rename = {
-            "clouds_state": "clouds_state",
             "cloudticks": "cloud_ticks",
-            "clouds_next_state_tick": "clouds_next_state_tick",
             "rainmins": "rain_duration_mins",
             "rainfront_start": "rainfront_start_tick",
             "rainfront_length": "rainfront_length_ticks",
             "stormfront_start": "stormfront_start_tick",
             "stormfront_length": "stormfront_length_ticks",
-            "rain_next_tick": "rain_next_tick",
-            "thunder_state": "thunder_state",
-            "thunder_next_state_tick": "thunder_next_state_tick",
-            "moon_state": "moon_state",
-            "moon_next_state_tick": "moon_next_state_tick",
             "daycount": "day_count",
         }
         exclude = {"weather_program_id"}
-        return {
-            _rename.get(k, k): v
-            for k, v in ch.items()
-            if k not in exclude
-        }
+
+        now = dt_util.utcnow()
+        result = {}
+        for k, v in ch.items():
+            if k in exclude:
+                continue
+            if k in _tick_to_seconds:
+                if v:
+                    seconds = round((v - uptime_ms) / 1000)
+                    result[_tick_to_seconds[k]] = (
+                        now + timedelta(seconds=seconds)
+                    ).isoformat()
+                else:
+                    result[_tick_to_seconds[k]] = None
+            else:
+                result[_rename.get(k, k)] = v
+        return result
