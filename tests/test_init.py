@@ -252,3 +252,66 @@ async def test_service_get_log(hass, setup_entry):
     )
 
     assert result == {"content": "diagnostic log content"}
+
+
+# ---------------------------------------------------------------------------
+# async_setup — static path + add_extra_js_url
+# ---------------------------------------------------------------------------
+
+
+async def test_async_setup_registers_static_path_and_js_url(hass, mock_http_frontend):
+    """async_setup must register the card JS as a static path and add it as an extra JS URL."""
+    from custom_components.sunriser import async_setup
+    from unittest.mock import patch as _patch, call as _call
+
+    with _patch("custom_components.sunriser.add_extra_js_url") as mock_add_js:
+        result = await async_setup(hass, {})
+
+    assert result is True
+    mock_http_frontend.async_register_static_paths.assert_awaited_once()
+    # The registered URL must be the card URL
+    args = mock_http_frontend.async_register_static_paths.call_args[0][0]
+    assert args[0].url_path == "/sunriser/sunriser-dayplan-card.js"
+    mock_add_js.assert_called_once_with(hass, "/sunriser/sunriser-dayplan-card.js")
+
+
+# ---------------------------------------------------------------------------
+# Dayplanner service handlers
+# ---------------------------------------------------------------------------
+
+
+async def test_service_get_dayplanner_schedule(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.config["pwm#1#color"] = "4500k"
+    coordinator.async_get_dayplanner = AsyncMock(
+        return_value=[{"time": "08:00", "percent": 50}]
+    )
+
+    result = await hass.services.async_call(
+        DOMAIN,
+        "get_dayplanner_schedule",
+        {"pwm": 1},
+        blocking=True,
+        return_response=True,
+    )
+
+    coordinator.async_get_dayplanner.assert_awaited_once_with(1)
+    assert result["pwm"] == 1
+    assert result["color_id"] == "4500k"
+    assert result["markers"] == [{"time": "08:00", "percent": 50}]
+    assert "name" in result
+
+
+async def test_service_set_dayplanner_schedule(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_set_dayplanner = AsyncMock()
+
+    markers = [{"time": "08:00", "percent": 50}, {"time": "20:00", "percent": 0}]
+    await hass.services.async_call(
+        DOMAIN,
+        "set_dayplanner_schedule",
+        {"pwm": 2, "markers": markers},
+        blocking=True,
+    )
+
+    coordinator.async_set_dayplanner.assert_awaited_once_with(2, markers)

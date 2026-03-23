@@ -449,3 +449,45 @@ async def test_async_get_log_returns_text(coord):
         m.get(f"{BASE}/log", body=b"log entry 1\nlog entry 2")
         result = await coord.async_get_log()
     assert "log entry 1" in result
+
+
+# ---------------------------------------------------------------------------
+# async_get_dayplanner / async_set_dayplanner
+# ---------------------------------------------------------------------------
+
+
+async def test_async_get_dayplanner_parses_flat_array(coord):
+    """Flat [daymin, percent, ...] array is converted to sorted marker dicts."""
+    # 08:00 → 480 mins, 20:30 → 1230 mins
+    flat = [1230, 75, 480, 50]
+    with aioresponses() as m:
+        m.post(f"{BASE}/", body=_pack({"dayplanner#marker#1": flat}))
+        result = await coord.async_get_dayplanner(1)
+
+    assert result == [
+        {"time": "08:00", "percent": 50},
+        {"time": "20:30", "percent": 75},
+    ]
+
+
+async def test_async_get_dayplanner_returns_empty_list_when_unset(coord):
+    """None or missing key returns an empty list."""
+    with aioresponses() as m:
+        m.post(f"{BASE}/", body=_pack({"dayplanner#marker#2": None}))
+        result = await coord.async_get_dayplanner(2)
+
+    assert result == []
+
+
+async def test_async_set_dayplanner_sends_flat_array(coord):
+    """Marker dicts are converted back to flat [daymin, percent, ...] and PUT."""
+    coord.config["factory_version"] = "1.005"
+    markers = [{"time": "08:00", "percent": 50}, {"time": "20:30", "percent": 75}]
+    with aioresponses() as m:
+        m.put(f"{BASE}/", status=200)
+        await coord.async_set_dayplanner(1, markers)
+
+    sent = msgpack.unpackb(
+        m.requests[("PUT", URL(f"{BASE}/"))][0].kwargs["data"], raw=False
+    )
+    assert sent["dayplanner#marker#1"] == [480, 50, 1230, 75]

@@ -8,6 +8,7 @@ import aiohttp
 import voluptuous as vol
 
 from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
@@ -65,7 +66,9 @@ _SET_DAYPLANNER_SCHEMA = vol.Schema(
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Register the Day Planner card as a frontend resource."""
-    hass.http.register_static_path(_CARD_URL, str(_CARD_PATH), cache_headers=False)
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(_CARD_URL, str(_CARD_PATH), cache_headers=False)]
+    )
     add_extra_js_url(hass, _CARD_URL)
     return True
 

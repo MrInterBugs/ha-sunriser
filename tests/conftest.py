@@ -81,6 +81,20 @@ def mock_config_entry():
     )
 
 
+@pytest.fixture(autouse=True)
+def mock_http_frontend(hass):
+    """Mock the HTTP static-path registration and add_extra_js_url called by
+    async_setup so all tests that trigger component load don't need a real
+    HTTP server."""
+    from unittest.mock import AsyncMock as _AsyncMock, MagicMock as _MagicMock, patch as _patch
+
+    mock_http = _MagicMock()
+    mock_http.async_register_static_paths = _AsyncMock()
+    hass.http = mock_http
+    with _patch("custom_components.sunriser.add_extra_js_url"):
+        yield mock_http
+
+
 @pytest.fixture
 def coordinator(hass, mock_config_entry):
     """Real SunRiserCoordinator pre-populated with fake data; network calls mocked."""
