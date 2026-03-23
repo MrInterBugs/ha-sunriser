@@ -1,8 +1,16 @@
 # Changelog
 
-## [1.0.6] - 2026-03-23
+## [1.1.0] - 2026-03-23
 
 ### Changed
+
+- **Weather channel attributes** now expose `*_next_change_at` / `*_next_at` as UTC ISO datetimes (e.g. `moon_next_change_at: 2026-03-24T00:27:39+00:00`) computed from device uptime ticks — usable directly in HA automations via `| as_datetime`
+- Inactive tick fields (value = 0) render as `None` instead of a meaningless past datetime
+- Renamed ambiguous raw keys: `cloudticks → cloud_ticks`, `rainmins → rain_duration_mins`, `rainfront_start/length → *_tick`, `stormfront_start/length → *_tick`, `daycount → day_count`
+
+## [1.0.6] - 2026-03-23
+
+### Updated
 
 - **Weather simulation sensor** now creates one entity per PWM channel that has a weather program assigned (e.g. `Weather Channel 2`), instead of a single aggregate count sensor
 - Each weather channel sensor state = `weather_program_id`; all other fields (`clouds_state`, `cloudticks`, `rainfront_start`, `rainmins`, `moon_state`, etc.) exposed as entity attributes
