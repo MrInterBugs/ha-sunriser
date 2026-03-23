@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.2] - 2026-03-23
+
+### Changed
+
+- Added `SPDX-License-Identifier: GPL-3.0-or-later` header to all Python source files
+- Added `LICENSE` file (GNU GPL v3)
+- Corrected README attribution — upstream source code is GPL v3, not CC BY 4.0
+- Added `requirements.txt` for development dependencies (msgpack, aiohttp, pytest, black)
+- Added `.gitignore`
+- Removed `render_readme` from `hacs.json` (no longer a valid HACS field)
+- Fixed `manifest.json` key ordering to satisfy hassfest (`domain`, `name`, then alphabetical)
+- Added hassfest and Black formatting jobs to the GitHub Actions validation workflow
+- Updated GitHub Actions to `actions/checkout@v5` and `actions/setup-python@v6` (Node.js 24)
+
 ## [1.0.1] - 2026-03-22
 
 ### Changed
