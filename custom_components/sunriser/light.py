@@ -12,11 +12,18 @@ from .coordinator import SunRiserCoordinator
 
 
 # Linear scale: device 0–1000 ↔ HA 0–255
+# Endpoints are exact: only PWM 1000 maps to HA 255, and only HA 255 maps to PWM 1000.
 def _to_ha_brightness(pwm_value: int) -> int:
-    return round(pwm_value * 255 / PWM_MAX)
+    if pwm_value <= 0:
+        return 0
+    if pwm_value >= PWM_MAX:
+        return 255
+    return max(1, min(254, round(pwm_value * 255 / PWM_MAX)))
 
 
 def _to_device_brightness(brightness: int) -> int:
+    if brightness >= 255:
+        return PWM_MAX
     return round(brightness * PWM_MAX / 255)
 
 
