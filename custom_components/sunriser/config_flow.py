@@ -6,6 +6,7 @@ import logging
 import aiohttp
 import voluptuous as vol
 
+from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -89,6 +90,40 @@ class SunRiserConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=STEP_SCHEMA,
             errors=errors,
+        )
+
+
+    async def async_step_dhcp(self, discovery_info: DhcpServiceInfo) -> ConfigFlowResult:
+        """Handle a device discovered via DHCP."""
+        await self.async_set_unique_id(discovery_info.macaddress)
+        self._abort_if_unique_id_configured(updates={CONF_HOST: discovery_info.ip})
+
+        # Test the connection before bothering the user.
+        error = await _test_connection(discovery_info.ip, DEFAULT_PORT, "")
+        if error:
+            return self.async_abort(reason=error)
+
+        self._discovered_host = discovery_info.ip
+        return await self.async_step_dhcp_confirm()
+
+    async def async_step_dhcp_confirm(
+        self, user_input: dict | None = None
+    ) -> ConfigFlowResult:
+        """Confirm adding a DHCP-discovered device."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title=self._discovered_host,
+                data={
+                    CONF_HOST: self._discovered_host,
+                    CONF_PORT: DEFAULT_PORT,
+                    CONF_PASSWORD: None,
+                },
+            )
+
+        self._set_confirm_only()
+        return self.async_show_form(
+            step_id="dhcp_confirm",
+            description_placeholders={"host": self._discovered_host},
         )
 
 

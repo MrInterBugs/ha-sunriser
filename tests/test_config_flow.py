@@ -5,6 +5,7 @@ import aiohttp
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant import config_entries
+from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -172,6 +173,76 @@ async def test_step_user_duplicate_aborts(hass):
 
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "single_instance_allowed"
+
+
+# ---------------------------------------------------------------------------
+# DHCP discovery flow
+# ---------------------------------------------------------------------------
+
+DHCP_INFO = DhcpServiceInfo(
+    ip="192.168.0.50",
+    hostname="sunriser",
+    macaddress="aabbccddeeff",
+)
+
+
+async def _start_dhcp_flow(hass):
+    return await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_DHCP},
+        data=DHCP_INFO,
+    )
+
+
+async def test_dhcp_shows_confirm_form(hass):
+    with patch(
+        "custom_components.sunriser.config_flow._test_connection", return_value=None
+    ):
+        result = await _start_dhcp_flow(hass)
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "dhcp_confirm"
+
+
+async def test_dhcp_confirm_creates_entry(hass):
+    with patch(
+        "custom_components.sunriser.config_flow._test_connection", return_value=None
+    ), patch("custom_components.sunriser.async_setup_entry", return_value=True):
+        result = await _start_dhcp_flow(hass)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {}
+        )
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_HOST] == "192.168.0.50"
+    assert result["data"][CONF_PORT] == DEFAULT_PORT
+    assert result["data"][CONF_PASSWORD] is None
+
+
+async def test_dhcp_aborts_if_already_configured(hass):
+    """single_config_entry: true means HA aborts any new flow when an entry exists."""
+    existing = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="aabbccddeeff",
+        data={CONF_HOST: "192.168.0.50", CONF_PORT: DEFAULT_PORT, CONF_PASSWORD: None},
+    )
+    existing.add_to_hass(hass)
+
+    result = await _start_dhcp_flow(hass)
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "single_instance_allowed"
+
+
+async def test_dhcp_aborts_on_cannot_connect(hass):
+    with patch(
+        "custom_components.sunriser.config_flow._test_connection",
+        return_value="cannot_connect",
+    ):
+        result = await _start_dhcp_flow(hass)
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "cannot_connect"
 
 
 # ---------------------------------------------------------------------------

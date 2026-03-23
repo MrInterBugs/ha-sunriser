@@ -241,7 +241,35 @@ def test_weather_channel_attributes_exclude_program_id(coordinator):
         "weather": [{"weather_program_id": 2, "clouds_state": 0, "moon_state": 1}],
     }
     sensor = _make_weather_channel_sensor(coordinator, channel=1)
-    assert sensor.extra_state_attributes == {"clouds_state": 0, "moon_state": 1}
+    attrs = sensor.extra_state_attributes
+    assert "weather_program_id" not in attrs
+    assert attrs["clouds_state"] == 0
+    assert attrs["moon_state"] == 1
+
+
+def test_weather_channel_tick_nonzero_produces_datetime(coordinator):
+    # uptime = 12345 s = 12_345_000 ms; tick at 13_345_000 ms = 1000 s in the future
+    coordinator.data = {
+        **FAKE_STATE,
+        "weather": [{"weather_program_id": 1, "moon_next_state_tick": 13_345_000}],
+    }
+    sensor = _make_weather_channel_sensor(coordinator, channel=1)
+    attrs = sensor.extra_state_attributes
+    assert "moon_next_change_at" in attrs
+    assert attrs["moon_next_change_at"] is not None
+    # Should be an ISO datetime string approximately 1000 s from now
+    from datetime import datetime, timezone
+    dt = datetime.fromisoformat(attrs["moon_next_change_at"])
+    assert dt.tzinfo is not None
+
+
+def test_weather_channel_tick_zero_produces_none(coordinator):
+    coordinator.data = {
+        **FAKE_STATE,
+        "weather": [{"weather_program_id": 1, "moon_next_state_tick": 0}],
+    }
+    sensor = _make_weather_channel_sensor(coordinator, channel=1)
+    assert sensor.extra_state_attributes["moon_next_change_at"] is None
 
 
 def test_weather_channel_unique_id(coordinator):
