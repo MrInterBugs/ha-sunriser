@@ -394,4 +394,10 @@ window.customCards.push({
   type: "sunriser-dayplan-card",
   name: "SunRiser Day Planner",
   description: "Day planner schedule chart for all active PWM channels",
+  preview: true,
+  documentationURL: "https://github.com/MrInterBugs/ha-sunriser",
 });
+
+// Notify HA that a new custom card type is available (handles the case where
+// the module loads after the picker has already been initialised).
+window.dispatchEvent(new Event("ll-custom-cards-updated"));

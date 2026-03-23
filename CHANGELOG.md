@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.1] - 2026-03-23
+
+### Fixed
+
+- Custom card now appears in the HA "Add card" picker — dispatches `ll-custom-cards-updated` to handle the race condition where the JS module loads after the picker is initialised; added `preview: true` to the card registration
+
 ## [1.4.0] - 2026-03-23
 
 ### Added
