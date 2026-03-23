@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.6] - 2026-03-23
+
+### Changed
+
+- **Weather simulation sensor** now creates one entity per PWM channel that has a weather program assigned (e.g. `Weather Channel 2`), instead of a single aggregate count sensor
+- Each weather channel sensor state = `weather_program_id`; all other fields (`clouds_state`, `cloudticks`, `rainfront_start`, `rainmins`, `moon_state`, etc.) exposed as entity attributes
+
 ## [1.0.5] - 2026-03-23
 
 ### Added

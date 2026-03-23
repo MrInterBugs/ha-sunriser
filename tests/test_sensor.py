@@ -9,7 +9,7 @@ from custom_components.sunriser.sensor import (
     SunRiserHostnameSensor,
     SunRiserTemperatureSensor,
     SunRiserUptimeSensor,
-    SunRiserWeatherSensor,
+    SunRiserWeatherChannelSensor,
     async_setup_entry,
 )
 
@@ -28,7 +28,22 @@ async def test_setup_creates_diagnostic_sensors(hass, coordinator, mock_config_e
     assert "SunRiserUptimeSensor" in types
     assert "SunRiserFirmwareSensor" in types
     assert "SunRiserHostnameSensor" in types
-    assert "SunRiserWeatherSensor" in types
+
+
+async def test_setup_creates_weather_channel_sensors(hass, coordinator, mock_config_entry):
+    coordinator.data = {
+        **coordinator.data,
+        "weather": [None, {"weather_program_id": 2}, {"weather_program_id": 5}],
+    }
+    hass.data.setdefault(DOMAIN, {})[ENTRY_ID] = coordinator
+
+    added = []
+    await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))
+
+    weather = [e for e in added if isinstance(e, SunRiserWeatherChannelSensor)]
+    assert len(weather) == 2
+    assert weather[0]._channel == 2
+    assert weather[1]._channel == 3
 
 
 async def test_setup_creates_temperature_sensor_for_ds1820(
@@ -75,12 +90,12 @@ async def test_setup_when_coordinator_data_none(hass, coordinator, mock_config_e
     await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))
 
     temp_sensors = [e for e in added if isinstance(e, SunRiserTemperatureSensor)]
-    weather_sensors = [e for e in added if isinstance(e, SunRiserWeatherSensor)]
+    weather_sensors = [e for e in added if isinstance(e, SunRiserWeatherChannelSensor)]
 
-    # Only diagnostic sensors, no temperature sensors.
-    assert len(added) == 4
+    # Only the three diagnostic sensors; no temp or weather channel sensors.
+    assert len(added) == 3
     assert len(temp_sensors) == 0
-    assert len(weather_sensors) == 1
+    assert len(weather_sensors) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -188,47 +203,50 @@ def test_temperature_name_from_config(coordinator, mock_config_entry):
 
 
 # ---------------------------------------------------------------------------
-# SunRiserWeatherSensor
+# SunRiserWeatherChannelSensor
 # ---------------------------------------------------------------------------
 
 
-def _make_weather_sensor(coordinator):
-    return SunRiserWeatherSensor(coordinator)
+def _make_weather_channel_sensor(coordinator, channel=1):
+    return SunRiserWeatherChannelSensor(coordinator, channel)
 
 
-def test_weather_none_when_no_data(coordinator):
+def test_weather_channel_value_is_program_id(coordinator):
+    coordinator.data = {
+        **FAKE_STATE,
+        "weather": [{"weather_program_id": 3, "clouds_state": 1}],
+    }
+    sensor = _make_weather_channel_sensor(coordinator, channel=1)
+    assert sensor.native_value == 3
+
+
+def test_weather_channel_none_when_no_data(coordinator):
     coordinator.data = None
-    sensor = _make_weather_sensor(coordinator)
+    sensor = _make_weather_channel_sensor(coordinator, channel=1)
     assert sensor.native_value is None
     assert sensor.extra_state_attributes == {}
 
 
-def test_weather_none_when_no_channels(coordinator):
-    coordinator.data = {**FAKE_STATE, "weather": []}
-    sensor = _make_weather_sensor(coordinator)
+def test_weather_channel_none_when_index_out_of_range(coordinator):
+    coordinator.data = {**FAKE_STATE, "weather": [{"weather_program_id": 1}]}
+    sensor = _make_weather_channel_sensor(coordinator, channel=5)
     assert sensor.native_value is None
 
 
-def test_weather_counts_active_channels(coordinator):
+def test_weather_channel_attributes_exclude_program_id(coordinator):
     coordinator.data = {
         **FAKE_STATE,
-        "weather": [
-            None,
-            {"weather_program_id": 1},
-            {"weather_program_id": 3, "moon_state": 2},
-        ],
+        "weather": [{"weather_program_id": 2, "clouds_state": 0, "moon_state": 1}],
     }
-    sensor = _make_weather_sensor(coordinator)
-    assert sensor.native_value == 2
+    sensor = _make_weather_channel_sensor(coordinator, channel=1)
+    assert sensor.extra_state_attributes == {"clouds_state": 0, "moon_state": 1}
 
 
-def test_weather_attributes_include_only_active_channels(coordinator):
-    ch2 = {"weather_program_id": 1, "clouds_state": 0}
-    ch3 = {"weather_program_id": 3, "moon_state": 2}
-    coordinator.data = {**FAKE_STATE, "weather": [None, ch2, ch3]}
-    sensor = _make_weather_sensor(coordinator)
+def test_weather_channel_unique_id(coordinator):
+    sensor = _make_weather_channel_sensor(coordinator, channel=3)
+    assert sensor.unique_id == f"{ENTRY_ID}_weather_3"
 
-    assert sensor.extra_state_attributes == {
-        "channel_2": ch2,
-        "channel_3": ch3,
-    }
+
+def test_weather_channel_name(coordinator):
+    sensor = _make_weather_channel_sensor(coordinator, channel=2)
+    assert sensor._attr_name == "Weather Channel 2"

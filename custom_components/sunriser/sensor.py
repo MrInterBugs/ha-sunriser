@@ -41,7 +41,10 @@ async def async_setup_entry(
             if device_type == _DS1820:
                 entities.append(SunRiserTemperatureSensor(coordinator, entry, rom))
 
-    entities.append(SunRiserWeatherSensor(coordinator))
+    weather = coordinator.data.get("weather") or [] if coordinator.data else []
+    for i, ch in enumerate(weather):
+        if ch is not None:
+            entities.append(SunRiserWeatherChannelSensor(coordinator, i + 1))
 
     async_add_entities(entities)
 
@@ -137,49 +140,49 @@ class SunRiserTemperatureSensor(CoordinatorEntity[SunRiserCoordinator], SensorEn
 
 
 # ---------------------------------------------------------------------------
-# Weather simulation sensor (GET /weather — API still under development)
+# Weather simulation sensors (GET /weather — API still under development)
+# One entity per PWM channel that has a weather program assigned.
 # ---------------------------------------------------------------------------
 
 
-class SunRiserWeatherSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity):
-    """Weather simulation state for the device.
+class SunRiserWeatherChannelSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity):
+    """Weather simulation state for a single PWM channel.
 
-    /weather returns a list with one entry per PWM channel — either None
-    (no weather program assigned) or a dict with keys:
-      weather_program_id, clouds_state, cloudticks, clouds_next_state_tick,
-      rainfront_start, rainfront_length, rainmins, rain_next_tick,
-      moon_state (optional), moon_next_state_tick (optional).
-
-    State = number of channels with an active weather program.
-    Full per-channel data is in extra_state_attributes.
+    State = weather_program_id (which program is running on this channel).
+    All other fields (clouds_state, rain ticks, moon state, etc.) are
+    exposed as extra state attributes.
     """
 
     _attr_has_entity_name = True
-    _attr_name = "Weather Simulation"
     _attr_icon = "mdi:weather-partly-cloudy"
-    _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator: SunRiserCoordinator) -> None:
+    def __init__(self, coordinator: SunRiserCoordinator, channel: int) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator._entry_id}_weather"
+        self._channel = channel
+        self._attr_unique_id = f"{coordinator._entry_id}_weather_{channel}"
+        self._attr_name = f"Weather Channel {channel}"
         self._attr_device_info = coordinator.device_info
 
-    def _channels(self) -> list:
+    def _channel_data(self) -> dict | None:
         if self.coordinator.data is None:
-            return []
-        return self.coordinator.data.get("weather") or []
+            return None
+        weather = self.coordinator.data.get("weather") or []
+        idx = self._channel - 1
+        if idx >= len(weather):
+            return None
+        return weather[idx]
 
     @property
     def native_value(self) -> int | None:
-        channels = self._channels()
-        if not channels:
+        ch = self._channel_data()
+        if ch is None:
             return None
-        return sum(1 for ch in channels if ch is not None)
+        return ch.get("weather_program_id")
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {
-            f"channel_{i + 1}": ch
-            for i, ch in enumerate(self._channels())
-            if ch is not None
-        }
+        ch = self._channel_data()
+        if not ch:
+            return {}
+        exclude = {"weather_program_id"}
+        return {k: v for k, v in ch.items() if k not in exclude}
