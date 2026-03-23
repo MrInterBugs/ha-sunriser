@@ -92,8 +92,9 @@ class SunRiserConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-
-    async def async_step_dhcp(self, discovery_info: DhcpServiceInfo) -> ConfigFlowResult:
+    async def async_step_dhcp(
+        self, discovery_info: DhcpServiceInfo
+    ) -> ConfigFlowResult:
         """Handle a device discovered via DHCP."""
         await self.async_set_unique_id(discovery_info.macaddress)
         self._abort_if_unique_id_configured(updates={CONF_HOST: discovery_info.ip})

@@ -1,9 +1,9 @@
 {
   "domain": "sunriser",
-  "dhcp": [{"hostname": "sunriser*"}],
   "name": "SunRiser",
   "codeowners": ["@MrInterBugs"],
   "config_flow": true,
+  "dhcp": [{"hostname": "sunriser*"}],
   "documentation": "https://github.com/MrInterBugs/ha-sunriser",
   "integration_type": "device",
   "iot_class": "local_polling",
