@@ -1,10 +1,17 @@
-# Runtime
-msgpack>=1.0.0
+# Shared CI/dev requirements.
+# Runtime requirements for Home Assistant itself belong in manifest.json.
 
-# Testing
-aiohttp>=3.0.0
-pytest-homeassistant-custom-component>=0.13.0
-aioresponses>=0.7.0
+# Runtime library used by this integration.
+msgpack==1.1.2
+
+# Test stack pinned for reproducible CI runs.
+aiohttp==3.13.3
+aiodns==4.0.0
+pycares==5.0.1
+aioresponses==0.7.8
+pytest==9.0.0
+pytest-cov==7.0.0
+pytest-homeassistant-custom-component==0.13.319
 
 # Linting
-black>=24.0.0
+black==26.3.1

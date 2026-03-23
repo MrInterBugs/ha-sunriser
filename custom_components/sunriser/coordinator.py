@@ -71,6 +71,11 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
             self._session = aiohttp.ClientSession()
         return self._session
 
+    async def async_close(self) -> None:
+        """Close the dedicated HTTP session, if one was created."""
+        if self._session and not self._session.closed:
+            await self._session.close()
+
     async def async_authenticate(self) -> None:
         """Send password to device and store the session cookie.
 

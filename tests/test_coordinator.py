@@ -27,8 +27,12 @@ def _pack(data):
 
 
 @pytest.fixture
-def coord(hass, mock_config_entry):
-    return SunRiserCoordinator(hass, mock_config_entry)
+async def coord(hass, mock_config_entry):
+    coordinator = SunRiserCoordinator(hass, mock_config_entry)
+    try:
+        yield coordinator
+    finally:
+        await coordinator.async_close()
 
 
 # ---------------------------------------------------------------------------
@@ -111,32 +115,34 @@ async def test_load_device_config_with_password(hass, mock_config_entry):
         options={},
     )
     coord = SunRiserCoordinator(hass, entry)
+    try:
+        base_resp = {
+            "hostname": "h",
+            "save_version": None,
+            "factory_version": "1",
+            "model": "sr",
+            "pwm_count": 1,
+            "name": "SR",
+            "model_id": "sr8",
+        }
+        pwm_resp = {
+            "pwm#1#name": None,
+            "pwm#1#onoff": False,
+            "pwm#1#max": None,
+            "pwm#1#color": "6500k",
+        }
+        state = {"pwms": {"1": 0}, "uptime": 1, "service_mode": 0}
 
-    base_resp = {
-        "hostname": "h",
-        "save_version": None,
-        "factory_version": "1",
-        "model": "sr",
-        "pwm_count": 1,
-        "name": "SR",
-        "model_id": "sr8",
-    }
-    pwm_resp = {
-        "pwm#1#name": None,
-        "pwm#1#onoff": False,
-        "pwm#1#max": None,
-        "pwm#1#color": "6500k",
-    }
-    state = {"pwms": {"1": 0}, "uptime": 1, "service_mode": 0}
+        with aioresponses() as m:
+            m.post(f"{BASE}/", body=b"OK")  # auth
+            m.post(f"{BASE}/", body=_pack(base_resp))  # config
+            m.get(f"{BASE}/state", body=_pack(state))
+            m.post(f"{BASE}/", body=_pack(pwm_resp))
+            await coord.async_load_device_config()
 
-    with aioresponses() as m:
-        m.post(f"{BASE}/", body=b"OK")  # auth
-        m.post(f"{BASE}/", body=_pack(base_resp))  # config
-        m.get(f"{BASE}/state", body=_pack(state))
-        m.post(f"{BASE}/", body=_pack(pwm_resp))
-        await coord.async_load_device_config()
-
-    assert coord.config["hostname"] == "h"
+        assert coord.config["hostname"] == "h"
+    finally:
+        await coord.async_close()
 
 
 # ---------------------------------------------------------------------------
