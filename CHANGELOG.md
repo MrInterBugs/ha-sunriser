@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0] - 2026-03-23
+
+### Added
+
+- **Day Planner custom card** (`www/sunriser-dayplan-card.js`) — Lovelace card that renders all active PWM schedules as a 24-hour SVG chart; uses the same LED colours as the firmware web UI; channel names resolved from the device (e.g. "TROPIC 4500K") with no manual configuration required
+- **`get_dayplanner_schedule` response enriched** — now returns `name` (resolved channel name) and `color_id` (LED colour identifier) alongside `pwm` and `markers`, making the response self-describing for automations and the custom card
+
 ## [1.3.1] - 2026-03-23
 
 ### Added

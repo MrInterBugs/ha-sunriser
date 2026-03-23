@@ -180,7 +180,12 @@ def _register_services(hass: HomeAssistant) -> None:
         coordinator = _get_coordinator(hass)
         pwm: int = call.data["pwm"]
         markers = await coordinator.async_get_dayplanner(pwm)
-        return {"pwm": pwm, "markers": markers}
+        return {
+            "pwm": pwm,
+            "name": coordinator.pwm_name(pwm),
+            "color_id": coordinator.config.get(f"pwm#{pwm}#color") or "",
+            "markers": markers,
+        }
 
     async def handle_set_dayplanner(call: ServiceCall) -> None:
         coordinator = _get_coordinator(hass)
