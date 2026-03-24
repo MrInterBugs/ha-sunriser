@@ -255,24 +255,29 @@ async def test_service_get_log(hass, setup_entry):
 
 
 # ---------------------------------------------------------------------------
-# async_setup — static path + add_extra_js_url
+# async_setup — static path + Lovelace resource registration
 # ---------------------------------------------------------------------------
 
 
 async def test_async_setup_registers_static_path_and_js_url(hass, mock_http_frontend):
-    """async_setup must register the card JS as a static path and add it as an extra JS URL."""
-    from custom_components.sunriser import async_setup
-    from unittest.mock import patch as _patch, call as _call
+    """async_setup registers the card JS as a static path.
+
+    When lovelace is unavailable (test env), it falls back to add_extra_js_url
+    with a versioned URL (?v=<version>).
+    """
+    from custom_components.sunriser import async_setup, _CARD_VERSION
+    from unittest.mock import patch as _patch
 
     with _patch("custom_components.sunriser.add_extra_js_url") as mock_add_js:
         result = await async_setup(hass, {})
 
     assert result is True
     mock_http_frontend.async_register_static_paths.assert_awaited_once()
-    # The registered URL must be the card URL
     args = mock_http_frontend.async_register_static_paths.call_args[0][0]
     assert args[0].url_path == "/sunriser/sunriser-dayplan-card.js"
-    mock_add_js.assert_called_once_with(hass, "/sunriser/sunriser-dayplan-card.js")
+    mock_add_js.assert_called_once_with(
+        hass, f"/sunriser/sunriser-dayplan-card.js?v={_CARD_VERSION}"
+    )
 
 
 # ---------------------------------------------------------------------------

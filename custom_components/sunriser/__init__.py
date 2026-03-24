@@ -7,10 +7,18 @@ import pathlib
 import aiohttp
 import voluptuous as vol
 
+from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.lovelace.resources import ResourceStorageCollection
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
-from homeassistant.core import Event, HomeAssistant, ServiceCall, SupportsResponse
+from homeassistant.core import (
+    CoreState,
+    Event,
+    HomeAssistant,
+    ServiceCall,
+    SupportsResponse,
+)
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.util import dt as dt_util
@@ -23,6 +31,7 @@ from .coordinator import SunRiserCoordinator
 
 _CARD_URL = "/sunriser/sunriser-dayplan-card.js"
 _CARD_PATH = pathlib.Path(__file__).parent / "www" / "sunriser-dayplan-card.js"
+_CARD_VERSION = "1.4.7"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -73,22 +82,42 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         [StaticPathConfig(_CARD_URL, str(_CARD_PATH), cache_headers=False)]
     )
 
-    async def _register_lovelace_resource(_event: Event) -> None:
+    async def _register(_event: Event | None = None) -> None:
         lovelace = hass.data.get("lovelace")
-        if not lovelace:
+        if lovelace is None:
             _LOGGER.warning(
-                "SunRiser: lovelace not available, card resource not registered"
+                "SunRiser: lovelace not available, falling back to add_extra_js_url"
             )
+            add_extra_js_url(hass, f"{_CARD_URL}?v={_CARD_VERSION}")
             return
-        resources = lovelace.get("resources")
-        if resources is None:
-            return
-        await resources.async_load()
-        if not any(r["url"] == _CARD_URL for r in resources.async_items()):
-            await resources.async_create_item({"res_type": "module", "url": _CARD_URL})
-            _LOGGER.debug("SunRiser: registered Day Planner card as Lovelace resource")
 
-    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _register_lovelace_resource)
+        resources = lovelace.resources
+        await resources.async_get_info()
+
+        url_versioned = f"{_CARD_URL}?v={_CARD_VERSION}"
+        for item in resources.async_items():
+            item_url: str = item.get("url", "")
+            if item_url.split("?")[0] == _CARD_URL:
+                if item_url != url_versioned and isinstance(
+                    resources, ResourceStorageCollection
+                ):
+                    await resources.async_update_item(
+                        item["id"], {"res_type": "module", "url": url_versioned}
+                    )
+                return
+
+        if isinstance(resources, ResourceStorageCollection):
+            await resources.async_create_item(
+                {"res_type": "module", "url": url_versioned}
+            )
+            _LOGGER.debug("SunRiser: registered Day Planner card as Lovelace resource")
+        else:
+            add_extra_js_url(hass, url_versioned)
+
+    if hass.state == CoreState.running:
+        await _register()
+    else:
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _register)
     return True
 
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.7] - 2026-03-24
+
+### Fixed
+
+- Day Planner card now correctly registers itself in Settings → Dashboards → Resources. Previous attempts used `add_extra_js_url` and accessed `hass.data["lovelace"]` as a dict (always returning `None`). Now uses `lovelace.resources` (attribute access), `async_get_info()` to force-load the storage collection, and `ResourceStorageCollection.async_create_item` / `async_update_item` — the same pattern used by WebRTC and other production integrations. Falls back to `add_extra_js_url` in YAML-mode Lovelace. URL is versioned (`?v=1.4.7`) to bust the browser cache on upgrade
+
 ## [1.4.6] - 2026-03-24
 
 ### Fixed
