@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.4] - 2026-03-24
+
+### Fixed
+
+- Added `after_dependencies: [frontend, http]` to `manifest.json` to resolve HACS validation error
+- Added `CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)` to satisfy the HA requirement that integrations defining `async_setup` declare a config schema
+
 ## [1.4.3] - 2026-03-23
 
 ### Added
