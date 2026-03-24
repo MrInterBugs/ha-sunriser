@@ -2,19 +2,15 @@
 //
 // SunRiser Day Planner Card
 //
-// Installation:
-//   1. Copy this file to <ha-config>/www/sunriser-dayplan-card.js
-//   2. Add resource in HA: Settings → Dashboards → Resources
-//      URL: /local/sunriser-dayplan-card.js  Type: JavaScript module
-//   3. Add card to a dashboard:
-//        type: custom:sunriser-dayplan-card
-//
 // Optional config:
 //   title: "My Aquarium"          # card title (default: "Day Planner")
 //   refresh_interval: 300         # seconds between refreshes (default: 300)
 //   channels:                     # override labels per PWM
 //     1: "4500K White"
 //     2: "Royal Blue"
+
+import { LitElement, html, css } from "https://unpkg.com/lit@3/index.js?module";
+import { unsafeSVG } from "https://unpkg.com/lit@3/directives/unsafe-svg.js?module";
 
 // LED colour map — sourced from sunriser_colors_config.js, matching the colours
 // used by the firmware's own dayplanner UI.  Very pale colours (e.g. 6500K sky
@@ -104,8 +100,9 @@ function buildSVGContent(schedules) {
   const parts = [];
 
   // ── Grid ──────────────────────────────────────────────────────────────────
+  // Use style attribute so CSS variables resolve inside the shadow DOM.
   const gridStyle =
-    'stroke="#CCD7E2" stroke-width="0.5" stroke-dasharray="2,2"';
+    'style="stroke: var(--divider-color, #CCD7E2)" stroke-width="0.5" stroke-dasharray="2,2"';
   // Vertical lines at 6 h, 12 h, 18 h
   for (const x of [360, 720, 1080]) {
     parts.push(
@@ -148,23 +145,115 @@ function buildSVGContent(schedules) {
   // Dots sit above all fill/line layers
   parts.push(...dotLayers);
 
-  // Border rect
-  parts.push(
-    `<rect x="0" y="0" width="${SVG_W}" height="${SVG_H}"` +
-      ` fill="none" stroke="#CCD7E2" stroke-width="1"/>`
-  );
-
   return parts.join("\n");
 }
 
 // ── Custom element ────────────────────────────────────────────────────────────
 
-class SunRiserDayplanCard extends HTMLElement {
+class SunRiserDayplanCard extends LitElement {
+  static properties = {
+    _schedules: { state: true },
+    _loading:   { state: true },
+    _error:     { state: true },
+  };
+
+  static styles = css`
+    :host { display: block; }
+
+    ha-card { padding: 0 16px 12px; }
+
+    .chart-row {
+      display: flex;
+      align-items: stretch;
+      gap: 4px;
+    }
+
+    /* Y-axis percentage labels */
+    .yaxis {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: flex-end;
+      width: 34px;
+      font-size: 0.7em;
+      color: var(--secondary-text-color);
+      /* bottom padding aligns with x-axis label row */
+      padding-bottom: 20px;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    /* SVG + x-axis together */
+    .chart-col { flex: 1; min-width: 0; }
+
+    svg {
+      display: block;
+      width: 100%;
+      height: 180px;
+      background: var(--card-background-color, #fff);
+      border: 1px solid var(--divider-color, #CCD7E2);
+      border-radius: 4px;
+      overflow: visible;
+    }
+
+    .xaxis {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7em;
+      color: var(--secondary-text-color);
+      margin-top: 3px;
+      padding: 0 1px;
+      user-select: none;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 14px;
+      margin-top: 10px;
+      padding-left: 38px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.78em;
+      color: var(--primary-text-color);
+    }
+    .swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .state {
+      color: var(--secondary-text-color);
+      font-size: 0.9em;
+      text-align: center;
+      padding: 28px 0;
+    }
+
+    .state.error {
+      color: var(--error-color, #db4437);
+    }
+
+    .state.error code {
+      display: inline-block;
+      margin-top: 6px;
+      font-size: 0.85em;
+      color: var(--primary-text-color);
+      background: var(--code-editor-background-color, rgba(0,0,0,0.06));
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+  `;
+
   constructor() {
     super();
-    this.attachShadow({ mode: "open" });
     this._schedules = null;
     this._loading = false;
+    this._error = null;
     this._initialized = false;
     this._refreshTimer = null;
   }
@@ -182,11 +271,13 @@ class SunRiserDayplanCard extends HTMLElement {
   }
 
   connectedCallback() {
+    super.connectedCallback();
     const interval = (this._config?.refresh_interval ?? 300) * 1000;
     this._refreshTimer = setInterval(() => this._fetch(), interval);
   }
 
   disconnectedCallback() {
+    super.disconnectedCallback();
     clearInterval(this._refreshTimer);
     this._refreshTimer = null;
   }
@@ -195,7 +286,6 @@ class SunRiserDayplanCard extends HTMLElement {
     if (!this._hass) return;
     this._loading = true;
     this._error = null;
-    this._render();
 
     const schedules = [];
     let firstError = null;
@@ -233,148 +323,58 @@ class SunRiserDayplanCard extends HTMLElement {
 
     this._schedules = schedules;
     this._loading = false;
-    this._render();
   }
 
-  _render() {
-    const title = this._config?.title ?? "Day Planner";
-
-    let body;
+  _renderBody() {
     if (this._loading && !this._schedules) {
-      body = `<div class="state">Loading schedules…</div>`;
-    } else if (this._error) {
-      body = `<div class="state error">
-        <b>Could not load schedules</b><br>
-        <code>${this._error}</code><br>
-        <small>Check browser console (F12) for details. Make sure the SunRiser
-        integration is added in Settings → Integrations.</small>
-      </div>`;
-    } else if (!this._schedules || this._schedules.length === 0) {
-      body = `<div class="state">No day planner schedules found.</div>`;
-    } else {
-      const svgContent = buildSVGContent(this._schedules);
-
-      const yLabels = ["100%", "75%", "50%", "25%", "0%"]
-        .map((l) => `<span>${l}</span>`)
-        .join("");
-
-      const legend = this._schedules
-        .map(({ pwm, name, color_id }, idx) => {
-          const color = channelColor(color_id, idx);
-          const label = this._config?.channels?.[pwm] ?? name;
-          return (
-            `<span class="legend-item">` +
-            `<span class="swatch" style="background:${color}"></span>` +
-            `<span>${label}</span>` +
-            `</span>`
-          );
-        })
-        .join("");
-
-      body = `
-        <div class="chart-row">
-          <div class="yaxis">${yLabels}</div>
-          <div class="chart-col">
-            <svg viewBox="${VBOX}" preserveAspectRatio="none"
-                 xmlns="http://www.w3.org/2000/svg">
-              ${svgContent}
-            </svg>
-            <div class="xaxis">
-              <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>24h</span>
-            </div>
-          </div>
-        </div>
-        <div class="legend">${legend}</div>`;
+      return html`<div class="state">Loading schedules…</div>`;
+    }
+    if (this._error) {
+      return html`
+        <div class="state error">
+          <b>Could not load schedules</b><br>
+          <code>${this._error}</code><br>
+          <small>Check browser console (F12) for details. Make sure the SunRiser
+          integration is added in Settings → Integrations.</small>
+        </div>`;
+    }
+    if (!this._schedules || this._schedules.length === 0) {
+      return html`<div class="state">No day planner schedules found.</div>`;
     }
 
-    this.shadowRoot.innerHTML = `
-      <style>
-        :host { display: block; }
+    const legend = this._schedules.map(({ pwm, name, color_id }, idx) => {
+      const color = channelColor(color_id, idx);
+      const label = this._config?.channels?.[pwm] ?? name;
+      return html`
+        <span class="legend-item">
+          <span class="swatch" style="background:${color}"></span>
+          <span>${label}</span>
+        </span>`;
+    });
 
-        ha-card { padding: 16px 16px 12px; }
+    return html`
+      <div class="chart-row">
+        <div class="yaxis">
+          <span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span>
+        </div>
+        <div class="chart-col">
+          <svg viewBox="${VBOX}" preserveAspectRatio="none"
+               xmlns="http://www.w3.org/2000/svg">
+            ${unsafeSVG(buildSVGContent(this._schedules))}
+          </svg>
+          <div class="xaxis">
+            <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>24h</span>
+          </div>
+        </div>
+      </div>
+      <div class="legend">${legend}</div>`;
+  }
 
-        .title {
-          font-size: 1.05em;
-          font-weight: 500;
-          color: var(--primary-text-color);
-          margin-bottom: 12px;
-        }
-
-        .chart-row {
-          display: flex;
-          align-items: stretch;
-          gap: 4px;
-        }
-
-        /* Y-axis percentage labels */
-        .yaxis {
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          align-items: flex-end;
-          width: 34px;
-          font-size: 0.7em;
-          color: var(--secondary-text-color);
-          /* bottom padding aligns with x-axis label row */
-          padding-bottom: 20px;
-          flex-shrink: 0;
-          user-select: none;
-        }
-
-        /* SVG + x-axis together */
-        .chart-col { flex: 1; min-width: 0; }
-
-        svg {
-          display: block;
-          width: 100%;
-          height: 180px;
-          background: var(--card-background-color, #fff);
-          border: 1px solid #CCD7E2;
-          border-radius: 4px;
-          overflow: visible;
-        }
-
-        .xaxis {
-          display: flex;
-          justify-content: space-between;
-          font-size: 0.7em;
-          color: var(--secondary-text-color);
-          margin-top: 3px;
-          padding: 0 1px;
-          user-select: none;
-        }
-
-        .legend {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 6px 14px;
-          margin-top: 10px;
-          padding-left: 38px;
-        }
-        .legend-item {
-          display: flex;
-          align-items: center;
-          gap: 5px;
-          font-size: 0.78em;
-          color: var(--primary-text-color);
-        }
-        .swatch {
-          width: 10px;
-          height: 10px;
-          border-radius: 50%;
-          flex-shrink: 0;
-        }
-
-        .state {
-          color: var(--secondary-text-color);
-          font-size: 0.9em;
-          text-align: center;
-          padding: 28px 0;
-        }
-      </style>
-      <ha-card>
-        <div class="title">${title}</div>
-        ${body}
+  render() {
+    const title = this._config?.title ?? "Day Planner";
+    return html`
+      <ha-card .header=${title}>
+        ${this._renderBody()}
       </ha-card>`;
   }
 

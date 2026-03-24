@@ -31,7 +31,7 @@ from .coordinator import SunRiserCoordinator
 
 _CARD_URL = "/sunriser/sunriser-dayplan-card.js"
 _CARD_PATH = pathlib.Path(__file__).parent / "www" / "sunriser-dayplan-card.js"
-_CARD_VERSION = "1.4.7"
+_CARD_VERSION = "1.4.8"
 
 _LOGGER = logging.getLogger(__name__)
 

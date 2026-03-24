@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.4.8] - 2026-03-24
+
+### Changed
+
+- Day Planner card refactored to use Lit 3 (`LitElement`, `html`, `css`, `unsafeSVG`) — replaces full shadow DOM teardown on every render with efficient Lit diffing and static styles
+- Card title now uses `ha-card`'s native `.header` property, picking up HA theme variables (`--ha-card-header-color`, etc.)
+- Border and grid-line colours now use `var(--divider-color)` instead of hardcoded `#CCD7E2`, respecting the active HA theme
+- Removed duplicate SVG `<rect>` border (CSS `border` on the `<svg>` element is sufficient)
+- Error state now styled with `var(--error-color)` and a subtle `<code>` background
+
 ## [1.4.7] - 2026-03-24
 
 ### Fixed
