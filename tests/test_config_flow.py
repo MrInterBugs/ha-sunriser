@@ -161,7 +161,7 @@ async def test_step_user_cannot_connect(hass):
 
 
 async def test_step_user_duplicate_aborts(hass):
-    """Because single_config_entry: true, starting a flow when an entry exists aborts immediately."""
+    """Submitting the same host:port as an existing entry aborts as already_configured."""
     existing = MockConfigEntry(
         domain=DOMAIN,
         unique_id=f"{HOST}:{DEFAULT_PORT}",
@@ -170,9 +170,18 @@ async def test_step_user_duplicate_aborts(hass):
     existing.add_to_hass(hass)
 
     result = await _start_flow(hass)
+    assert result["type"] == FlowResultType.FORM
+
+    with patch(
+        "custom_components.sunriser.config_flow._test_connection", return_value=None
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT, CONF_PASSWORD: ""},
+        )
 
     assert result["type"] == FlowResultType.ABORT
-    assert result["reason"] == "single_instance_allowed"
+    assert result["reason"] == "already_configured"
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +227,7 @@ async def test_dhcp_confirm_creates_entry(hass):
 
 
 async def test_dhcp_aborts_if_already_configured(hass):
-    """single_config_entry: true means HA aborts any new flow when an entry exists."""
+    """DHCP flow for a MAC already in HA is aborted as already_configured."""
     existing = MockConfigEntry(
         domain=DOMAIN,
         unique_id="aabbccddeeff",
@@ -229,7 +238,7 @@ async def test_dhcp_aborts_if_already_configured(hass):
     result = await _start_dhcp_flow(hass)
 
     assert result["type"] == FlowResultType.ABORT
-    assert result["reason"] == "single_instance_allowed"
+    assert result["reason"] == "already_configured"
 
 
 async def test_dhcp_aborts_on_cannot_connect(hass):
