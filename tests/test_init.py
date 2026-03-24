@@ -309,9 +309,7 @@ async def test_async_setup_lovelace_url_stale_updates_resource(hass):
     url_versioned = f"{_CARD_URL}?v={_CARD_VERSION}"
     mock_resources = MagicMock(spec=ResourceStorageCollection)
     mock_resources.async_get_info = AsyncMock()
-    mock_resources.async_items = MagicMock(
-        return_value=[{"url": url_old, "id": "abc"}]
-    )
+    mock_resources.async_items = MagicMock(return_value=[{"url": url_old, "id": "abc"}])
     mock_resources.async_update_item = AsyncMock()
     hass.data["lovelace"] = MagicMock(resources=mock_resources)
 
