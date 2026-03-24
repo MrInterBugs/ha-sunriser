@@ -3,7 +3,7 @@
 
 import aiohttp
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 from homeassistant.exceptions import HomeAssistantError
 
@@ -278,6 +278,105 @@ async def test_async_setup_registers_static_path_and_js_url(hass, mock_http_fron
     mock_add_js.assert_called_once_with(
         hass, f"/sunriser/sunriser-dayplan-card.js?v={_CARD_VERSION}"
     )
+
+
+async def test_async_setup_lovelace_url_already_current(hass):
+    """Resource URL already matches the current version — no update is made."""
+    from custom_components.sunriser import async_setup, _CARD_URL, _CARD_VERSION
+    from homeassistant.components.lovelace.resources import ResourceStorageCollection
+
+    url_versioned = f"{_CARD_URL}?v={_CARD_VERSION}"
+    mock_resources = MagicMock(spec=ResourceStorageCollection)
+    mock_resources.async_get_info = AsyncMock()
+    mock_resources.async_items = MagicMock(
+        return_value=[{"url": url_versioned, "id": "1"}]
+    )
+    mock_resources.async_update_item = AsyncMock()
+    hass.data["lovelace"] = MagicMock(resources=mock_resources)
+
+    result = await async_setup(hass, {})
+
+    assert result is True
+    mock_resources.async_update_item.assert_not_awaited()
+
+
+async def test_async_setup_lovelace_url_stale_updates_resource(hass):
+    """Resource URL is outdated — async_update_item is called with the new URL."""
+    from custom_components.sunriser import async_setup, _CARD_URL, _CARD_VERSION
+    from homeassistant.components.lovelace.resources import ResourceStorageCollection
+
+    url_old = f"{_CARD_URL}?v=1.0.0"
+    url_versioned = f"{_CARD_URL}?v={_CARD_VERSION}"
+    mock_resources = MagicMock(spec=ResourceStorageCollection)
+    mock_resources.async_get_info = AsyncMock()
+    mock_resources.async_items = MagicMock(
+        return_value=[{"url": url_old, "id": "abc"}]
+    )
+    mock_resources.async_update_item = AsyncMock()
+    hass.data["lovelace"] = MagicMock(resources=mock_resources)
+
+    result = await async_setup(hass, {})
+
+    assert result is True
+    mock_resources.async_update_item.assert_awaited_once_with(
+        "abc", {"res_type": "module", "url": url_versioned}
+    )
+
+
+async def test_async_setup_lovelace_no_resource_creates_item(hass):
+    """No existing resource and storage-backed Lovelace — async_create_item is called."""
+    from custom_components.sunriser import async_setup, _CARD_URL, _CARD_VERSION
+    from homeassistant.components.lovelace.resources import ResourceStorageCollection
+
+    url_versioned = f"{_CARD_URL}?v={_CARD_VERSION}"
+    mock_resources = MagicMock(spec=ResourceStorageCollection)
+    mock_resources.async_get_info = AsyncMock()
+    mock_resources.async_items = MagicMock(return_value=[])
+    mock_resources.async_create_item = AsyncMock()
+    hass.data["lovelace"] = MagicMock(resources=mock_resources)
+
+    result = await async_setup(hass, {})
+
+    assert result is True
+    mock_resources.async_create_item.assert_awaited_once_with(
+        {"res_type": "module", "url": url_versioned}
+    )
+
+
+async def test_async_setup_lovelace_no_resource_not_storage_falls_back(hass):
+    """No existing resource and non-storage Lovelace — falls back to add_extra_js_url."""
+    from custom_components.sunriser import async_setup, _CARD_URL, _CARD_VERSION
+
+    url_versioned = f"{_CARD_URL}?v={_CARD_VERSION}"
+    mock_resources = MagicMock()  # not a ResourceStorageCollection
+    mock_resources.async_get_info = AsyncMock()
+    mock_resources.async_items = MagicMock(return_value=[])
+    hass.data["lovelace"] = MagicMock(resources=mock_resources)
+
+    with patch("custom_components.sunriser.add_extra_js_url") as mock_add_js:
+        result = await async_setup(hass, {})
+
+    assert result is True
+    mock_add_js.assert_called_once_with(hass, url_versioned)
+
+
+async def test_async_setup_ha_not_running_registers_listener(hass):
+    """When HA is still starting, async_listen_once defers card registration."""
+    from custom_components.sunriser import async_setup
+    from homeassistant.core import CoreState
+    from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+
+    original_state = hass.state
+    hass.set_state(CoreState.starting)
+    try:
+        with patch.object(type(hass.bus), "async_listen_once") as mock_listen:
+            result = await async_setup(hass, {})
+    finally:
+        hass.set_state(original_state)
+
+    assert result is True
+    mock_listen.assert_called_once()
+    assert mock_listen.call_args[0][0] == EVENT_HOMEASSISTANT_STARTED
 
 
 # ---------------------------------------------------------------------------
