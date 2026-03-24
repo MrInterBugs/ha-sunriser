@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.6] - 2026-03-24
+
+### Fixed
+
+- Day Planner card now registers itself as a proper Lovelace resource (visible in Settings → Dashboards → Resources, loaded the same way as other HACS frontend plugins). Previously used `add_extra_js_url` which bypasses the Lovelace resource system and was unreliable
+
 ## [1.4.4] - 2026-03-24
 
 ### Fixed

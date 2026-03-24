@@ -1,7 +1,7 @@
 {
   "domain": "sunriser",
   "name": "SunRiser",
-  "after_dependencies": ["frontend", "http"],
+  "after_dependencies": ["frontend", "http", "lovelace"],
   "codeowners": ["@MrInterBugs"],
   "config_flow": true,
   "dhcp": [{"hostname": "sunriser*"}],
@@ -12,5 +12,5 @@
   "quality_scale": "bronze",
   "requirements": ["msgpack>=1.0.0"],
   "single_config_entry": true,
-  "version": "1.4.4"
+  "version": "1.4.6"
 }

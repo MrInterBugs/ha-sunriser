@@ -7,10 +7,10 @@ import pathlib
 import aiohttp
 import voluptuous as vol
 
-from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import Event, HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.util import dt as dt_util
@@ -68,11 +68,27 @@ _SET_DAYPLANNER_SCHEMA = vol.Schema(
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Register the Day Planner card as a frontend resource."""
+    """Serve the Day Planner card JS and register it as a Lovelace resource."""
     await hass.http.async_register_static_paths(
         [StaticPathConfig(_CARD_URL, str(_CARD_PATH), cache_headers=False)]
     )
-    add_extra_js_url(hass, _CARD_URL)
+
+    async def _register_lovelace_resource(_event: Event) -> None:
+        lovelace = hass.data.get("lovelace")
+        if not lovelace:
+            _LOGGER.warning(
+                "SunRiser: lovelace not available, card resource not registered"
+            )
+            return
+        resources = lovelace.get("resources")
+        if resources is None:
+            return
+        await resources.async_load()
+        if not any(r["url"] == _CARD_URL for r in resources.async_items()):
+            await resources.async_create_item({"res_type": "module", "url": _CARD_URL})
+            _LOGGER.debug("SunRiser: registered Day Planner card as Lovelace resource")
+
+    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _register_lovelace_resource)
     return True
 
 
