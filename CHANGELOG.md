@@ -1,63 +1,24 @@
 # Changelog
 
-## [1.4.8] - 2026-03-24
+## [1.4.0 - 1.4.8] - 2026-03-24
+
+### Added
+
+- **Day Planner custom card** (`sunriser-dayplan-card.js`) — Lovelace card that renders all active PWM schedules as a 24-hour SVG chart using the same LED colours as the firmware web UI; channel names resolved from the device with no manual configuration required
+- **`get_dayplanner_schedule`** now returns `name` and `color_id` alongside `pwm` and `markers`
+- Unit tests for all dayplanner coordinator methods and service handlers (100% coverage, 145 tests)
+
+### Fixed
+
+- Card registers itself as a proper Lovelace resource via `lovelace.resources` / `ResourceStorageCollection` — visible in Settings → Dashboards → Resources; falls back to `add_extra_js_url` in YAML-mode Lovelace
+- Card JS served from `custom_components/sunriser/www/` (picked up by HACS) and registered automatically on integration setup — no manual Lovelace resource entry required
+- Card appears in the HA "Add card" picker via `ll-custom-cards-updated` dispatch
+- Added `after_dependencies: [frontend, http, lovelace]` and `CONFIG_SCHEMA` to satisfy HACS and hassfest validation
 
 ### Changed
 
-- Day Planner card refactored to use Lit 3 (`LitElement`, `html`, `css`, `unsafeSVG`) — replaces full shadow DOM teardown on every render with efficient Lit diffing and static styles
-- Card title now uses `ha-card`'s native `.header` property, picking up HA theme variables (`--ha-card-header-color`, etc.)
-- Border and grid-line colours now use `var(--divider-color)` instead of hardcoded `#CCD7E2`, respecting the active HA theme
-- Removed duplicate SVG `<rect>` border (CSS `border` on the `<svg>` element is sufficient)
-- Error state now styled with `var(--error-color)` and a subtle `<code>` background
-
-## [1.4.7] - 2026-03-24
-
-### Fixed
-
-- Day Planner card now correctly registers itself in Settings → Dashboards → Resources. Previous attempts used `add_extra_js_url` and accessed `hass.data["lovelace"]` as a dict (always returning `None`). Now uses `lovelace.resources` (attribute access), `async_get_info()` to force-load the storage collection, and `ResourceStorageCollection.async_create_item` / `async_update_item` — the same pattern used by WebRTC and other production integrations. Falls back to `add_extra_js_url` in YAML-mode Lovelace. URL is versioned (`?v=1.4.7`) to bust the browser cache on upgrade
-
-## [1.4.6] - 2026-03-24
-
-### Fixed
-
-- Day Planner card now registers itself as a proper Lovelace resource (visible in Settings → Dashboards → Resources, loaded the same way as other HACS frontend plugins). Previously used `add_extra_js_url` which bypasses the Lovelace resource system and was unreliable
-
-## [1.4.4] - 2026-03-24
-
-### Fixed
-
-- Added `after_dependencies: [frontend, http]` to `manifest.json` to resolve HACS validation error
-- Added `CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)` to satisfy the HA requirement that integrations defining `async_setup` declare a config schema
-
-## [1.4.3] - 2026-03-23
-
-### Added
-
-- Unit tests for `async_get_dayplanner` and `async_set_dayplanner` coordinator methods
-- Unit tests for `get_dayplanner_schedule` and `set_dayplanner_schedule` service handlers
-- Unit test for `async_setup` static path registration and `add_extra_js_url` call
-- `mock_http_frontend` autouse fixture in `conftest.py` so all tests work after `async_setup` was introduced
-
-Coverage remains at 100% (145 tests, 623 statements).
-
-## [1.4.2] - 2026-03-23
-
-### Fixed
-
-- Day Planner card now works after HACS installation with no manual steps — the card JS has moved from `www/` (ignored by HACS) into `custom_components/sunriser/www/` and is registered automatically via `async_setup` using `add_extra_js_url`; no Lovelace resource entry required
-
-## [1.4.1] - 2026-03-23
-
-### Fixed
-
-- Custom card now appears in the HA "Add card" picker — dispatches `ll-custom-cards-updated` to handle the race condition where the JS module loads after the picker is initialised; added `preview: true` to the card registration
-
-## [1.4.0] - 2026-03-23
-
-### Added
-
-- **Day Planner custom card** (`www/sunriser-dayplan-card.js`) — Lovelace card that renders all active PWM schedules as a 24-hour SVG chart; uses the same LED colours as the firmware web UI; channel names resolved from the device (e.g. "TROPIC 4500K") with no manual configuration required
-- **`get_dayplanner_schedule` response enriched** — now returns `name` (resolved channel name) and `color_id` (LED colour identifier) alongside `pwm` and `markers`, making the response self-describing for automations and the custom card
+- Card refactored to use Lit 3 (`LitElement`, `html`, `css`, `unsafeSVG`) — efficient DOM diffing replaces full shadow DOM teardown on every render
+- Card title uses `ha-card`'s native `.header` property; border and grid colours use `var(--divider-color)`; error state styled with `var(--error-color)`
 
 ## [1.3.1] - 2026-03-23
 
