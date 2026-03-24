@@ -16,6 +16,9 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, PLATFORMS
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
 from .coordinator import SunRiserCoordinator
 
 _CARD_URL = "/sunriser/sunriser-dayplan-card.js"
