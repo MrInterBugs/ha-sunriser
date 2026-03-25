@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.1] - 2026-03-25
+
+### Added
+
+- **Fixed value number entity** — one `number` entity per active PWM channel exposing `pwm#X#fixed`. Slider from 0–1000 sets the output level used when the channel manager is `fixed`. Writes to the device immediately via `PUT /`.
+
 ## [1.5.0] - 2026-03-25
 
 ### Added

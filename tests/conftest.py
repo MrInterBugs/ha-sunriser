@@ -40,21 +40,25 @@ FAKE_CONFIG = {
     "pwm#1#onoff": False,
     "pwm#1#max": None,
     "pwm#1#manager": 1,
+    "pwm#1#fixed": 500,
     # pwm2 = on/off switch (pump), no manager
     "pwm#2#color": "pump",
     "pwm#2#onoff": True,
     "pwm#2#max": None,
     "pwm#2#manager": 0,
+    "pwm#2#fixed": None,
     # pwm3 = unused (empty color)
     "pwm#3#color": "",
     "pwm#3#onoff": False,
     "pwm#3#max": None,
     "pwm#3#manager": 0,
+    "pwm#3#fixed": None,
     # pwm4 = dimmable light, weekplanner
     "pwm#4#color": "6500k",
     "pwm#4#onoff": False,
     "pwm#4#max": None,
     "pwm#4#manager": 2,
+    "pwm#4#fixed": 0,
     # DS1820 temp sensor
     "sensors#sensor#AABBCCDDEEFF#name": "Water Temp",
     "sensors#sensor#AABBCCDDEEFF#unit": 1,

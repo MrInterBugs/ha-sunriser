@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 DOMAIN = "sunriser"
 
-PLATFORMS = ["binary_sensor", "button", "light", "select", "sensor", "switch"]
+PLATFORMS = ["binary_sensor", "button", "light", "number", "select", "sensor", "switch"]
 
 # pwm#X#manager values → human-readable option labels
 # Confirmed from real device web UI (Kein Verlauf / Tagesplanung / Wochenplanung

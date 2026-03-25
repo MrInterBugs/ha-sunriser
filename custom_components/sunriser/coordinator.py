@@ -412,6 +412,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
                 f"pwm#{i}#max",
                 f"pwm#{i}#color",
                 f"pwm#{i}#manager",
+                f"pwm#{i}#fixed",
             ]
 
         pwm_config = await self.async_get_config(pwm_keys)
