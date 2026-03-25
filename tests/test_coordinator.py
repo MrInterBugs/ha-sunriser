@@ -583,3 +583,185 @@ async def test_async_set_dayplanner_sends_flat_array(coord):
         m.requests[("PUT", URL(f"{BASE}/"))][0].kwargs["data"], raw=False
     )
     assert sent["dayplanner#marker#1"] == [480, 50, 1230, 75]
+
+
+# ---------------------------------------------------------------------------
+# async_check_ok
+# ---------------------------------------------------------------------------
+
+
+async def test_async_check_ok_returns_true(coord):
+    with aioresponses() as m:
+        m.get(f"{BASE}/ok", body=b"OK")
+        result = await coord.async_check_ok()
+    assert result is True
+
+
+async def test_async_check_ok_returns_false_on_wrong_body(coord):
+    with aioresponses() as m:
+        m.get(f"{BASE}/ok", body=b"NOT OK")
+        result = await coord.async_check_ok()
+    assert result is False
+
+
+async def test_async_check_ok_returns_false_on_error(coord):
+    with aioresponses() as m:
+        m.get(f"{BASE}/ok", exception=aiohttp.ClientConnectionError("down"))
+        result = await coord.async_check_ok()
+    assert result is False
+
+
+async def test_update_data_includes_ok_true(coord):
+    """_async_update_data stores ok=True when /ok responds correctly."""
+    coord.config = dict(FAKE_CONFIG)
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        m.get(f"{BASE}/ok", body=b"OK")
+        m.get(f"{BASE}/weather", body=_pack([]))
+        data = await coord._async_update_data()
+    assert data["ok"] is True
+
+
+async def test_update_data_includes_ok_false_when_ping_fails(coord):
+    """_async_update_data stores ok=False when /ok is unreachable (non-fatal)."""
+    coord.config = dict(FAKE_CONFIG)
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        m.get(f"{BASE}/ok", exception=aiohttp.ClientConnectionError("down"))
+        m.get(f"{BASE}/weather", body=_pack([]))
+        data = await coord._async_update_data()
+    assert data["ok"] is False
+
+
+async def test_update_data_ok_exception_in_check_method_is_non_fatal(
+    coord, monkeypatch
+):
+    """If async_check_ok itself raises unexpectedly, ok=False and update continues."""
+    coord.config = dict(FAKE_CONFIG)
+    monkeypatch.setattr(
+        coord, "async_check_ok", AsyncMock(side_effect=RuntimeError("unexpected"))
+    )
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        m.get(f"{BASE}/weather", body=_pack([]))
+        data = await coord._async_update_data()
+    assert data["ok"] is False
+    assert data["uptime"] == 12345
+
+
+# ---------------------------------------------------------------------------
+# async_get_factory_backup / async_get_firmware / async_get_bootload
+# ---------------------------------------------------------------------------
+
+
+async def test_async_get_factory_backup_returns_bytes(coord):
+    payload = b"\x82\xa4name\xa8SunRiser"
+    with aioresponses() as m:
+        m.get(f"{BASE}/factorybackup", body=payload)
+        result = await coord.async_get_factory_backup()
+    assert result == payload
+
+
+async def test_async_get_firmware_returns_bytes(coord):
+    payload = b"\x81\xa8filename\xaafw_1.005"
+    with aioresponses() as m:
+        m.get(f"{BASE}/firmware.mp", body=payload)
+        result = await coord.async_get_firmware()
+    assert result == payload
+
+
+async def test_async_get_bootload_returns_bytes(coord):
+    payload = b"\x81\xa4boot\xa31.0"
+    with aioresponses() as m:
+        m.get(f"{BASE}/bootload.mp", body=payload)
+        result = await coord.async_get_bootload()
+    assert result == payload
+
+
+# ---------------------------------------------------------------------------
+# async_factory_reset
+# ---------------------------------------------------------------------------
+
+
+async def test_async_factory_reset_sends_delete(coord):
+    with aioresponses() as m:
+        m.delete(f"{BASE}/", status=200)
+        await coord.async_factory_reset()
+    assert ("DELETE", URL(f"{BASE}/")) in m.requests
+
+
+# ---------------------------------------------------------------------------
+# async_get_weekplanner / async_set_weekplanner
+# ---------------------------------------------------------------------------
+
+
+async def test_async_get_weekplanner_parses_array(coord):
+    """8-element flat array is mapped to day-name dict."""
+    # sun=2, mon..fri=1, sat=2, default=0
+    flat = [2, 1, 1, 1, 1, 1, 2, 0]
+    with aioresponses() as m:
+        m.post(f"{BASE}/", body=_pack({"weekplanner#programs#1": flat}))
+        result = await coord.async_get_weekplanner(1)
+    assert result == {
+        "sunday": 2,
+        "monday": 1,
+        "tuesday": 1,
+        "wednesday": 1,
+        "thursday": 1,
+        "friday": 1,
+        "saturday": 2,
+        "default": 0,
+    }
+
+
+async def test_async_get_weekplanner_returns_none_for_unset(coord):
+    """None value (key never written) returns all-None dict."""
+    with aioresponses() as m:
+        m.post(f"{BASE}/", body=_pack({"weekplanner#programs#1": None}))
+        result = await coord.async_get_weekplanner(1)
+    assert all(v is None for v in result.values())
+    assert set(result.keys()) == {
+        "sunday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "default",
+    }
+
+
+async def test_async_set_weekplanner_sends_flat_array(coord):
+    coord.config["factory_version"] = "1.005"
+    schedule = {
+        "sunday": 2,
+        "monday": 1,
+        "tuesday": 1,
+        "wednesday": 1,
+        "thursday": 1,
+        "friday": 1,
+        "saturday": 2,
+        "default": 0,
+    }
+    with aioresponses() as m:
+        m.put(f"{BASE}/", status=200)
+        await coord.async_set_weekplanner(1, schedule)
+
+    sent = msgpack.unpackb(
+        m.requests[("PUT", URL(f"{BASE}/"))][0].kwargs["data"], raw=False
+    )
+    assert sent["weekplanner#programs#1"] == [2, 1, 1, 1, 1, 1, 2, 0]
+
+
+async def test_async_set_weekplanner_missing_days_default_to_zero(coord):
+    """Days not in the schedule dict are written as 0."""
+    coord.config["factory_version"] = "1.005"
+    with aioresponses() as m:
+        m.put(f"{BASE}/", status=200)
+        await coord.async_set_weekplanner(1, {"monday": 3})
+
+    sent = msgpack.unpackb(
+        m.requests[("PUT", URL(f"{BASE}/"))][0].kwargs["data"], raw=False
+    )
+    assert sent["weekplanner#programs#1"] == [0, 3, 0, 0, 0, 0, 0, 0]

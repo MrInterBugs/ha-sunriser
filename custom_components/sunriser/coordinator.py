@@ -205,11 +205,62 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         ) as resp:
             resp.raise_for_status()
 
+    async def async_check_ok(self) -> bool:
+        """GET /ok — returns True if device responds with 'OK'."""
+        session = self._get_session()
+        try:
+            async with session.get(
+                f"{self.base_url}/ok",
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as resp:
+                return resp.status == 200 and (await resp.text()).strip() == "OK"
+        except Exception:
+            return False
+
     async def async_reboot(self) -> None:
         """GET /reboot — initiate a device reboot."""
         session = self._get_session()
         async with session.get(
             f"{self.base_url}/reboot",
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as resp:
+            resp.raise_for_status()
+
+    async def async_get_factory_backup(self) -> bytes:
+        """GET /factorybackup — download the factory default configuration as msgpack bytes."""
+        session = self._get_session()
+        async with session.get(
+            f"{self.base_url}/factorybackup",
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as resp:
+            resp.raise_for_status()
+            return await resp.read()
+
+    async def async_get_firmware(self) -> bytes:
+        """GET /firmware.mp — download firmware info as msgpack bytes."""
+        session = self._get_session()
+        async with session.get(
+            f"{self.base_url}/firmware.mp",
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as resp:
+            resp.raise_for_status()
+            return await resp.read()
+
+    async def async_get_bootload(self) -> bytes:
+        """GET /bootload.mp — download bootloader info as msgpack bytes."""
+        session = self._get_session()
+        async with session.get(
+            f"{self.base_url}/bootload.mp",
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as resp:
+            resp.raise_for_status()
+            return await resp.read()
+
+    async def async_factory_reset(self) -> None:
+        """DELETE / — reset all device configuration to factory defaults."""
+        session = self._get_session()
+        async with session.delete(
+            f"{self.base_url}/",
             timeout=aiohttp.ClientTimeout(total=10),
         ) as resp:
             resp.raise_for_status()
@@ -277,6 +328,40 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
             )
         markers.sort(key=lambda m: m["time"])
         return markers
+
+    _WEEK_DAYS = [
+        "sunday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "default",
+    ]
+
+    async def async_get_weekplanner(self, pwm: int) -> dict[str, int | None]:
+        """Read the weekplanner program assignment for a PWM channel.
+
+        Returns a dict mapping day names to program IDs.
+        Day order matches the device: sunday(0)..saturday(6), default(7).
+        'default' is the fallback program used on days with no explicit assignment.
+        """
+        result = await self.async_get_config([f"weekplanner#programs#{pwm}"])
+        flat = result.get(f"weekplanner#programs#{pwm}") or []
+        return {
+            day: (int(flat[i]) if i < len(flat) else None)
+            for i, day in enumerate(self._WEEK_DAYS)
+        }
+
+    async def async_set_weekplanner(self, pwm: int, schedule: dict[str, int]) -> None:
+        """Write the weekplanner program assignment for a PWM channel.
+
+        Accepts a dict with day names (sunday..saturday + default) mapped to program IDs.
+        Missing days default to 0 (no program).
+        """
+        flat = [schedule.get(day, 0) for day in self._WEEK_DAYS]
+        await self.async_set_config({f"weekplanner#programs#{pwm}": flat})
 
     async def async_set_dayplanner(self, pwm: int, markers: list[dict]) -> None:
         """Write the dayplanner schedule for a PWM channel.
@@ -380,6 +465,12 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
                     self.config.update(sensor_config)
                 except aiohttp.ClientError as err:
                     _LOGGER.warning("Could not fetch sensor config: %s", err)
+
+        # Ping /ok — non-fatal; used by the connectivity binary sensor.
+        try:
+            state["ok"] = await self.async_check_ok()
+        except Exception:
+            state["ok"] = False
 
         # Fetch weather data — non-fatal; endpoint is still under development.
         try:

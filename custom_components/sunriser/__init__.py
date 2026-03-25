@@ -41,6 +41,12 @@ _SERVICE_GET_ERRORS = "get_errors"
 _SERVICE_GET_LOG = "get_log"
 _SERVICE_GET_DAYPLANNER = "get_dayplanner_schedule"
 _SERVICE_SET_DAYPLANNER = "set_dayplanner_schedule"
+_SERVICE_GET_WEEKPLANNER = "get_weekplanner_schedule"
+_SERVICE_SET_WEEKPLANNER = "set_weekplanner_schedule"
+_SERVICE_FACTORY_BACKUP = "download_factory_backup"
+_SERVICE_FIRMWARE = "download_firmware"
+_SERVICE_BOOTLOAD = "download_bootload"
+_SERVICE_FACTORY_RESET = "factory_reset"
 _ALL_SERVICES = (
     _SERVICE_BACKUP,
     _SERVICE_RESTORE,
@@ -48,6 +54,12 @@ _ALL_SERVICES = (
     _SERVICE_GET_LOG,
     _SERVICE_GET_DAYPLANNER,
     _SERVICE_SET_DAYPLANNER,
+    _SERVICE_GET_WEEKPLANNER,
+    _SERVICE_SET_WEEKPLANNER,
+    _SERVICE_FACTORY_BACKUP,
+    _SERVICE_FIRMWARE,
+    _SERVICE_BOOTLOAD,
+    _SERVICE_FACTORY_RESET,
 )
 
 _RESTORE_SCHEMA = vol.Schema({vol.Required("file_path"): cv.string})
@@ -73,6 +85,34 @@ _SET_DAYPLANNER_SCHEMA = vol.Schema(
             vol.Length(min=1),
         ),
     }
+)
+
+_WEEK_DAYS = [
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "default",
+]
+
+_GET_WEEKPLANNER_SCHEMA = vol.Schema(
+    {vol.Required("pwm"): vol.All(int, vol.Range(min=1, max=10))}
+)
+
+_SET_WEEKPLANNER_SCHEMA = vol.Schema(
+    {
+        vol.Required("pwm"): vol.All(int, vol.Range(min=1, max=10)),
+        vol.Required("schedule"): vol.Schema(
+            {vol.In(_WEEK_DAYS): vol.All(int, vol.Range(min=0))}
+        ),
+    }
+)
+
+_FACTORY_RESET_SCHEMA = vol.Schema(
+    {vol.Required("confirm"): vol.All(bool, vol.IsTrue())}
 )
 
 
@@ -266,4 +306,108 @@ def _register_services(hass: HomeAssistant) -> None:
         _SERVICE_SET_DAYPLANNER,
         handle_set_dayplanner,
         schema=_SET_DAYPLANNER_SCHEMA,
+    )
+
+    async def handle_get_weekplanner(call: ServiceCall) -> dict:
+        coordinator = _get_coordinator(hass)
+        pwm: int = call.data["pwm"]
+        schedule = await coordinator.async_get_weekplanner(pwm)
+        return {
+            "pwm": pwm,
+            "name": coordinator.pwm_name(pwm),
+            "color_id": coordinator.config.get(f"pwm#{pwm}#color") or "",
+            "schedule": schedule,
+        }
+
+    async def handle_set_weekplanner(call: ServiceCall) -> None:
+        coordinator = _get_coordinator(hass)
+        await coordinator.async_set_weekplanner(call.data["pwm"], call.data["schedule"])
+
+    hass.services.async_register(
+        DOMAIN,
+        _SERVICE_GET_WEEKPLANNER,
+        handle_get_weekplanner,
+        schema=_GET_WEEKPLANNER_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        _SERVICE_SET_WEEKPLANNER,
+        handle_set_weekplanner,
+        schema=_SET_WEEKPLANNER_SCHEMA,
+    )
+
+    async def handle_factory_backup(call: ServiceCall) -> dict:
+        coordinator = _get_coordinator(hass)
+        data = await coordinator.async_get_factory_backup()
+        now = dt_util.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"sunriser_factory_backup_{now}.msgpack"
+        path = hass.config.path(filename)
+
+        def _write() -> None:
+            with open(path, "wb") as f:
+                f.write(data)
+
+        await hass.async_add_executor_job(_write)
+        _LOGGER.info("SunRiser factory backup saved to %s", path)
+        return {"path": path}
+
+    async def handle_firmware(call: ServiceCall) -> dict:
+        coordinator = _get_coordinator(hass)
+        data = await coordinator.async_get_firmware()
+        now = dt_util.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"sunriser_firmware_{now}.msgpack"
+        path = hass.config.path(filename)
+
+        def _write() -> None:
+            with open(path, "wb") as f:
+                f.write(data)
+
+        await hass.async_add_executor_job(_write)
+        _LOGGER.info("SunRiser firmware info saved to %s", path)
+        return {"path": path}
+
+    async def handle_bootload(call: ServiceCall) -> dict:
+        coordinator = _get_coordinator(hass)
+        data = await coordinator.async_get_bootload()
+        now = dt_util.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"sunriser_bootload_{now}.msgpack"
+        path = hass.config.path(filename)
+
+        def _write() -> None:
+            with open(path, "wb") as f:
+                f.write(data)
+
+        await hass.async_add_executor_job(_write)
+        _LOGGER.info("SunRiser bootload info saved to %s", path)
+        return {"path": path}
+
+    async def handle_factory_reset(call: ServiceCall) -> None:
+        coordinator = _get_coordinator(hass)
+        await coordinator.async_factory_reset()
+        _LOGGER.warning("SunRiser factory reset triggered — all config wiped")
+
+    hass.services.async_register(
+        DOMAIN,
+        _SERVICE_FACTORY_BACKUP,
+        handle_factory_backup,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        _SERVICE_FIRMWARE,
+        handle_firmware,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        _SERVICE_BOOTLOAD,
+        handle_bootload,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        _SERVICE_FACTORY_RESET,
+        handle_factory_reset,
+        schema=_FACTORY_RESET_SCHEMA,
     )

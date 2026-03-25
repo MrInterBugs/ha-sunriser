@@ -417,3 +417,136 @@ async def test_service_set_dayplanner_schedule(hass, setup_entry):
     )
 
     coordinator.async_set_dayplanner.assert_awaited_once_with(2, markers)
+
+
+# ---------------------------------------------------------------------------
+# Weekplanner service handlers
+# ---------------------------------------------------------------------------
+
+
+async def test_service_get_weekplanner_schedule(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.config["pwm#4#color"] = "6500k"
+    schedule = {
+        "sunday": 0,
+        "monday": 1,
+        "tuesday": 1,
+        "wednesday": 1,
+        "thursday": 1,
+        "friday": 1,
+        "saturday": 0,
+        "default": 1,
+    }
+    coordinator.async_get_weekplanner = AsyncMock(return_value=schedule)
+
+    result = await hass.services.async_call(
+        DOMAIN,
+        "get_weekplanner_schedule",
+        {"pwm": 4},
+        blocking=True,
+        return_response=True,
+    )
+
+    coordinator.async_get_weekplanner.assert_awaited_once_with(4)
+    assert result["pwm"] == 4
+    assert result["schedule"] == schedule
+    assert result["color_id"] == "6500k"
+    assert "name" in result
+
+
+async def test_service_set_weekplanner_schedule(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_set_weekplanner = AsyncMock()
+
+    schedule = {"monday": 1, "default": 1}
+    await hass.services.async_call(
+        DOMAIN,
+        "set_weekplanner_schedule",
+        {"pwm": 4, "schedule": schedule},
+        blocking=True,
+    )
+
+    coordinator.async_set_weekplanner.assert_awaited_once_with(4, schedule)
+
+
+# ---------------------------------------------------------------------------
+# Dev service handlers — factory backup, firmware, bootload, factory reset
+# ---------------------------------------------------------------------------
+
+
+async def test_service_download_factory_backup(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_get_factory_backup = AsyncMock(return_value=b"\x80")
+
+    from unittest.mock import mock_open as _mock_open
+
+    m = _mock_open()
+    with patch("builtins.open", m):
+        result = await hass.services.async_call(
+            DOMAIN, "download_factory_backup", {}, blocking=True, return_response=True
+        )
+
+    coordinator.async_get_factory_backup.assert_awaited_once()
+    m().write.assert_called_once_with(b"\x80")
+    assert "path" in result
+    assert "factory_backup" in result["path"]
+    assert result["path"].endswith(".msgpack")
+
+
+async def test_service_download_firmware(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_get_firmware = AsyncMock(return_value=b"\x81")
+
+    from unittest.mock import mock_open as _mock_open
+
+    m = _mock_open()
+    with patch("builtins.open", m):
+        result = await hass.services.async_call(
+            DOMAIN, "download_firmware", {}, blocking=True, return_response=True
+        )
+
+    coordinator.async_get_firmware.assert_awaited_once()
+    m().write.assert_called_once_with(b"\x81")
+    assert "path" in result
+    assert "firmware" in result["path"]
+    assert result["path"].endswith(".msgpack")
+
+
+async def test_service_download_bootload(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_get_bootload = AsyncMock(return_value=b"\x82")
+
+    from unittest.mock import mock_open as _mock_open
+
+    m = _mock_open()
+    with patch("builtins.open", m):
+        result = await hass.services.async_call(
+            DOMAIN, "download_bootload", {}, blocking=True, return_response=True
+        )
+
+    coordinator.async_get_bootload.assert_awaited_once()
+    m().write.assert_called_once_with(b"\x82")
+    assert "path" in result
+    assert "bootload" in result["path"]
+    assert result["path"].endswith(".msgpack")
+
+
+async def test_service_factory_reset(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_factory_reset = AsyncMock()
+
+    await hass.services.async_call(
+        DOMAIN, "factory_reset", {"confirm": True}, blocking=True
+    )
+
+    coordinator.async_factory_reset.assert_awaited_once()
+
+
+async def test_service_factory_reset_requires_confirm(hass, setup_entry):
+    """factory_reset must be rejected if confirm is not True."""
+    import voluptuous
+
+    with pytest.raises((voluptuous.error.MultipleInvalid, Exception)):
+        await hass.services.async_call(
+            DOMAIN, "factory_reset", {"confirm": False}, blocking=True
+        )

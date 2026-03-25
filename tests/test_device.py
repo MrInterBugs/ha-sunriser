@@ -57,11 +57,21 @@ async def session(socket_enabled):
 
 @pytest.mark.asyncio
 async def test_ping(session):
-    """GET /ok should return the text OK."""
-    async with session.get(f"{BASE_URL}/ok", timeout=TIMEOUT) as resp:
-        assert resp.status == 200, f"Expected 200, got {resp.status}"
-        text = await resp.text()
-        assert text.strip() == "OK", f"Expected 'OK', got {text!r}"
+    """GET /ok should return the text OK.
+
+    Retries once — the device occasionally resets the TCP connection on the
+    very first request of a test run (cold-connection quirk).
+    """
+    for attempt in range(2):
+        try:
+            async with session.get(f"{BASE_URL}/ok", timeout=TIMEOUT) as resp:
+                assert resp.status == 200, f"Expected 200, got {resp.status}"
+                text = await resp.text()
+                assert text.strip() == "OK", f"Expected 'OK', got {text!r}"
+            return
+        except aiohttp.ClientOSError:
+            if attempt == 1:
+                raise
 
 
 # ---------------------------------------------------------------------------
@@ -228,7 +238,62 @@ async def test_read_dayplanner(session):
 
 
 # ---------------------------------------------------------------------------
-# Dayplanner write (real device only — always restores original)
+# Week planner read
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_read_weekplanner(session):
+    """Read weekplanner#programs#X for all PWM channels and verify the format.
+
+    Each value should be either None (no schedule set) or a list of exactly 8
+    integers: [sunday, monday, tuesday, wednesday, thursday, friday, saturday, default].
+    """
+    keys = [f"weekplanner#programs#{i}" for i in range(1, 11)]
+    body = msgpack.packb(keys, use_bin_type=True)
+    async with session.post(
+        f"{BASE_URL}/",
+        data=body,
+        headers={"Content-Type": "application/x-msgpack"},
+        timeout=TIMEOUT,
+    ) as resp:
+        assert resp.status == 200, f"Expected 200, got {resp.status}"
+        result = msgpack.unpackb(await resp.read(), raw=False, strict_map_key=False)
+
+    assert isinstance(result, dict), f"Expected dict, got {type(result)}"
+    _DAY_NAMES = [
+        "sunday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "default",
+    ]
+    print("\nWeek planner schedules:")
+    for i in range(1, 11):
+        key = f"weekplanner#programs#{i}"
+        programs = result.get(key)
+        if programs is None:
+            print(f"  pwm#{i}: no week schedule")
+            continue
+        assert isinstance(
+            programs, list
+        ), f"pwm#{i}: expected list, got {type(programs)}: {programs!r}"
+        assert (
+            len(programs) == 8
+        ), f"pwm#{i}: expected 8 entries, got {len(programs)}: {programs!r}"
+        for j, prog_id in enumerate(programs):
+            assert isinstance(
+                prog_id, int
+            ), f"pwm#{i}: programs[{j}] ({_DAY_NAMES[j]}) is not int: {prog_id!r}"
+        day_map = dict(zip(_DAY_NAMES, programs))
+        print(f"  pwm#{i}: {day_map}")
+
+
+# ---------------------------------------------------------------------------
+# Dayplanner + week planner write (real device only — always restores original)
 # ---------------------------------------------------------------------------
 
 _REAL_ONLY = pytest.mark.skipif(
@@ -309,6 +374,49 @@ async def test_write_dayplanner(session):
         # The device reloads config after a PUT / and drops the TCP connection —
         # a 200 from the write is sufficient proof the restore succeeded.
         print("Restore write returned 200 — OK")
+
+
+@_REAL_ONLY
+@pytest.mark.asyncio
+async def test_write_weekplanner(session):
+    """Write a test week schedule to pwm#1, verify it, then restore the original.
+
+    Uses pwm#1 regardless of its current manager setting — the key can be written
+    independently of the manager. Always restores via finally.
+    """
+    TEST_PWM = 1
+    programs_key = f"weekplanner#programs#{TEST_PWM}"
+
+    result = await _read_config(session, [programs_key, "factory_version"])
+    original = result.get(programs_key)
+    factory_version = result.get("factory_version")
+    print(f"\nOriginal {programs_key}: {original!r}")
+    print(f"factory_version: {factory_version!r}")
+
+    # Test schedule: program 7 on weekdays, program 8 on weekends, default=7
+    test_flat = [8, 7, 7, 7, 7, 7, 8, 7]  # [sun, mon, tue, wed, thu, fri, sat, default]
+
+    try:
+        payload = {programs_key: test_flat}
+        if factory_version:
+            payload["save_version"] = factory_version
+        await _write_config(session, payload)
+        print(f"Wrote {programs_key}={test_flat!r}")
+
+        verify = await _read_config(session, [programs_key])
+        written = verify.get(programs_key)
+        print(f"Read back: {written!r}")
+        assert (
+            written == test_flat
+        ), f"Round-trip mismatch: sent {test_flat!r}, got {written!r}"
+        print("Round-trip OK")
+
+    finally:
+        restore_payload = {programs_key: original}
+        if factory_version:
+            restore_payload["save_version"] = factory_version
+        await _write_config(session, restore_payload)
+        print(f"Restored {programs_key}={original!r}")
 
 
 @_REAL_ONLY
@@ -524,6 +632,27 @@ async def test_weather_channel_schema(session):
 
 
 # ---------------------------------------------------------------------------
+# Factory backup / firmware / bootload endpoints
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_factorybackup(session):
+    """GET /factorybackup should return a msgpack dict of factory default config."""
+    async with session.get(f"{BASE_URL}/factorybackup", timeout=TIMEOUT) as resp:
+        if resp.status in (404, 500):
+            pytest.skip(
+                f"GET /factorybackup not available on this firmware ({resp.status})"
+            )
+        assert resp.status == 200, f"Expected 200, got {resp.status}"
+        raw = await resp.read()
+
+    result = msgpack.unpackb(raw, raw=False, strict_map_key=False)
+    assert isinstance(result, dict), f"Expected dict, got {type(result)}: {result!r}"
+    print(f"\nFactory backup: {len(result)} keys — {sorted(result.keys())[:10]}")
+
+
+# ---------------------------------------------------------------------------
 # Admin endpoints — SIMULATOR ONLY
 #
 # These tests only run when SUNRISER_PORT=8080 (the Docker simulator).
@@ -540,6 +669,46 @@ _SIM_ONLY = pytest.mark.skipif(
     PORT != 8080,
     reason="Simulator only — run with SUNRISER_HOST=127.0.0.1 SUNRISER_PORT=8080",
 )
+
+
+@_SIM_ONLY
+@pytest.mark.asyncio
+async def test_get_firmware_mp(session):
+    """GET /firmware.mp should return a msgpack dict with firmware metadata.
+
+    Simulator only — keep off the real device to avoid any risk of triggering
+    an unintended firmware operation.
+    """
+    async with session.get(f"{BASE_URL}/firmware.mp", timeout=TIMEOUT) as resp:
+        if resp.status == 404:
+            pytest.skip("GET /firmware.mp not available on this simulator build")
+        assert resp.status == 200, f"Expected 200, got {resp.status}"
+        raw = await resp.read()
+
+    result = msgpack.unpackb(raw, raw=False, strict_map_key=False)
+    assert isinstance(result, dict), f"Expected dict, got {type(result)}: {result!r}"
+    print(f"\nFirmware info keys: {sorted(result.keys())}")
+    for k, v in result.items():
+        print(f"  {k}: {v!r}")
+
+
+@_SIM_ONLY
+@pytest.mark.asyncio
+async def test_get_bootload_mp(session):
+    """GET /bootload.mp should return a msgpack payload (dict or list).
+
+    Simulator only — keep off the real device to avoid any risk of triggering
+    an unintended bootloader operation.
+    """
+    async with session.get(f"{BASE_URL}/bootload.mp", timeout=TIMEOUT) as resp:
+        if resp.status == 404:
+            pytest.skip("GET /bootload.mp not available on this simulator build")
+        assert resp.status == 200, f"Expected 200, got {resp.status}"
+        raw = await resp.read()
+
+    assert len(raw) > 0, "Expected non-empty response from /bootload.mp"
+    result = msgpack.unpackb(raw, raw=False, strict_map_key=False)
+    print(f"\nBootload info type={type(result).__name__}: {result!r}")
 
 
 @pytest.mark.asyncio

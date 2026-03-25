@@ -88,3 +88,95 @@ set_dayplanner_schedule:
           percent: 0
       selector:
         object: {}
+
+get_weekplanner_schedule:
+  name: Get Week Planner Schedule
+  description: >
+    Read the current week planner program assignment for a PWM channel. Returns
+    a dict with "pwm", "name", "color_id", and "schedule" keys. The schedule maps
+    day names (sunday, monday, …, saturday, default) to program IDs (integers).
+    "default" is the fallback program used on days with no explicit assignment.
+  fields:
+    pwm:
+      name: PWM channel
+      description: PWM channel number (1–10).
+      required: true
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 10
+          mode: box
+
+set_weekplanner_schedule:
+  name: Set Week Planner Schedule
+  description: >
+    Write the week planner program assignment for a PWM channel. Provide a
+    "schedule" dict mapping day names (sunday, monday, tuesday, wednesday,
+    thursday, friday, saturday, default) to program IDs. Omitted days default
+    to 0 (no program). "default" is the fallback used on unassigned days.
+  fields:
+    pwm:
+      name: PWM channel
+      description: PWM channel number (1–10).
+      required: true
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 10
+          mode: box
+    schedule:
+      name: Schedule
+      description: >
+        Dict mapping day names to program IDs (integers). Include only the days
+        you want to set; omitted days are written as 0 (no program).
+      required: true
+      example:
+        monday: 1
+        tuesday: 1
+        wednesday: 1
+        thursday: 1
+        friday: 1
+        saturday: 2
+        sunday: 2
+        default: 1
+      selector:
+        object: {}
+
+download_factory_backup:
+  name: Download Factory Backup
+  description: >
+    Download the factory default configuration from the device and save it as a
+    .msgpack file in your Home Assistant /config directory. Returns the saved
+    file path.
+  fields: {}
+
+download_firmware:
+  name: Download Firmware Info
+  description: >
+    Download the firmware info blob (GET /firmware.mp) from the device and save
+    it as a .msgpack file in /config. Developer/diagnostic use only.
+  fields: {}
+
+download_bootload:
+  name: Download Bootload Info
+  description: >
+    Download the bootload info blob (GET /bootload.mp) from the device and save
+    it as a .msgpack file in /config. Developer/diagnostic use only.
+  fields: {}
+
+factory_reset:
+  name: Factory Reset
+  description: >
+    Reset ALL device configuration to factory defaults (DELETE /). This is
+    irreversible — all PWM settings, schedules, and network config will be wiped.
+    You must pass confirm: true to proceed.
+  fields:
+    confirm:
+      name: Confirm
+      description: Must be set to true to execute the reset.
+      required: true
+      example: true
+      selector:
+        boolean: {}

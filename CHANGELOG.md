@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.0] - 2026-03-25
+
+### Added
+
+- **Connectivity binary sensor** — diagnostic `BinarySensorDeviceClass.CONNECTIVITY` entity that reports `true` when `GET /ok` returns `OK` on the latest poll cycle; goes `false` when the device is unreachable
+- **`sunriser.get_weekplanner_schedule` service** — reads the week planner program assignment for a PWM channel; returns a dict mapping day names (`sunday`–`saturday`, `default`) to program IDs
+- **`sunriser.set_weekplanner_schedule` service** — writes a new week planner schedule for a PWM channel; accepts a dict of day → program ID; missing days default to 0
+- **`sunriser.download_factory_backup` service** — downloads the factory default configuration via `GET /factorybackup` and saves it as a timestamped `.msgpack` file in the HA config directory
+- **`sunriser.download_firmware` service** — downloads firmware info via `GET /firmware.mp` and saves it as a timestamped `.msgpack` file
+- **`sunriser.download_bootload` service** — downloads bootloader info via `GET /bootload.mp` and saves it as a timestamped `.msgpack` file
+- **`sunriser.factory_reset` service** — calls `DELETE /` to reset the device to factory defaults; requires `confirm: true` to prevent accidental use
+
 ## [1.4.14] - 2026-03-25
 
 ### Fixed
