@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.12] - 2026-03-25
+
+### Fixed
+
+- Use `TCPConnector(force_close=True)` for all HTTP requests so the ESP8266 BEE module always receives a fresh single-use TCP connection; persistent keep-alive connections caused the ESP8266 to send the extended AT+IPD format which the MCU firmware cannot parse, hanging the main loop until the watchdog fired and resetting the device
+
 ## [1.4.11] - 2026-03-25
 
 ### Changed

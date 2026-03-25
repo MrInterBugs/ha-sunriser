@@ -67,8 +67,13 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
 
     def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
-            # Dedicated session so cookies are not shared with HA's global session.
-            self._session = aiohttp.ClientSession()
+            # force_close=True sends Connection: close on every request so the
+            # ESP8266 BEE module always receives a fresh single-use TCP connection.
+            # Without this, keep-alive connections cause the ESP8266 to send the
+            # extended AT+IPD format (+IPD,<id>,<ip>,<port>,<len>) which the MCU
+            # firmware cannot parse, hanging the main loop until the watchdog fires.
+            connector = aiohttp.TCPConnector(force_close=True)
+            self._session = aiohttp.ClientSession(connector=connector)
         return self._session
 
     async def async_close(self) -> None:
