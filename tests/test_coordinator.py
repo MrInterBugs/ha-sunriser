@@ -191,8 +191,76 @@ async def test_update_data_client_error_raises_update_failed(coord):
 async def test_update_data_unexpected_error_raises_update_failed(coord):
     with aioresponses() as m:
         m.get(f"{BASE}/state", exception=ValueError("boom"))
-        with pytest.raises(UpdateFailed, match="Unexpected error"):
+        with pytest.raises(UpdateFailed, match="Error communicating"):
             await coord._async_update_data()
+
+
+# ---------------------------------------------------------------------------
+# Grace period — stale data returned for transient failures
+# ---------------------------------------------------------------------------
+
+
+async def test_grace_period_returns_stale_data_on_first_failure(coord, caplog):
+    """First failure with existing data should return stale data, not raise."""
+    coord.data = dict(FAKE_STATE)
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("blip"))
+        with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
+            data = await coord._async_update_data()
+
+    assert data is coord.data
+    assert coord._consecutive_failures == 1
+    assert "returning stale data" in caplog.text
+
+
+async def test_grace_period_returns_stale_data_on_second_failure(coord):
+    """Second consecutive failure should still return stale data."""
+    coord.data = dict(FAKE_STATE)
+    coord._consecutive_failures = 1
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("blip"))
+        data = await coord._async_update_data()
+
+    assert data is coord.data
+    assert coord._consecutive_failures == 2
+
+
+async def test_grace_period_raises_on_third_failure(coord):
+    """Third consecutive failure should raise UpdateFailed."""
+    coord.data = dict(FAKE_STATE)
+    coord._consecutive_failures = 2
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("down"))
+        with pytest.raises(UpdateFailed):
+            await coord._async_update_data()
+
+    assert coord._consecutive_failures == 3
+
+
+async def test_grace_period_raises_immediately_with_no_prior_data(coord):
+    """If there is no prior data, raise UpdateFailed immediately on any failure."""
+    assert coord.data is None
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("down"))
+        with pytest.raises(UpdateFailed):
+            await coord._async_update_data()
+
+
+async def test_grace_period_resets_on_success(coord):
+    """A successful poll resets the consecutive failure counter."""
+    coord.config = dict(FAKE_CONFIG)
+    coord._consecutive_failures = 2
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        m.get(f"{BASE}/weather", body=_pack([]))
+        await coord._async_update_data()
+
+    assert coord._consecutive_failures == 0
 
 
 async def test_update_data_sensor_config_fetch_error_logs_warning(coord, caplog):

@@ -1,7 +1,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 DOMAIN = "sunriser"
 
-PLATFORMS = ["button", "light", "sensor", "switch"]
+PLATFORMS = ["button", "light", "select", "sensor", "switch"]
+
+# pwm#X#manager values → human-readable option labels
+MANAGER_OPTIONS: dict[int, str] = {
+    0: "none",
+    1: "dayplanner",
+    2: "weekplanner",
+    3: "celestial",
+}
 
 DEFAULT_PORT = 80
 DEFAULT_SCAN_INTERVAL = 30

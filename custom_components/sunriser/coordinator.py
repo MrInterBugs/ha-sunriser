@@ -19,6 +19,7 @@ from .const import (
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    MANAGER_OPTIONS,
     PWM_MAX,
 )
 
@@ -43,6 +44,10 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
 
         # Static device config fetched once at startup and updated on new sensors.
         self.config: dict = {}
+
+        # Number of consecutive poll failures. Entities only go unavailable
+        # after this reaches _FAILURE_GRACE (3 missed check-ins).
+        self._consecutive_failures: int = 0
 
         self._session: aiohttp.ClientSession | None = None
 
@@ -321,6 +326,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
                 f"pwm#{i}#onoff",
                 f"pwm#{i}#max",
                 f"pwm#{i}#color",
+                f"pwm#{i}#manager",
             ]
 
         pwm_config = await self.async_get_config(pwm_keys)
@@ -330,17 +336,29 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
     # Coordinator update
     # ------------------------------------------------------------------
 
+    _FAILURE_GRACE = 3
+
     async def _async_update_data(self) -> dict:
         try:
             state = await self.async_get_state()
-        except aiohttp.ClientError as err:
+        except (aiohttp.ClientError, Exception) as err:
+            self._consecutive_failures += 1
+            if (
+                self.data is not None
+                and self._consecutive_failures < self._FAILURE_GRACE
+            ):
+                _LOGGER.debug(
+                    "SunRiser poll failed (%d/%d), returning stale data: %s",
+                    self._consecutive_failures,
+                    self._FAILURE_GRACE,
+                    err,
+                )
+                return self.data
             raise UpdateFailed(
                 f"Error communicating with SunRiser at {self.host}: {err}"
             ) from err
-        except Exception as err:
-            raise UpdateFailed(
-                f"Unexpected error from SunRiser at {self.host}: {err}"
-            ) from err
+
+        self._consecutive_failures = 0
 
         # Fetch config for any sensors that have appeared since last update.
         if state.get("sensors"):
@@ -410,6 +428,10 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
 
     def pwm_is_onoff(self, pwm_num: int) -> bool:
         return bool(self.config.get(f"pwm#{pwm_num}#onoff", False))
+
+    def pwm_manager(self, pwm_num: int) -> int:
+        """Return the manager integer for a PWM channel (0–3)."""
+        return self.config.get(f"pwm#{pwm_num}#manager") or 0
 
     def pwm_is_unused(self, pwm_num: int) -> bool:
         return not (self.config.get(f"pwm#{pwm_num}#color") or "")

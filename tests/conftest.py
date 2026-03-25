@@ -35,22 +35,26 @@ FAKE_CONFIG = {
     "factory_version": "1.005",
     "model": "SunRiser 10",
     "pwm_count": 4,
-    # pwm1 = dimmable light
+    # pwm1 = dimmable light, dayplanner
     "pwm#1#color": "4500k",
     "pwm#1#onoff": False,
     "pwm#1#max": None,
-    # pwm2 = on/off switch (pump)
+    "pwm#1#manager": 1,
+    # pwm2 = on/off switch (pump), no manager
     "pwm#2#color": "pump",
     "pwm#2#onoff": True,
     "pwm#2#max": None,
+    "pwm#2#manager": 0,
     # pwm3 = unused (empty color)
     "pwm#3#color": "",
     "pwm#3#onoff": False,
     "pwm#3#max": None,
-    # pwm4 = dimmable light
+    "pwm#3#manager": 0,
+    # pwm4 = dimmable light, weekplanner
     "pwm#4#color": "6500k",
     "pwm#4#onoff": False,
     "pwm#4#max": None,
+    "pwm#4#manager": 2,
     # DS1820 temp sensor
     "sensors#sensor#AABBCCDDEEFF#name": "Water Temp",
     "sensors#sensor#AABBCCDDEEFF#unit": 1,

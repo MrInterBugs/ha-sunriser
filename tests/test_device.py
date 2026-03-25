@@ -152,6 +152,37 @@ async def test_read_pwm_config(session):
 
 
 # ---------------------------------------------------------------------------
+# PWM manager read
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_read_pwm_manager(session):
+    """Read pwm#X#manager for all channels and verify values are 0–3 or None."""
+    keys = ["pwm_count"] + [f"pwm#{i}#manager" for i in range(1, 11)]
+    body = msgpack.packb(keys, use_bin_type=True)
+    async with session.post(
+        f"{BASE_URL}/",
+        data=body,
+        headers={"Content-Type": "application/x-msgpack"},
+        timeout=TIMEOUT,
+    ) as resp:
+        assert resp.status == 200, f"Expected 200, got {resp.status}"
+        result = msgpack.unpackb(await resp.read(), raw=False, strict_map_key=False)
+
+    pwm_count = result.get("pwm_count") or 10
+    _MANAGER_NAMES = {0: "none", 1: "dayplanner", 2: "weekplanner", 3: "celestial"}
+    print(f"\npwm#X#manager values ({pwm_count} channels):")
+    for i in range(1, pwm_count + 1):
+        val = result.get(f"pwm#{i}#manager")
+        assert (
+            val is None or val in _MANAGER_NAMES
+        ), f"pwm#{i}#manager={val!r} is not a valid manager id (expected 0–3 or None)"
+        label = _MANAGER_NAMES.get(val or 0, "none")
+        print(f"  pwm#{i}: manager={val!r} ({label})")
+
+
+# ---------------------------------------------------------------------------
 # Dayplanner read
 # ---------------------------------------------------------------------------
 
@@ -278,6 +309,49 @@ async def test_write_dayplanner(session):
         # The device reloads config after a PUT / and drops the TCP connection —
         # a 200 from the write is sufficient proof the restore succeeded.
         print("Restore write returned 200 — OK")
+
+
+@_REAL_ONLY
+@pytest.mark.asyncio
+async def test_write_pwm_manager(session):
+    """Write a different manager value to pwm#1, verify it, then restore the original.
+
+    Uses pwm#1 — always restores via finally so the device is never left
+    in a modified state even if an assertion fails.
+    """
+    TEST_PWM = 1
+    manager_key = f"pwm#{TEST_PWM}#manager"
+
+    result = await _read_config(session, [manager_key, "factory_version"])
+    original = result.get(manager_key)
+    factory_version = result.get("factory_version")
+    print(f"\nOriginal {manager_key}: {original!r}")
+    print(f"factory_version: {factory_version!r}")
+
+    # Pick a test value that differs from the current one
+    test_value = 1 if (original or 0) != 1 else 0
+
+    try:
+        payload = {manager_key: test_value}
+        if factory_version:
+            payload["save_version"] = factory_version
+        await _write_config(session, payload)
+        print(f"Wrote {manager_key}={test_value!r}")
+
+        verify = await _read_config(session, [manager_key])
+        written = verify.get(manager_key)
+        print(f"Read back: {written!r}")
+        assert (
+            written == test_value
+        ), f"Round-trip mismatch: sent {test_value!r}, got {written!r}"
+        print("Round-trip OK")
+
+    finally:
+        restore_payload = {manager_key: original}
+        if factory_version:
+            restore_payload["save_version"] = factory_version
+        await _write_config(session, restore_payload)
+        print(f"Restored {manager_key}={original!r}")
 
 
 # ---------------------------------------------------------------------------

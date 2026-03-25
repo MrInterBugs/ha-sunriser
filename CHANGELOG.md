@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.4.13] - 2026-03-25
+
+### Added
+
+- **PWM Manager select entity** — one `select` entity per active PWM channel exposing `pwm#X#manager`; options are `none`, `dayplanner`, `weekplanner`, `celestial`; changing the selection writes the new value to the device immediately via `PUT /`
+- **Poll grace period** — the coordinator now tolerates up to 2 consecutive missed check-ins before marking entities unavailable; on the third consecutive failure entities go unknown as before; eliminates spurious unavailability caused by transient TCP drops on the ESP8266
+
+### Changed
+
+- `pwm#X#manager` is now fetched at startup alongside name, color, onoff, and max
+
 ## [1.4.12] - 2026-03-25
 
 ### Fixed
