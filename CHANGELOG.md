@@ -1,10 +1,16 @@
 # Changelog
 
+## [1.4.14] - 2026-03-25
+
+### Fixed
+
+- PWM manager option 3 corrected from `celestial` to `fixed` — the real device web UI shows "Fester Wert" (fixed value); `config_def.json` label was wrong
+
 ## [1.4.13] - 2026-03-25
 
 ### Added
 
-- **PWM Manager select entity** — one `select` entity per active PWM channel exposing `pwm#X#manager`; options are `none`, `dayplanner`, `weekplanner`, `celestial`; changing the selection writes the new value to the device immediately via `PUT /`
+- **PWM Manager select entity** — one `select` entity per active PWM channel exposing `pwm#X#manager`; options are `none`, `dayplanner`, `weekplanner`, `fixed`; changing the selection writes the new value to the device immediately via `PUT /`
 - **Poll grace period** — the coordinator now tolerates up to 2 consecutive missed check-ins before marking entities unavailable; on the third consecutive failure entities go unknown as before; eliminates spurious unavailability caused by transient TCP drops on the ESP8266
 
 ### Changed

@@ -4,11 +4,14 @@ DOMAIN = "sunriser"
 PLATFORMS = ["button", "light", "select", "sensor", "switch"]
 
 # pwm#X#manager values → human-readable option labels
+# Confirmed from real device web UI (Kein Verlauf / Tagesplanung / Wochenplanung
+# / Fester Wert). config_def.json labels 3 as "celestial" but that is wrong —
+# the device shows "fixed value" and pwm#X#fixed is the companion config key.
 MANAGER_OPTIONS: dict[int, str] = {
     0: "none",
     1: "dayplanner",
     2: "weekplanner",
-    3: "celestial",
+    3: "fixed",
 }
 
 DEFAULT_PORT = 80

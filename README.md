@@ -6,11 +6,13 @@ A community-made Home Assistant custom integration for the [SunRiser 8/10](https
 
 - **Light** — Dimmable control (0–100%) for each PWM channel configured as a light
 - **Switch** — On/off control for PWM channels configured as on/off, plus a **Maintenance Mode** switch
-- **Sensor** — DS1820 temperature sensors; diagnostic sensors for Uptime, Firmware Version, and Hostname
+- **Select** — Per-channel manager selector (`none`, `dayplanner`, `weekplanner`, `celestial`) — shows and changes which planner controls each channel
+- **Sensor** — DS1820 temperature sensors; weather simulation state per channel; diagnostic sensors for Uptime, Firmware Version, and Hostname
 - **Button** — **Reboot** button to restart the device directly from HA
-- **Services** — Backup, restore, and log retrieval (see [Services](#services) below)
+- **Day Planner card** — built-in Lovelace card that renders all active PWM schedules as a 24-hour chart using the same LED colours as the device web UI; registered automatically, no manual setup required
+- **Services** — Backup, restore, log retrieval, and dayplanner read/write (see [Services](#services) below)
 - **Options** — Configurable poll interval (5–3600 seconds, default 30s) without re-adding the integration
-- Auto-discovery of PWM channels and sensors from the device
+- Auto-discovery of PWM channels and temperature sensors from the device
 - "Visit device" link in the device page opens the SunRiser web UI directly from HA
 
 ## Requirements
@@ -41,7 +43,7 @@ The integration will automatically detect all PWM channels and temperature senso
 
 ## Services
 
-The integration registers four HA services under the `sunriser` domain:
+The integration registers the following HA services under the `sunriser` domain:
 
 | Service | Description |
 |---------|-------------|
@@ -49,6 +51,8 @@ The integration registers four HA services under the `sunriser` domain:
 | `sunriser.restore` | Restores configuration from a `.msgpack` backup file. Requires `file_path` parameter. The device performs a deep restart after applying. |
 | `sunriser.get_errors` | Fetches the device error log. Returns `{"content": "..."}`. |
 | `sunriser.get_log` | Fetches the device diagnostic log. Returns `{"content": "..."}`. |
+| `sunriser.get_dayplanner_schedule` | Returns the day planner schedule for a PWM channel as `{"pwm": N, "name": "...", "markers": [{"time": "HH:MM", "percent": N}, ...]}`. |
+| `sunriser.set_dayplanner_schedule` | Writes a new day planner schedule for a PWM channel. Accepts `pwm` and a list of `{time, percent}` markers. Changes persist across reboots. |
 
 Example — backup and restore via automation:
 
@@ -65,8 +69,8 @@ data:
 ## Notes
 
 - PWM values are polled every 30 seconds by default. Change this under **Settings → Devices & Services → SunRiser → Configure**.
-- Manually setting a PWM brightness from HA overrides the active program for approximately 1 minute, after which the device's own schedule resumes. For permanent manual control, disable the dayplanner/weekplanner on the device.
-- New temperature sensors that appear after initial setup require a reload of the integration to create their entities (**Settings → Devices & Services → SunRiser → Reload**).
+- Manually setting a PWM brightness from HA overrides the active program for approximately 1 minute, after which the device's own schedule resumes. Use the Manager select entity to switch a channel to `none` for permanent manual control.
+- New temperature sensors discovered after initial setup are added automatically on the next poll — no reload required.
 
 ## Attribution
 

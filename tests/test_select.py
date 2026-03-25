@@ -71,10 +71,10 @@ def test_current_option_missing_key_defaults_to_none(coordinator, mock_config_en
     assert sel.current_option == "none"
 
 
-def test_current_option_celestial(coordinator, mock_config_entry):
+def test_current_option_fixed(coordinator, mock_config_entry):
     coordinator.config["pwm#1#manager"] = 3
     sel = _make_select(coordinator, mock_config_entry, pwm_num=1)
-    assert sel.current_option == "celestial"
+    assert sel.current_option == "fixed"
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +92,7 @@ async def test_select_option_writes_correct_key(coordinator, mock_config_entry):
 async def test_select_option_updates_local_config(coordinator, mock_config_entry):
     """After selecting, coordinator.config must reflect the new value immediately."""
     sel = _make_select(coordinator, mock_config_entry, pwm_num=1)
-    await sel.async_select_option("celestial")
+    await sel.async_select_option("fixed")
     assert coordinator.config["pwm#1#manager"] == 3
 
 
@@ -126,4 +126,4 @@ def test_name_includes_channel_name(coordinator, mock_config_entry):
 
 def test_options_list_is_complete(coordinator, mock_config_entry):
     sel = _make_select(coordinator, mock_config_entry, pwm_num=1)
-    assert set(sel.options) == {"none", "dayplanner", "weekplanner", "celestial"}
+    assert set(sel.options) == {"none", "dayplanner", "weekplanner", "fixed"}
