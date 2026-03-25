@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.10] - 2026-03-25
+
+### Changed
+
+- Weather channel sensors now named after the PWM channel (e.g. "Cool White Weather") instead of the generic "Weather Channel X"
+- Weather sensor attributes now include `weather_program_name` (resolved from device config), `thunder_active`, `moon_active`, `clouds_active`, and `rain_active` convenience booleans
+- Weather program names are lazy-loaded from the device the first time a program ID is seen
+
 ## [1.4.0 - 1.4.8] - 2026-03-24
 
 ### Added
