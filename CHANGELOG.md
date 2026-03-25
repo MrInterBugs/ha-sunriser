@@ -1,11 +1,17 @@
 # Changelog
 
+## [1.4.11] - 2026-03-25
+
+### Changed
+
+- Weather sensor state is now a condition string (`thunder`, `rain`, `cloudy`, `moon`, `clear`) instead of the static program ID integer, enabling HA history recording
+
 ## [1.4.10] - 2026-03-25
 
 ### Changed
 
 - Weather channel sensors now named after the PWM channel (e.g. "Cool White Weather") instead of the generic "Weather Channel X"
-- Weather sensor attributes now include `weather_program_name` (resolved from device config), `thunder_active`, `moon_active`, `clouds_active`, and `rain_active` convenience booleans
+- Weather sensor attributes now include `weather_program_name` (resolved from device config) and `thunder_active`, `moon_active`, `clouds_active`, `rain_active` boolean flags; raw opaque state integers (`clouds_state`, `thunder_state`, `moon_state`) are no longer exposed
 - Weather program names are lazy-loaded from the device the first time a program ID is seen
 
 ## [1.4.0 - 1.4.8] - 2026-03-24

@@ -178,11 +178,19 @@ class SunRiserWeatherChannelSensor(
         return weather[idx]
 
     @property
-    def native_value(self) -> int | None:
+    def native_value(self) -> str | None:
         ch = self._channel_data()
         if ch is None:
             return None
-        return ch.get("weather_program_id")
+        if bool(ch.get("thunder_state")):
+            return "thunder"
+        if (ch.get("rainmins") or 0) > 0:
+            return "rain"
+        if bool(ch.get("clouds_state")):
+            return "cloudy"
+        if bool(ch.get("moon_state")):
+            return "moon"
+        return "clear"
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -209,7 +217,7 @@ class SunRiserWeatherChannelSensor(
             "stormfront_length": "stormfront_length_ticks",
             "daycount": "day_count",
         }
-        exclude = {"weather_program_id"}
+        exclude = {"weather_program_id", "clouds_state", "thunder_state", "moon_state"}
 
         now = dt_util.utcnow()
         result = {}

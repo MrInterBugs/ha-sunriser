@@ -213,13 +213,49 @@ def _make_weather_channel_sensor(coordinator, channel=1):
     return SunRiserWeatherChannelSensor(coordinator, channel)
 
 
-def test_weather_channel_value_is_program_id(coordinator):
+def test_weather_channel_value_cloudy(coordinator):
     coordinator.data = {
         **FAKE_STATE,
         "weather": [{"weather_program_id": 3, "clouds_state": 1}],
     }
     sensor = _make_weather_channel_sensor(coordinator, channel=1)
-    assert sensor.native_value == 3
+    assert sensor.native_value == "cloudy"
+
+
+def test_weather_channel_value_thunder(coordinator):
+    coordinator.data = {
+        **FAKE_STATE,
+        "weather": [{"weather_program_id": 1, "thunder_state": 2, "clouds_state": 1}],
+    }
+    sensor = _make_weather_channel_sensor(coordinator, channel=1)
+    assert sensor.native_value == "thunder"
+
+
+def test_weather_channel_value_rain(coordinator):
+    coordinator.data = {
+        **FAKE_STATE,
+        "weather": [{"weather_program_id": 1, "rainmins": 15, "clouds_state": 0}],
+    }
+    sensor = _make_weather_channel_sensor(coordinator, channel=1)
+    assert sensor.native_value == "rain"
+
+
+def test_weather_channel_value_moon(coordinator):
+    coordinator.data = {
+        **FAKE_STATE,
+        "weather": [{"weather_program_id": 1, "moon_state": 1}],
+    }
+    sensor = _make_weather_channel_sensor(coordinator, channel=1)
+    assert sensor.native_value == "moon"
+
+
+def test_weather_channel_value_clear(coordinator):
+    coordinator.data = {
+        **FAKE_STATE,
+        "weather": [{"weather_program_id": 1}],
+    }
+    sensor = _make_weather_channel_sensor(coordinator, channel=1)
+    assert sensor.native_value == "clear"
 
 
 def test_weather_channel_none_when_no_data(coordinator):
@@ -244,8 +280,10 @@ def test_weather_channel_attributes_include_program_id_and_name(coordinator):
     attrs = sensor.extra_state_attributes
     assert attrs["weather_program_id"] == 2
     assert attrs["weather_program_name"] is None  # not loaded in this fixture
-    assert attrs["clouds_state"] == 0
-    assert attrs["moon_state"] == 1
+    assert "clouds_state" not in attrs
+    assert "moon_state" not in attrs
+    assert attrs["clouds_active"] is False
+    assert attrs["moon_active"] is True
 
 
 def test_weather_channel_tick_nonzero_produces_datetime(coordinator):
@@ -284,3 +322,17 @@ def test_weather_channel_name(coordinator):
     # FAKE_CONFIG has pwm#2#color = "pump" → COLOR_NAMES maps "pump" to "Mini Pump".
     sensor = _make_weather_channel_sensor(coordinator, channel=2)
     assert sensor._attr_name == "Mini Pump Weather"
+
+
+def test_weather_channel_attributes_rename_passthrough(coordinator):
+    # cloudticks → cloud_ticks and rainmins → rain_duration_mins are renamed.
+    coordinator.data = {
+        **FAKE_STATE,
+        "weather": [{"weather_program_id": 1, "cloudticks": 5000, "rainmins": 10}],
+    }
+    sensor = _make_weather_channel_sensor(coordinator, channel=1)
+    attrs = sensor.extra_state_attributes
+    assert attrs["cloud_ticks"] == 5000
+    assert attrs["rain_duration_mins"] == 10
+    assert "cloudticks" not in attrs
+    assert "rainmins" not in attrs

@@ -388,6 +388,30 @@ def test_sensor_value_returns_none_for_missing_rom(coordinator):
     assert coordinator.sensor_value("MISSING") is None
 
 
+def test_weather_program_name_returns_none_when_program_id_is_none(coordinator):
+    assert coordinator.weather_program_name(None) is None
+
+
+def test_weather_program_name_returns_name_when_loaded(coordinator):
+    coordinator.config["weather#setup#1#name"] = "Reef Day"
+    assert coordinator.weather_program_name(1) == "Reef Day"
+
+
+async def test_update_data_fetches_new_weather_program_names(coord):
+    """First time a weather program ID is seen its name is fetched from config."""
+    coord.config = dict(FAKE_CONFIG)
+    weather = [{"weather_program_id": 7}]
+    program_cfg = {"weather#setup#7#name": "Storm Program"}
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        m.get(f"{BASE}/weather", body=_pack(weather))
+        m.post(f"{BASE}/", body=_pack(program_cfg))
+        await coord._async_update_data()
+
+    assert coord.config["weather#setup#7#name"] == "Storm Program"
+
+
 def test_sensor_value_raw_unit(coordinator):
     coordinator.config["sensors#sensor#AABBCCDDEEFF#unitcomma"] = 0
     val = coordinator.sensor_value("AABBCCDDEEFF")
