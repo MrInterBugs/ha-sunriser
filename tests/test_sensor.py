@@ -235,14 +235,15 @@ def test_weather_channel_none_when_index_out_of_range(coordinator):
     assert sensor.native_value is None
 
 
-def test_weather_channel_attributes_exclude_program_id(coordinator):
+def test_weather_channel_attributes_include_program_id_and_name(coordinator):
     coordinator.data = {
         **FAKE_STATE,
         "weather": [{"weather_program_id": 2, "clouds_state": 0, "moon_state": 1}],
     }
     sensor = _make_weather_channel_sensor(coordinator, channel=1)
     attrs = sensor.extra_state_attributes
-    assert "weather_program_id" not in attrs
+    assert attrs["weather_program_id"] == 2
+    assert attrs["weather_program_name"] is None  # not loaded in this fixture
     assert attrs["clouds_state"] == 0
     assert attrs["moon_state"] == 1
 
@@ -279,5 +280,7 @@ def test_weather_channel_unique_id(coordinator):
 
 
 def test_weather_channel_name(coordinator):
+    # Name is derived from the PWM channel name, not a generic "Weather Channel X".
+    # FAKE_CONFIG has pwm#2#color = "pump" → COLOR_NAMES maps "pump" to "Mini Pump".
     sensor = _make_weather_channel_sensor(coordinator, channel=2)
-    assert sensor._attr_name == "Weather Channel 2"
+    assert sensor._attr_name == "Mini Pump Weather"

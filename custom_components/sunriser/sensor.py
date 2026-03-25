@@ -165,7 +165,7 @@ class SunRiserWeatherChannelSensor(
         super().__init__(coordinator)
         self._channel = channel
         self._attr_unique_id = f"{coordinator._entry_id}_weather_{channel}"
-        self._attr_name = f"Weather Channel {channel}"
+        self._attr_name = f"{coordinator.pwm_name(channel)} Weather"
         self._attr_device_info = coordinator.device_info
 
     def _channel_data(self) -> dict | None:
@@ -193,7 +193,7 @@ class SunRiserWeatherChannelSensor(
         uptime_ms = ((self.coordinator.data or {}).get("uptime") or 0) * 1000
 
         # *_next_state_tick / *_next_tick fields are milliseconds from device
-        # boot; convert to seconds until the next state transition.
+        # boot; convert to an ISO timestamp of the next state transition.
         _tick_to_seconds = {
             "clouds_next_state_tick": "clouds_next_change_at",
             "rain_next_tick": "rain_next_at",
@@ -226,4 +226,21 @@ class SunRiserWeatherChannelSensor(
                     result[_tick_to_seconds[k]] = None
             else:
                 result[_rename.get(k, k)] = v
+
+        # Human-readable program name (resolved from config).
+        program_id = ch.get("weather_program_id")
+        result["weather_program_id"] = program_id
+        result["weather_program_name"] = self.coordinator.weather_program_name(
+            program_id
+        )
+
+        # Convenience booleans derived from the state-machine integers.
+        # A non-zero state means that subsystem is currently active.
+        result["thunder_active"] = bool(ch.get("thunder_state"))
+        result["moon_active"] = bool(ch.get("moon_state"))
+        result["clouds_active"] = bool(ch.get("clouds_state"))
+        # rain_active: rain is running when rainmins > 0 (device counts down
+        # the remaining minutes of the current rain event).
+        result["rain_active"] = (ch.get("rainmins") or 0) > 0
+
         return result

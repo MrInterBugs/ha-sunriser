@@ -360,7 +360,24 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
 
         # Fetch weather data — non-fatal; endpoint is still under development.
         try:
-            state["weather"] = await self.async_get_weather()
+            weather = await self.async_get_weather()
+            state["weather"] = weather
+
+            # Lazy-load names for any weather program IDs we haven't seen before.
+            new_ids = [
+                ch["weather_program_id"]
+                for ch in weather
+                if ch is not None
+                and ch.get("weather_program_id") is not None
+                and f"weather#setup#{ch['weather_program_id']}#name" not in self.config
+            ]
+            if new_ids:
+                name_keys = [f"weather#setup#{pid}#name" for pid in new_ids]
+                try:
+                    program_config = await self.async_get_config(name_keys)
+                    self.config.update(program_config)
+                except aiohttp.ClientError as err:
+                    _LOGGER.debug("Could not fetch weather program names: %s", err)
         except aiohttp.ClientError as err:
             _LOGGER.debug("Could not fetch weather data: %s", err)
             state["weather"] = {}
@@ -397,6 +414,11 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         if self.data is None:
             return 0
         return self.data.get("pwms", {}).get(str(pwm_num)) or 0
+
+    def weather_program_name(self, program_id: int | None) -> str | None:
+        if program_id is None:
+            return None
+        return self.config.get(f"weather#setup#{program_id}#name") or None
 
     def sensor_name(self, rom: str) -> str:
         return self.config.get(f"sensors#sensor#{rom}#name") or rom
