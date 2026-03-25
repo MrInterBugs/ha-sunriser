@@ -27,7 +27,7 @@ async def async_setup_entry(
 class SunRiserConnectivitySensor(
     CoordinatorEntity[SunRiserCoordinator], BinarySensorEntity
 ):
-    """Reports whether GET /ok returns OK on the latest poll cycle."""
+    """Reports whether the most recent GET /ok refresh returned OK."""
 
     _attr_has_entity_name = True
     _attr_name = "Connectivity"

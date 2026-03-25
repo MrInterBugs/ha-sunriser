@@ -29,6 +29,8 @@ _LOGGER = logging.getLogger(__name__)
 class SunRiserCoordinator(DataUpdateCoordinator[dict]):
     """Coordinator that polls /state and holds device config."""
 
+    _REFRESH_SEQUENCE = ("state", "ok", "weather")
+
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
         super().__init__(
@@ -50,6 +52,8 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         self._consecutive_failures: int = 0
 
         self._session: aiohttp.ClientSession | None = None
+        self._next_refresh_index = 0
+        self._last_state_refresh_succeeded = False
 
     @property
     def base_url(self) -> str:
@@ -424,10 +428,11 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
 
     _FAILURE_GRACE = 3
 
-    async def _async_update_data(self) -> dict:
+    async def _async_refresh_state(self) -> dict:
         try:
             state = await self.async_get_state()
         except (aiohttp.ClientError, Exception) as err:
+            self._last_state_refresh_succeeded = False
             self._consecutive_failures += 1
             if (
                 self.data is not None
@@ -445,6 +450,9 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
             ) from err
 
         self._consecutive_failures = 0
+        self._last_state_refresh_succeeded = True
+        data = dict(self.data or {})
+        data.update(state)
 
         # Fetch config for any sensors that have appeared since last update.
         if state.get("sensors"):
@@ -467,16 +475,12 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
                 except aiohttp.ClientError as err:
                     _LOGGER.warning("Could not fetch sensor config: %s", err)
 
-        # Ping /ok — non-fatal; used by the connectivity binary sensor.
-        try:
-            state["ok"] = await self.async_check_ok()
-        except Exception:
-            state["ok"] = False
+        return data
 
-        # Fetch weather data — non-fatal; endpoint is still under development.
+    async def _async_refresh_weather(self, data: dict) -> dict:
         try:
             weather = await self.async_get_weather()
-            state["weather"] = weather
+            data["weather"] = weather
 
             # Lazy-load names for any weather program IDs we haven't seen before.
             new_ids = [
@@ -495,12 +499,49 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
                     _LOGGER.debug("Could not fetch weather program names: %s", err)
         except aiohttp.ClientError as err:
             _LOGGER.debug("Could not fetch weather data: %s", err)
-            state["weather"] = {}
+            data.setdefault("weather", [])
         except Exception as err:
             _LOGGER.debug("Unexpected error fetching weather data: %s", err)
-            state["weather"] = {}
+            data.setdefault("weather", [])
 
-        return state
+        return data
+
+    async def _async_refresh_all(self) -> dict:
+        """Build an initial full snapshot before switching to round-robin refreshes."""
+        data = await self._async_refresh_state()
+        try:
+            data["ok"] = await self.async_check_ok()
+        except Exception:
+            data["ok"] = False
+        return await self._async_refresh_weather(data)
+
+    async def _async_update_data(self) -> dict:
+        if self.data is None:
+            data = await self._async_refresh_all()
+            self._next_refresh_index = 1
+            return data
+
+        refresh_kind = self._REFRESH_SEQUENCE[self._next_refresh_index]
+
+        if refresh_kind == "state":
+            data = await self._async_refresh_state()
+            if not self._last_state_refresh_succeeded:
+                return data
+        else:
+            data = dict(self.data)
+            if refresh_kind == "ok":
+                try:
+                    data["ok"] = await self.async_check_ok()
+                except Exception:
+                    data["ok"] = False
+            else:
+                data = await self._async_refresh_weather(data)
+
+        self._next_refresh_index = (self._next_refresh_index + 1) % len(
+            self._REFRESH_SEQUENCE
+        )
+
+        return data
 
     # ------------------------------------------------------------------
     # Convenience helpers for entities

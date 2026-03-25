@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.2] - 2026-03-25
+
+### Changed
+
+- **Staggered polling** — after the initial startup snapshot, the coordinator now refreshes only one endpoint per scan interval (`/ok`, `/weather`, `/state` in rotation) instead of hitting all three back-to-back every cycle; reduces rapid successive TCP reconnects on WizFi360-based devices while retaining the last successful values for the endpoints not refreshed on that tick
+
 ## [1.5.1] - 2026-03-25
 
 ### Added

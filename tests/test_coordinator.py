@@ -153,12 +153,16 @@ async def test_load_device_config_with_password(hass, mock_config_entry):
 
 async def test_update_data_success(coord):
     coord.config = dict(FAKE_CONFIG)
+    coord.data = None
     with aioresponses() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        m.get(f"{BASE}/ok", body="OK")
         m.get(f"{BASE}/weather", body=_pack([None, {"weather_program_id": 1}]))
         data = await coord._async_update_data()
     assert data["uptime"] == 12345
+    assert data["ok"] is True
     assert data["weather"] == [None, {"weather_program_id": 1}]
+    assert coord._next_refresh_index == 1
 
 
 async def test_update_data_fetches_new_sensor_config(coord):
@@ -175,7 +179,6 @@ async def test_update_data_fetches_new_sensor_config(coord):
     with aioresponses() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
         m.post(f"{BASE}/", body=_pack(sensor_cfg))
-        m.get(f"{BASE}/weather", body=_pack([]))
         data = await coord._async_update_data()
 
     assert coord.config["sensors#sensor#AABBCCDDEEFF#name"] == "Water Temp"
@@ -257,7 +260,6 @@ async def test_grace_period_resets_on_success(coord):
 
     with aioresponses() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
-        m.get(f"{BASE}/weather", body=_pack([]))
         await coord._async_update_data()
 
     assert coord._consecutive_failures == 0
@@ -271,12 +273,65 @@ async def test_update_data_sensor_config_fetch_error_logs_warning(coord, caplog)
     with aioresponses() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
         m.post(f"{BASE}/", exception=aiohttp.ClientConnectionError("down"))
-        m.get(f"{BASE}/weather", body=_pack([]))
         with caplog.at_level(logging.WARNING, logger="custom_components.sunriser"):
             data = await coord._async_update_data()
 
     assert data["uptime"] == 12345  # main data still returned despite the fetch failure
     assert "Could not fetch sensor config" in caplog.text
+
+
+async def test_update_data_round_robins_to_ok(coord):
+    coord.data = {**FAKE_STATE, "ok": False, "weather": [{"weather_program_id": 7}]}
+    coord._next_refresh_index = 1
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/ok", body="OK")
+        data = await coord._async_update_data()
+
+    assert data["ok"] is True
+    assert data["weather"] == [{"weather_program_id": 7}]
+    assert data["uptime"] == FAKE_STATE["uptime"]
+    assert coord._next_refresh_index == 2
+
+
+async def test_update_data_round_robins_to_weather(coord):
+    coord.data = {**FAKE_STATE, "ok": True, "weather": [{"weather_program_id": 3}]}
+    coord._next_refresh_index = 2
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/weather", body=_pack([None, {"weather_program_id": 5}]))
+        data = await coord._async_update_data()
+
+    assert data["ok"] is True
+    assert data["weather"] == [None, {"weather_program_id": 5}]
+    assert data["uptime"] == FAKE_STATE["uptime"]
+    assert coord._next_refresh_index == 0
+
+
+async def test_update_data_weather_failure_keeps_stale_weather(coord, caplog):
+    coord.data = {**FAKE_STATE, "weather": [{"weather_program_id": 3}]}
+    coord._next_refresh_index = 2
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/weather", exception=aiohttp.ClientConnectionError("down"))
+        with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
+            data = await coord._async_update_data()
+
+    assert data["weather"] == [{"weather_program_id": 3}]
+    assert "Could not fetch weather data" in caplog.text
+
+
+async def test_state_failure_does_not_advance_round_robin(coord):
+    coord.data = dict(FAKE_STATE)
+    coord._next_refresh_index = 0
+    coord._consecutive_failures = 1
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("blip"))
+        data = await coord._async_update_data()
+
+    assert data is coord.data
+    assert coord._next_refresh_index == 0
 
 
 async def test_async_get_weather_returns_first_msgpack_object(coord):
@@ -309,7 +364,7 @@ async def test_update_data_weather_client_error_logs_debug_and_returns_empty_wea
         with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
             data = await coord._async_update_data()
 
-    assert data["weather"] == {}
+    assert data["weather"] == []
     assert "Could not fetch weather data" in caplog.text
 
 
@@ -326,7 +381,7 @@ async def test_update_data_weather_unexpected_error_logs_debug_and_returns_empty
         with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
             data = await coord._async_update_data()
 
-    assert data["weather"] == {}
+    assert data["weather"] == []
     assert "Unexpected error fetching weather data" in caplog.text
 
 
@@ -409,6 +464,15 @@ def test_pwm_is_onoff_false(coordinator):
     assert coordinator.pwm_is_onoff(1) is False
 
 
+def test_pwm_manager_returns_configured_value(coordinator):
+    assert coordinator.pwm_manager(4) == 2
+
+
+def test_pwm_manager_defaults_to_zero_when_missing(coordinator):
+    coordinator.config["pwm#4#manager"] = None
+    assert coordinator.pwm_manager(4) == 0
+
+
 def test_pwm_is_unused_empty_color(coordinator):
     assert coordinator.pwm_is_unused(3) is True
 
@@ -468,11 +532,12 @@ def test_weather_program_name_returns_name_when_loaded(coordinator):
 async def test_update_data_fetches_new_weather_program_names(coord):
     """First time a weather program ID is seen its name is fetched from config."""
     coord.config = dict(FAKE_CONFIG)
+    coord.data = {**FAKE_STATE, "ok": True}
+    coord._next_refresh_index = 2
     weather = [{"weather_program_id": 7}]
     program_cfg = {"weather#setup#7#name": "Storm Program"}
 
     with aioresponses() as m:
-        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
         m.get(f"{BASE}/weather", body=_pack(weather))
         m.post(f"{BASE}/", body=_pack(program_cfg))
         await coord._async_update_data()
@@ -638,6 +703,23 @@ async def test_update_data_ok_exception_in_check_method_is_non_fatal(
 ):
     """If async_check_ok itself raises unexpectedly, ok=False and update continues."""
     coord.config = dict(FAKE_CONFIG)
+    coord.data = dict(FAKE_STATE)
+    coord._next_refresh_index = 1
+    monkeypatch.setattr(
+        coord, "async_check_ok", AsyncMock(side_effect=RuntimeError("unexpected"))
+    )
+    with aioresponses() as m:
+        data = await coord._async_update_data()
+    assert data["ok"] is False
+    assert data["uptime"] == 12345
+
+
+async def test_initial_update_data_ok_exception_in_check_method_is_non_fatal(
+    coord, monkeypatch
+):
+    """The startup full refresh also falls back to ok=False when /ok handling blows up."""
+    coord.config = dict(FAKE_CONFIG)
+    coord.data = None
     monkeypatch.setattr(
         coord, "async_check_ok", AsyncMock(side_effect=RuntimeError("unexpected"))
     )
@@ -646,6 +728,7 @@ async def test_update_data_ok_exception_in_check_method_is_non_fatal(
         m.get(f"{BASE}/weather", body=_pack([]))
         data = await coord._async_update_data()
     assert data["ok"] is False
+    assert data["weather"] == []
     assert data["uptime"] == 12345
 
 
