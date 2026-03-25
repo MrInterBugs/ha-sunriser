@@ -6,7 +6,7 @@ A community-made Home Assistant custom integration for the [SunRiser 8/10](https
 
 - **Light** — Dimmable control (0–100%) for each PWM channel configured as a light
 - **Switch** — On/off control for PWM channels configured as on/off, plus a **Maintenance Mode** switch
-- **Select** — Per-channel manager selector (`none`, `dayplanner`, `weekplanner`, `celestial`) — shows and changes which planner controls each channel
+- **Select** — Per-channel manager selector (`none`, `dayplanner`, `weekplanner`, `fixed`) — shows and changes which planner controls each channel
 - **Sensor** — DS1820 temperature sensors; weather simulation state per channel; diagnostic sensors for Uptime, Firmware Version, and Hostname
 - **Button** — **Reboot** button to restart the device directly from HA
 - **Day Planner card** — built-in Lovelace card that renders all active PWM schedules as a 24-hour chart using the same LED colours as the device web UI; registered automatically, no manual setup required
