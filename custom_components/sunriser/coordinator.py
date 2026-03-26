@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import timedelta
 
@@ -55,6 +54,8 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         self._session: aiohttp.ClientSession | None = None
         self._next_refresh_index = 0
         self._last_state_refresh_succeeded = False
+        self._init_step: int = 0
+        self._pending_sensor_roms: list = []
 
     @property
     def base_url(self) -> str:
@@ -90,6 +91,11 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         """Close the dedicated HTTP session, if one was created."""
         if self._session and not self._session.closed:
             await self._session.close()
+
+    @property
+    def init_complete(self) -> bool:
+        """True once all four init ticks have completed."""
+        return self._init_step >= 4
 
     async def async_authenticate(self) -> None:
         """Send password to device and store the session cookie.
@@ -380,39 +386,63 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         await self.async_set_config({f"dayplanner#marker#{pwm}": flat})
         self.config[f"dayplanner#marker#{pwm}"] = flat
 
+    _BASE_CONFIG_KEYS: list[str] = [
+        "name",
+        "model",
+        "model_id",
+        "pwm_count",
+        "hostname",
+        "factory_version",
+        "save_version",
+    ]
+
     # ------------------------------------------------------------------
     # Setup
     # ------------------------------------------------------------------
 
     async def async_load_device_config(self) -> None:
-        """Fetch static device config (PWM names, onoff flags, etc.).
+        """Authenticate with the device.  All config is loaded lazily by the poll loop.
 
-        Called once during entry setup before the first state poll.
+        Steps 0-3 of the init state machine each make exactly one HTTP request so
+        the WizFi360 module has a full poll interval to tear down the TCP session
+        before the next connection arrives.
         """
         await self.async_authenticate()
 
-        base_keys = [
-            "name",
-            "model",
-            "model_id",
-            "pwm_count",
-            "hostname",
-            "factory_version",
-            "save_version",
-        ]
-        base = await self.async_get_config(base_keys)
+    async def _async_init_base_config(self) -> dict:
+        """Init tick 0 — fetch name, model, pwm_count, etc."""
+        base = await self.async_get_config(self._BASE_CONFIG_KEYS)
         self.config.update(base)
+        self._init_step = 1
+        return {}
 
-        # pwm_count may be None on some firmware versions; derive it from
-        # the actual pwms dict in state instead, which is always accurate.
-        await asyncio.sleep(2)
+    async def _async_init_state(self) -> dict:
+        """Init tick 1 — fetch /state; derive pwm_count and discover sensor ROMs."""
         state = await self.async_get_state()
-        pwm_count: int = base.get("pwm_count") or len(state.get("pwms", {})) or 8
+        pwm_count = self.config.get("pwm_count") or len(state.get("pwms", {})) or 8
         self.config["pwm_count"] = pwm_count
+        self._pending_sensor_roms = [
+            rom
+            for rom in state.get("sensors", {})
+            if f"sensors#sensor#{rom}#name" not in self.config
+        ]
+        self._last_state_refresh_succeeded = True
+        self._consecutive_failures = 0
+        self._init_step = 2
+        data = dict(state)
+        data["ok"] = True
+        data.setdefault("weather", [])
+        return data
 
-        pwm_keys: list[str] = []
+    async def _async_init_pwm_config(self) -> dict:
+        """Init tick 2 — fetch PWM config and any sensor config discovered in tick 1.
+
+        Both key sets are batched into a single POST request.
+        """
+        pwm_count = self.config.get("pwm_count") or 8
+        keys: list[str] = []
         for i in range(1, pwm_count + 1):
-            pwm_keys += [
+            keys += [
                 f"pwm#{i}#name",
                 f"pwm#{i}#onoff",
                 f"pwm#{i}#max",
@@ -421,10 +451,32 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
                 f"pwm#{i}#fixed",
                 f"dayplanner#marker#{i}",
             ]
+        for rom in self._pending_sensor_roms:
+            keys += [
+                f"sensors#sensor#{rom}#name",
+                f"sensors#sensor#{rom}#unit",
+                f"sensors#sensor#{rom}#unitcomma",
+            ]
+        config = await self.async_get_config(keys)
+        self.config.update(config)
+        self._init_step = 3
+        return dict(self.data) if self.data else {}
 
-        await asyncio.sleep(2)
-        pwm_config = await self.async_get_config(pwm_keys)
-        self.config.update(pwm_config)
+    async def _async_init_weather(self) -> dict:
+        """Init tick 3 — fetch /weather so weather sensor entities can be created.
+
+        Failure is graceful: an empty weather list is returned so the rest of
+        init still completes and entities are set up.
+        """
+        data = dict(self.data) if self.data else {}
+        try:
+            data["weather"] = await self.async_get_weather()
+        except (aiohttp.ClientError, Exception) as err:
+            _LOGGER.debug("Could not fetch initial weather data: %s", err)
+            data.setdefault("weather", [])
+        self._init_step = 4
+        self._next_refresh_index = 0
+        return data
 
     # ------------------------------------------------------------------
     # Coordinator update
@@ -510,19 +562,24 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
 
         return data
 
-    async def _async_refresh_all(self) -> dict:
-        """Build an initial full snapshot before switching to round-robin refreshes."""
-        data = await self._async_refresh_state()
-        data["ok"] = self._last_state_refresh_succeeded
-        await asyncio.sleep(2)
-        return await self._async_refresh_weather(data)
-
     async def _async_update_data(self) -> dict:
-        if self.data is None:
-            data = await self._async_refresh_all()
-            self._next_refresh_index = 1
-            return data
+        # ── Init phase: steps 0–2 retry on failure; step 3 always completes ──
+        if 0 <= self._init_step <= 2:
+            try:
+                if self._init_step == 0:
+                    return await self._async_init_base_config()
+                if self._init_step == 1:
+                    return await self._async_init_state()
+                return await self._async_init_pwm_config()
+            except (aiohttp.ClientError, Exception) as err:
+                raise UpdateFailed(
+                    f"Error communicating with SunRiser at {self.host}: {err}"
+                ) from err
 
+        if self._init_step == 3:
+            return await self._async_init_weather()
+
+        # ── Normal round-robin ──────────────────────────────────────────────────
         refresh_kind = self._REFRESH_SEQUENCE[self._next_refresh_index]
 
         if refresh_kind == "state":
@@ -537,7 +594,6 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         self._next_refresh_index = (self._next_refresh_index + 1) % len(
             self._REFRESH_SEQUENCE
         )
-
         return data
 
     # ------------------------------------------------------------------
