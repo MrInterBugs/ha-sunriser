@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.4] - 2026-03-26
+
+### Changed
+
+- **4-step init state machine** — replaces `asyncio.sleep()` startup delays with a proper state machine; each of the four init ticks (base config, state, PWM config, weather) makes exactly one HTTP request so the WizFi360 has a full poll interval between connections
+- **Deferred platform setup** — entity platforms are not loaded until all four init ticks complete, ensuring PWM names, colors, and weather data are fully populated before any entity is created
+- **Sensor ROM discovery during init** — temperature sensor ROMs are discovered in tick 1 (state fetch) and their config keys are batched into the tick 2 request, eliminating a separate config round-trip
+
 ## [1.5.3] - 2026-03-26
 
 ### Changed
