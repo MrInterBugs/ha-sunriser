@@ -1,4 +1,4 @@
-# SunRiser Home Assistant Integration
+# <img src="custom_components/sunriser/brand/icon.png" alt="SunRiser logo" height="32" style="vertical-align:middle"> SunRiser Home Assistant Integration
 
 A community-made Home Assistant custom integration for the [SunRiser 8/10](https://www.ledaquaristik.de/SunRiser-10-Dimmsteuerung-und-Tagessimulation-mit-WLAN/150-00) LED aquarium controller by LEDaquaristik.
 
@@ -16,6 +16,8 @@ A community-made Home Assistant custom integration for the [SunRiser 8/10](https
 - **Options** — Configurable poll interval (5–3600 seconds, default 30s) without re-adding the integration
 - Auto-discovery of PWM channels and temperature sensors from the device
 - "Visit device" link in the device page opens the SunRiser web UI directly from HA
+
+![SunRiser device page in Home Assistant](images/device_page.png)
 
 ## Requirements
 
@@ -42,6 +44,8 @@ A community-made Home Assistant custom integration for the [SunRiser 8/10](https
 6. Click **Submit**
 
 The integration will automatically detect all PWM channels and temperature sensors on your device.
+
+![Example aquarium dashboard with Day Planner card](images/example_dashboard.png)
 
 ## Services
 
