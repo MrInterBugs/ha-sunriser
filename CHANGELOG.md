@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.4-beta.1] - 2026-03-26
+
+### Changed
+
+- **Request serialisation lock** — `asyncio.Lock` added to the coordinator so only one TCP connection is ever in-flight at a time; prevents concurrent entity writes from crashing the WizFi360 module
+
 ## [1.5.4-beta.0] - 2026-03-26
 
 ### Changed
