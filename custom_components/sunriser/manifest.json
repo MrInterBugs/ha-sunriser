@@ -11,6 +11,5 @@
   "issue_tracker": "https://github.com/MrInterBugs/ha-sunriser/issues",
   "quality_scale": "bronze",
   "requirements": ["msgpack>=1.0.0"],
-  "single_config_entry": false,
   "version": "1.5.4"
 }
