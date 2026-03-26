@@ -26,9 +26,7 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 def mock_coordinator_sleep():
     """Patch asyncio.sleep in the coordinator so tests return immediately without
     lingering event-loop tasks that PHCC's verify_cleanup fixture would flag."""
-    with patch(
-        "custom_components.sunriser.coordinator.asyncio.sleep", new=AsyncMock()
-    ):
+    with patch("custom_components.sunriser.coordinator.asyncio.sleep", new=AsyncMock()):
         yield
 
 
