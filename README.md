@@ -78,6 +78,10 @@ data:
   file_path: /config/sunriser_backup_20260323_120000.msgpack
 ```
 
+## Known Limitations & Warnings
+
+> **Warning:** Do not use the SunRiser web interface while this integration is running. The device has limited capacity for concurrent connections, and accessing the web UI at the same time as the integration polls the device can cause the controller to crash and require either a manual power cycle or waiting for the device's watchdog (dead man's switch) to trigger and restart it automatically.
+
 ## Notes
 
 - PWM values are polled every 30 seconds by default. Change this under **Settings → Devices & Services → SunRiser → Configure**.
