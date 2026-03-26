@@ -80,6 +80,10 @@ data:
 - Manually setting a PWM brightness from HA overrides the active program for approximately 1 minute, after which the device's own schedule resumes. Use the Manager select entity to switch a channel to `none` for permanent manual control.
 - New temperature sensors discovered after initial setup are added automatically on the next poll — no reload required.
 
+## License
+
+This project is licensed under the [GNU GPLv3](http://www.gnu.org/licenses/gpl-3.0) — see the [LICENSE](LICENSE) file for details.
+
 ## Attribution
 
 This integration was built using the [SunRiser source code](https://github.com/LEDaquaristik/sunriser) by [LEDaquaristik](https://www.ledaquaristik.de/) as reference material. The source code and configuration files from that project are licensed under the [GNU GPL v3](http://www.gnu.org/licenses/gpl-3.0). Other assets (graphics etc.) are licensed under [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/).
