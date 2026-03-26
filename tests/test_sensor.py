@@ -19,7 +19,7 @@ from custom_components.sunriser.sensor import (
 
 
 async def test_setup_creates_diagnostic_sensors(hass, coordinator, mock_config_entry):
-    hass.data.setdefault(DOMAIN, {})[ENTRY_ID] = coordinator
+    mock_config_entry.runtime_data = coordinator
 
     added = []
     await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))
@@ -37,7 +37,7 @@ async def test_setup_creates_weather_channel_sensors(
         **coordinator.data,
         "weather": [None, {"weather_program_id": 2}, {"weather_program_id": 5}],
     }
-    hass.data.setdefault(DOMAIN, {})[ENTRY_ID] = coordinator
+    mock_config_entry.runtime_data = coordinator
 
     added = []
     await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))
@@ -51,7 +51,7 @@ async def test_setup_creates_weather_channel_sensors(
 async def test_setup_creates_temperature_sensor_for_ds1820(
     hass, coordinator, mock_config_entry
 ):
-    hass.data.setdefault(DOMAIN, {})[ENTRY_ID] = coordinator
+    mock_config_entry.runtime_data = coordinator
 
     added = []
     await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))
@@ -64,7 +64,7 @@ async def test_setup_creates_temperature_sensor_for_ds1820(
 async def test_setup_skips_non_ds1820_sensors(hass, coordinator, mock_config_entry):
     """Device type 2 (not DS1820) should not create a temperature sensor."""
     coordinator.data = {**FAKE_STATE, "sensors": {"FFEEDD": [2, 500]}}
-    hass.data.setdefault(DOMAIN, {})[ENTRY_ID] = coordinator
+    mock_config_entry.runtime_data = coordinator
 
     added = []
     await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))
@@ -75,7 +75,7 @@ async def test_setup_skips_non_ds1820_sensors(hass, coordinator, mock_config_ent
 
 async def test_setup_no_sensors(hass, coordinator, mock_config_entry):
     coordinator.data = {**FAKE_STATE, "sensors": {}}
-    hass.data.setdefault(DOMAIN, {})[ENTRY_ID] = coordinator
+    mock_config_entry.runtime_data = coordinator
 
     added = []
     await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))
@@ -86,7 +86,7 @@ async def test_setup_no_sensors(hass, coordinator, mock_config_entry):
 
 async def test_setup_when_coordinator_data_none(hass, coordinator, mock_config_entry):
     coordinator.data = None
-    hass.data.setdefault(DOMAIN, {})[ENTRY_ID] = coordinator
+    mock_config_entry.runtime_data = coordinator
 
     added = []
     await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))

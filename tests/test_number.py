@@ -17,7 +17,7 @@ async def test_setup_creates_number_for_active_channels(
     hass, coordinator, mock_config_entry
 ):
     """One number entity per active channel (pwm1, pwm2, pwm4); pwm3 is unused."""
-    hass.data.setdefault(DOMAIN, {})[ENTRY_ID] = coordinator
+    mock_config_entry.runtime_data = coordinator
 
     added = []
     await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))
@@ -28,7 +28,7 @@ async def test_setup_creates_number_for_active_channels(
 
 async def test_setup_excludes_unused_channels(hass, coordinator, mock_config_entry):
     """Channels with empty color string must not get a number entity."""
-    hass.data.setdefault(DOMAIN, {})[ENTRY_ID] = coordinator
+    mock_config_entry.runtime_data = coordinator
 
     added = []
     await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))

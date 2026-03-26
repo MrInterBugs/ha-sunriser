@@ -14,6 +14,7 @@ from custom_components.sunriser import (
     _register_services,
 )
 from custom_components.sunriser.const import DOMAIN
+from custom_components.sunriser.coordinator import SunRiserCoordinator
 
 
 async def test_setup_entry_success(hass, mock_config_entry):
@@ -33,7 +34,7 @@ async def test_setup_entry_success(hass, mock_config_entry):
         await hass.async_block_till_done()
 
     assert result is True
-    assert ENTRY_ID in hass.data[DOMAIN]
+    assert isinstance(mock_config_entry.runtime_data, SunRiserCoordinator)
 
 
 async def test_setup_entry_client_error_raises_not_ready(hass, mock_config_entry):
@@ -82,7 +83,7 @@ async def test_unload_entry_closes_open_session(hass, mock_config_entry):
         await hass.async_block_till_done()
 
         # Inject an open mock session into the coordinator so the close branch is hit
-        coordinator = hass.data[DOMAIN][ENTRY_ID]
+        coordinator = mock_config_entry.runtime_data
         mock_session = MagicMock(spec=aiohttp.ClientSession)
         mock_session.closed = False
         mock_session.close = AsyncMock()
@@ -140,7 +141,6 @@ async def test_unload_entry(hass, mock_config_entry):
         await hass.async_block_till_done()
 
     assert result is True
-    assert ENTRY_ID not in hass.data.get(DOMAIN, {})
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +164,7 @@ async def setup_entry(hass, mock_config_entry):
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
-    return hass.data[DOMAIN][ENTRY_ID]
+    return mock_config_entry.runtime_data
 
 
 # ---------------------------------------------------------------------------

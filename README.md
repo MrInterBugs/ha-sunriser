@@ -47,6 +47,14 @@ The integration will automatically detect all PWM channels and temperature senso
 
 ![Example aquarium dashboard with Day Planner card](images/example_dashboard.png)
 
+## Device Removal and Integration Removal
+
+1. Go to **Settings → Devices & Services**
+2. Find the **SunRiser** integration and click the three-dot menu
+3. Select **Delete**
+4. If installed via HACS, open HACS, find **SunRiser**, and click **Remove**
+5. Restart Home Assistant
+
 ## Services
 
 The integration registers the following HA services under the `sunriser` domain:

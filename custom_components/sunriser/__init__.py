@@ -176,7 +176,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await coordinator.async_config_entry_first_refresh()
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
 
@@ -193,7 +193,7 @@ async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        coordinator: SunRiserCoordinator = hass.data[DOMAIN].pop(entry.entry_id)
+        coordinator: SunRiserCoordinator = entry.runtime_data
         await coordinator.async_close()
         for svc in _ALL_SERVICES:
             hass.services.async_remove(DOMAIN, svc)
@@ -201,9 +201,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 def _get_coordinator(hass: HomeAssistant) -> SunRiserCoordinator:
-    entries = hass.data.get(DOMAIN, {})
+    entries = hass.config_entries.async_entries(DOMAIN)
     try:
-        return next(iter(entries.values()))
+        return next(iter(entries)).runtime_data
     except StopIteration:
         raise HomeAssistantError("SunRiser integration not loaded") from None
 

@@ -20,7 +20,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    coordinator: SunRiserCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: SunRiserCoordinator = entry.runtime_data
     async_add_entities([SunRiserConnectivitySensor(coordinator, entry)])
 
 
