@@ -10,6 +10,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN, PWM_MAX
 from .coordinator import SunRiserCoordinator
 
+PARALLEL_UPDATES = 1
+
 
 # Linear scale: device 0–1000 ↔ HA 0–255
 # Endpoints are exact: only PWM 1000 maps to HA 255, and only HA 255 maps to PWM 1000.

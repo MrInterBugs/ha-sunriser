@@ -265,6 +265,20 @@ async def test_grace_period_resets_on_success(coord):
     assert coord._consecutive_failures == 0
 
 
+async def test_recovery_after_unavailable_logs_info(coord, caplog):
+    """Recovery after >= FAILURE_GRACE failures logs at INFO."""
+    coord.config = dict(FAKE_CONFIG)
+    coord._consecutive_failures = coord._FAILURE_GRACE
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        with caplog.at_level(logging.INFO, logger="custom_components.sunriser"):
+            await coord._async_refresh_state()
+
+    assert "available again" in caplog.text
+    assert coord._consecutive_failures == 0
+
+
 async def test_update_data_sensor_config_fetch_error_logs_warning(coord, caplog):
     """If the sensor config POST fails, log a warning but don't crash."""
     coord.config = dict(FAKE_CONFIG)

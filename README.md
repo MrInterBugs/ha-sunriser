@@ -47,6 +47,30 @@ The integration will automatically detect all PWM channels and temperature senso
 
 ![Example aquarium dashboard with Day Planner card](images/example_dashboard.png)
 
+## Configuration
+
+### Initial Configuration
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| Host | IP address or hostname of the SunRiser device | — |
+| Port | HTTP port the device listens on | `80` |
+| Password | Device password (leave blank if not set) | — |
+
+### Options
+
+After setup, go to **Settings → Devices & Services → SunRiser → Configure** to adjust:
+
+| Option | Description | Range | Default |
+|--------|-------------|-------|---------|
+| Poll interval | How often HA fetches the device state | 5–3600 s | 30 s |
+
+Changing the poll interval reloads the integration automatically — no restart required.
+
+### Automatic Discovery
+
+The integration can discover SunRiser devices automatically via DHCP. When a device with a hostname matching `sunriser*` joins your network, Home Assistant will prompt you to set it up. You can also initiate setup manually via **Settings → Devices & Services → Add Integration → SunRiser**.
+
 ## Device Removal and Integration Removal
 
 1. Go to **Settings → Devices & Services**
