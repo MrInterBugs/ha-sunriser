@@ -92,6 +92,8 @@ This project is licensed under the [GNU GPLv3](http://www.gnu.org/licenses/gpl-3
 
 This integration was built using the [SunRiser source code](https://github.com/LEDaquaristik/sunriser) by [LEDaquaristik](https://www.ledaquaristik.de/) as reference material. The source code and configuration files from that project are licensed under the [GNU GPL v3](http://www.gnu.org/licenses/gpl-3.0). Other assets (graphics etc.) are licensed under [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/).
 
+The integration icon is derived from the [sun icon](https://github.com/feathericons/feather/blob/main/icons/sun.svg) by [Feather Icons](https://feathericons.com), licensed under the [MIT License](https://github.com/feathericons/feather/blob/master/LICENSE).
+
 ## Links
 
 - [SunRiser source code](https://github.com/LEDaquaristik/sunriser)
