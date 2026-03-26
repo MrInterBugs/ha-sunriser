@@ -17,7 +17,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    coordinator: SunRiserCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: SunRiserCoordinator = entry.runtime_data
     async_add_entities(
         SunRiserPWMFixedNumber(coordinator, entry, pwm_num)
         for pwm_num in range(1, coordinator.pwm_count + 1)

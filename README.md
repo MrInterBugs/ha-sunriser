@@ -1,4 +1,4 @@
-# SunRiser Home Assistant Integration
+# <img src="custom_components/sunriser/brand/icon.png" alt="SunRiser logo" height="32" style="vertical-align:middle"> SunRiser Home Assistant Integration
 
 A community-made Home Assistant custom integration for the [SunRiser 8/10](https://www.ledaquaristik.de/SunRiser-10-Dimmsteuerung-und-Tagessimulation-mit-WLAN/150-00) LED aquarium controller by LEDaquaristik.
 
@@ -16,6 +16,8 @@ A community-made Home Assistant custom integration for the [SunRiser 8/10](https
 - **Options** — Configurable poll interval (5–3600 seconds, default 30s) without re-adding the integration
 - Auto-discovery of PWM channels and temperature sensors from the device
 - "Visit device" link in the device page opens the SunRiser web UI directly from HA
+
+![SunRiser device page in Home Assistant](images/device_page.png)
 
 ## Requirements
 
@@ -42,6 +44,16 @@ A community-made Home Assistant custom integration for the [SunRiser 8/10](https
 6. Click **Submit**
 
 The integration will automatically detect all PWM channels and temperature sensors on your device.
+
+![Example aquarium dashboard with Day Planner card](images/example_dashboard.png)
+
+## Device Removal and Integration Removal
+
+1. Go to **Settings → Devices & Services**
+2. Find the **SunRiser** integration and click the three-dot menu
+3. Select **Delete**
+4. If installed via HACS, open HACS, find **SunRiser**, and click **Remove**
+5. Restart Home Assistant
 
 ## Services
 
@@ -74,6 +86,10 @@ data:
   file_path: /config/sunriser_backup_20260323_120000.msgpack
 ```
 
+## Known Limitations & Warnings
+
+> **Warning:** Do not use the SunRiser web interface while this integration is running. The device has limited capacity for concurrent connections, and accessing the web UI at the same time as the integration polls the device can cause the controller to crash and require either a manual power cycle or waiting for the device's watchdog (dead man's switch) to trigger and restart it automatically.
+
 ## Notes
 
 - PWM values are polled every 30 seconds by default. Change this under **Settings → Devices & Services → SunRiser → Configure**.
@@ -87,6 +103,8 @@ This project is licensed under the [GNU GPLv3](http://www.gnu.org/licenses/gpl-3
 ## Attribution
 
 This integration was built using the [SunRiser source code](https://github.com/LEDaquaristik/sunriser) by [LEDaquaristik](https://www.ledaquaristik.de/) as reference material. The source code and configuration files from that project are licensed under the [GNU GPL v3](http://www.gnu.org/licenses/gpl-3.0). Other assets (graphics etc.) are licensed under [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/).
+
+The integration icon is derived from the [sun icon](https://github.com/feathericons/feather/blob/main/icons/sun.svg) by [Feather Icons](https://feathericons.com), licensed under the [MIT License](https://github.com/feathericons/feather/blob/master/LICENSE).
 
 ## Links
 

@@ -41,7 +41,7 @@ def test_connectivity_sensor_is_off_when_no_data(coordinator):
 
 
 async def test_setup_creates_connectivity_sensor(hass, coordinator, mock_config_entry):
-    hass.data.setdefault(DOMAIN, {})[ENTRY_ID] = coordinator
+    mock_config_entry.runtime_data = coordinator
     added = []
     await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))
     assert len(added) == 1

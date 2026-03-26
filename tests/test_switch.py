@@ -15,7 +15,7 @@ from custom_components.sunriser.switch import (
 
 
 async def test_setup_creates_maintenance_switch(hass, coordinator, mock_config_entry):
-    hass.data.setdefault(DOMAIN, {})[ENTRY_ID] = coordinator
+    mock_config_entry.runtime_data = coordinator
 
     added = []
     await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))
@@ -28,7 +28,7 @@ async def test_setup_creates_pwm_switch_for_onoff_channels(
     hass, coordinator, mock_config_entry
 ):
     """pwm2 has onoff=True → becomes a SunRiserSwitch."""
-    hass.data.setdefault(DOMAIN, {})[ENTRY_ID] = coordinator
+    mock_config_entry.runtime_data = coordinator
 
     added = []
     await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))
@@ -43,7 +43,7 @@ async def test_setup_excludes_unused_onoff_channels(
 ):
     """Unused channels (empty color) are excluded even if onoff=True."""
     coordinator.config["pwm#3#onoff"] = True  # still unused (empty color)
-    hass.data.setdefault(DOMAIN, {})[ENTRY_ID] = coordinator
+    mock_config_entry.runtime_data = coordinator
 
     added = []
     await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))

@@ -5,6 +5,9 @@
         "title": "SunRiser Options",
         "data": {
           "scan_interval": "Polling interval (seconds)"
+        },
+        "data_description": {
+          "scan_interval": "How often (in seconds) to poll the device for updated PWM and sensor values. Lower values give faster updates but increase load on the controller."
         }
       }
     }
@@ -18,6 +21,11 @@
           "host": "Host or IP address",
           "port": "Port",
           "password": "Password (leave blank if not set)"
+        },
+        "data_description": {
+          "host": "The IP address or hostname of your SunRiser controller on the local network (e.g. 192.168.1.100 or sunriser).",
+          "port": "The HTTP port the SunRiser web server listens on. Leave as 80 unless you have changed it.",
+          "password": "The password set on the SunRiser device. Leave blank if no password has been configured."
         }
       },
       "dhcp_confirm": {
