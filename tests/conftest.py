@@ -2,7 +2,7 @@
 """Shared fixtures for SunRiser HA integration unit tests."""
 
 import os
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT
@@ -20,6 +20,16 @@ def hass_config_dir():
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
     """Allow HA to load custom integrations from custom_components/ in this repo."""
+
+
+@pytest.fixture(autouse=True)
+def mock_coordinator_sleep():
+    """Patch asyncio.sleep in the coordinator so tests return immediately without
+    lingering event-loop tasks that PHCC's verify_cleanup fixture would flag."""
+    with patch(
+        "custom_components.sunriser.coordinator.asyncio.sleep", new=AsyncMock()
+    ):
+        yield
 
 
 from custom_components.sunriser.const import DEFAULT_PORT, DOMAIN

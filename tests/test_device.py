@@ -6,6 +6,8 @@ Run with:
     pytest tests/test_device.py -v
 """
 
+import asyncio
+
 import pytest
 import pytest_asyncio
 import aiohttp
@@ -34,6 +36,13 @@ CONFIG_KEYS = [
     "factory_version",
     "save_version",
 ]
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def inter_test_delay():
+    """2-second pause after every test to let the WizFi360 fully tear down the TCP session."""
+    yield
+    await asyncio.sleep(2)
 
 
 @pytest_asyncio.fixture
@@ -303,6 +312,7 @@ _REAL_ONLY = pytest.mark.skipif(
 
 
 async def _read_config(session, keys: list) -> dict:
+    await asyncio.sleep(2)
     body = msgpack.packb(keys, use_bin_type=True)
     async with session.post(
         f"{BASE_URL}/",
@@ -315,6 +325,7 @@ async def _read_config(session, keys: list) -> dict:
 
 
 async def _write_config(session, params: dict) -> None:
+    await asyncio.sleep(2)
     body = msgpack.packb(params, use_bin_type=True)
     async with session.put(
         f"{BASE_URL}/",
@@ -501,10 +512,12 @@ async def test_maintenance_mode_integer(session):
     print(f"\nservice_mode before: {initial!r}")
 
     # Enable with integer 1
+    await asyncio.sleep(2)
     status, body = await _put_state(session, {"service_mode": 1})
     print(f"PUT service_mode=1 → {status} {body!r}")
     assert status == 200, f"Enable failed with {status}: {body}"
 
+    await asyncio.sleep(2)
     after_on = await _get_service_mode(session)
     print(f"service_mode after enable: {after_on!r}")
     if PORT == 8080 and not after_on:
@@ -516,10 +529,12 @@ async def test_maintenance_mode_integer(session):
     assert after_on, f"Expected truthy service_mode after enable, got {after_on!r}"
 
     # Disable with integer 0
+    await asyncio.sleep(2)
     status, body = await _put_state(session, {"service_mode": 0})
     print(f"PUT service_mode=0 → {status} {body!r}")
     assert status == 200, f"Disable failed with {status}: {body}"
 
+    await asyncio.sleep(2)
     after_off = await _get_service_mode(session)
     print(f"service_mode after disable: {after_off!r}")
     assert (
@@ -533,6 +548,7 @@ async def test_maintenance_mode_boolean(session):
 
     This may return 500 on real firmware — if so, use integers instead.
     """
+    await asyncio.sleep(2)
     status, body = await _put_state(session, {"service_mode": True})
     print(f"\nPUT service_mode=True → {status} {body!r}")
 
@@ -540,6 +556,7 @@ async def test_maintenance_mode_boolean(session):
         # Device resets the TCP connection after a 500, so the cleanup call may
         # also fail — ignore errors here and skip the test regardless.
         try:
+            await asyncio.sleep(2)
             await _put_state(session, {"service_mode": 0})
         except Exception:
             pass
@@ -550,6 +567,7 @@ async def test_maintenance_mode_boolean(session):
     assert status == 200
 
     # Clean up
+    await asyncio.sleep(2)
     await _put_state(session, {"service_mode": 0})
 
 
@@ -764,6 +782,7 @@ async def test_restore(session):
         assert resp.status == 200, f"Backup step failed: {resp.status}"
         backup_data = await resp.read()
 
+    await asyncio.sleep(2)
     async with session.put(
         f"{BASE_URL}/restore",
         data=backup_data,
