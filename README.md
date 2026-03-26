@@ -7,10 +7,12 @@ A community-made Home Assistant custom integration for the [SunRiser 8/10](https
 - **Light** — Dimmable control (0–100%) for each PWM channel configured as a light
 - **Switch** — On/off control for PWM channels configured as on/off, plus a **Maintenance Mode** switch
 - **Select** — Per-channel manager selector (`none`, `dayplanner`, `weekplanner`, `fixed`) — shows and changes which planner controls each channel
+- **Number** — Per-channel fixed value slider (0–1000) used when the channel manager is set to `fixed`
 - **Sensor** — DS1820 temperature sensors; weather simulation state per channel; diagnostic sensors for Uptime, Firmware Version, and Hostname
+- **Binary Sensor** — Connectivity sensor that reports whether the device responded on the last poll cycle
 - **Button** — **Reboot** button to restart the device directly from HA
-- **Day Planner card** — built-in Lovelace card that renders all active PWM schedules as a 24-hour chart using the same LED colours as the device web UI; registered automatically, no manual setup required
-- **Services** — Backup, restore, log retrieval, and dayplanner read/write (see [Services](#services) below)
+- **Day Planner card** — built-in Lovelace card that renders all active PWM schedules as a 24-hour chart using the same LED colours as the device web UI; registered automatically, no manual setup required; schedule data is cached at startup so page loads never hit the device
+- **Services** — Backup, restore, log retrieval, dayplanner/weekplanner read/write, and factory tools (see [Services](#services) below)
 - **Options** — Configurable poll interval (5–3600 seconds, default 30s) without re-adding the integration
 - Auto-discovery of PWM channels and temperature sensors from the device
 - "Visit device" link in the device page opens the SunRiser web UI directly from HA
@@ -51,8 +53,14 @@ The integration registers the following HA services under the `sunriser` domain:
 | `sunriser.restore` | Restores configuration from a `.msgpack` backup file. Requires `file_path` parameter. The device performs a deep restart after applying. |
 | `sunriser.get_errors` | Fetches the device error log. Returns `{"content": "..."}`. |
 | `sunriser.get_log` | Fetches the device diagnostic log. Returns `{"content": "..."}`. |
-| `sunriser.get_dayplanner_schedule` | Returns the day planner schedule for a PWM channel as `{"pwm": N, "name": "...", "markers": [{"time": "HH:MM", "percent": N}, ...]}`. |
+| `sunriser.get_dayplanner_schedule` | Returns the day planner schedule for a PWM channel as `{"pwm": N, "name": "...", "markers": [{"time": "HH:MM", "percent": N}, ...]}`. Served from cache — no device request. |
 | `sunriser.set_dayplanner_schedule` | Writes a new day planner schedule for a PWM channel. Accepts `pwm` and a list of `{time, percent}` markers. Changes persist across reboots. |
+| `sunriser.get_weekplanner_schedule` | Returns the week planner program assignment for a PWM channel as a dict mapping day names (`sunday`–`saturday`, `default`) to program IDs. |
+| `sunriser.set_weekplanner_schedule` | Writes a new week planner schedule for a PWM channel. Accepts `pwm` and a dict of day → program ID. Missing days default to 0. |
+| `sunriser.download_factory_backup` | Downloads the factory default configuration via `GET /factorybackup` and saves it as a timestamped `.msgpack` file in the HA config directory. |
+| `sunriser.download_firmware` | Downloads firmware info via `GET /firmware.mp` and saves it as a timestamped `.msgpack` file. |
+| `sunriser.download_bootload` | Downloads bootloader info via `GET /bootload.mp` and saves it as a timestamped `.msgpack` file. |
+| `sunriser.factory_reset` | Resets the device to factory defaults via `DELETE /`. Requires `confirm: true` to prevent accidental use. |
 
 Example — backup and restore via automation:
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.5.3] - 2026-03-26
+
+### Changed
+
+- **Dayplanner schedule caching** — `dayplanner#marker#N` keys are pre-fetched at startup alongside PWM config and served from the coordinator cache; the Lovelace card no longer hits the device on every page load
+
+- **Startup inter-request delays** — 2-second pauses added between each HTTP request during startup (`async_load_device_config` and the initial full snapshot); prevents rapid back-to-back connections overwhelming the WizFi360 on first load
+
+- **Staggered polling** — after the initial startup snapshot, the coordinator now alternates between `/state` and `/weather` refreshes; connectivity (`ok`) is derived from whether the last state fetch succeeded rather than a separate `/ok` ping; eliminates all back-to-back TCP reconnects on WizFi360-based devices
+
 ## [1.5.2] - 2026-03-25
 
 ### Changed

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import timedelta
 
@@ -29,7 +30,7 @@ _LOGGER = logging.getLogger(__name__)
 class SunRiserCoordinator(DataUpdateCoordinator[dict]):
     """Coordinator that polls /state and holds device config."""
 
-    _REFRESH_SEQUENCE = ("state", "ok", "weather")
+    _REFRESH_SEQUENCE = ("state", "weather")
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
@@ -314,13 +315,12 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
             return await resp.text()
 
     async def async_get_dayplanner(self, pwm: int) -> list[dict]:
-        """Read the dayplanner schedule for a PWM channel.
+        """Read the dayplanner schedule for a PWM channel from the config cache.
 
         Returns a list of markers in the form [{"time": "HH:MM", "percent": N}, ...],
         sorted by time. Returns an empty list if no schedule is set.
         """
-        result = await self.async_get_config([f"dayplanner#marker#{pwm}"])
-        flat = result.get(f"dayplanner#marker#{pwm}") or []
+        flat = self.config.get(f"dayplanner#marker#{pwm}") or []
         markers = []
         for i in range(0, len(flat) - 1, 2):
             daymin = int(flat[i])
@@ -378,6 +378,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
             h, mn = map(int, m["time"].split(":"))
             flat.extend([h * 60 + mn, int(m["percent"])])
         await self.async_set_config({f"dayplanner#marker#{pwm}": flat})
+        self.config[f"dayplanner#marker#{pwm}"] = flat
 
     # ------------------------------------------------------------------
     # Setup
@@ -404,6 +405,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
 
         # pwm_count may be None on some firmware versions; derive it from
         # the actual pwms dict in state instead, which is always accurate.
+        await asyncio.sleep(2)
         state = await self.async_get_state()
         pwm_count: int = base.get("pwm_count") or len(state.get("pwms", {})) or 8
         self.config["pwm_count"] = pwm_count
@@ -417,8 +419,10 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
                 f"pwm#{i}#color",
                 f"pwm#{i}#manager",
                 f"pwm#{i}#fixed",
+                f"dayplanner#marker#{i}",
             ]
 
+        await asyncio.sleep(2)
         pwm_config = await self.async_get_config(pwm_keys)
         self.config.update(pwm_config)
 
@@ -509,10 +513,8 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
     async def _async_refresh_all(self) -> dict:
         """Build an initial full snapshot before switching to round-robin refreshes."""
         data = await self._async_refresh_state()
-        try:
-            data["ok"] = await self.async_check_ok()
-        except Exception:
-            data["ok"] = False
+        data["ok"] = self._last_state_refresh_succeeded
+        await asyncio.sleep(2)
         return await self._async_refresh_weather(data)
 
     async def _async_update_data(self) -> dict:
@@ -525,17 +527,12 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
 
         if refresh_kind == "state":
             data = await self._async_refresh_state()
+            data["ok"] = self._last_state_refresh_succeeded
             if not self._last_state_refresh_succeeded:
                 return data
         else:
             data = dict(self.data)
-            if refresh_kind == "ok":
-                try:
-                    data["ok"] = await self.async_check_ok()
-                except Exception:
-                    data["ok"] = False
-            else:
-                data = await self._async_refresh_weather(data)
+            data = await self._async_refresh_weather(data)
 
         self._next_refresh_index = (self._next_refresh_index + 1) % len(
             self._REFRESH_SEQUENCE
