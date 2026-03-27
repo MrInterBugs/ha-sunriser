@@ -19,6 +19,8 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN
 from .coordinator import SunRiserCoordinator
 
+PARALLEL_UPDATES = 0
+
 # DS1820 device type id
 _DS1820 = 1
 # unit id for celsius

@@ -48,20 +48,6 @@ _SERVICE_FACTORY_BACKUP = "download_factory_backup"
 _SERVICE_FIRMWARE = "download_firmware"
 _SERVICE_BOOTLOAD = "download_bootload"
 _SERVICE_FACTORY_RESET = "factory_reset"
-_ALL_SERVICES = (
-    _SERVICE_BACKUP,
-    _SERVICE_RESTORE,
-    _SERVICE_GET_ERRORS,
-    _SERVICE_GET_LOG,
-    _SERVICE_GET_DAYPLANNER,
-    _SERVICE_SET_DAYPLANNER,
-    _SERVICE_GET_WEEKPLANNER,
-    _SERVICE_SET_WEEKPLANNER,
-    _SERVICE_FACTORY_BACKUP,
-    _SERVICE_FIRMWARE,
-    _SERVICE_BOOTLOAD,
-    _SERVICE_FACTORY_RESET,
-)
 
 _RESTORE_SCHEMA = vol.Schema({vol.Required("file_path"): cv.string})
 
@@ -159,6 +145,8 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         await _register()
     else:
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _register)
+
+    _register_services(hass)
     return True
 
 
@@ -199,8 +187,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
 
-    _register_services(hass)
-
     return True
 
 
@@ -214,8 +200,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         coordinator: SunRiserCoordinator = entry.runtime_data
         await coordinator.async_close()
-        for svc in _ALL_SERVICES:
-            hass.services.async_remove(DOMAIN, svc)
     return unload_ok
 
 

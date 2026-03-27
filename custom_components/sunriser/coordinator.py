@@ -520,10 +520,21 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
                     err,
                 )
                 return self.data
+            if (
+                self.data is not None
+                and self._consecutive_failures == self._FAILURE_GRACE
+            ):
+                _LOGGER.warning(
+                    "SunRiser at %s is unavailable after %d consecutive poll failures",
+                    self.host,
+                    self._FAILURE_GRACE,
+                )
             raise UpdateFailed(
                 f"Error communicating with SunRiser at {self.host}: {err}"
             ) from err
 
+        if self._consecutive_failures >= self._FAILURE_GRACE:
+            _LOGGER.info("SunRiser at %s is available again", self.host)
         self._consecutive_failures = 0
         self._last_state_refresh_succeeded = True
         data = dict(self.data or {})

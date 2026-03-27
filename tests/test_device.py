@@ -17,7 +17,7 @@ import pytest_socket
 import os
 
 # Override with env vars to target the Docker simulator:
-#   SUNRISER_HOST=127.0.0.1 SUNRISER_PORT=8080 pytest tests/test_device.py -v -s
+#   SUNRISER_HOST=127.0.0.1 SUNRISER_PORT=9000 pytest tests/test_device.py -v -s
 HOST = os.environ.get("SUNRISER_HOST", "192.168.0.13")
 PORT = int(os.environ.get("SUNRISER_PORT", "80"))
 BASE_URL = f"http://{HOST}:{PORT}"
@@ -306,7 +306,7 @@ async def test_read_weekplanner(session):
 # ---------------------------------------------------------------------------
 
 _REAL_ONLY = pytest.mark.skipif(
-    PORT == 8080,
+    PORT == 9000,
     reason="Real device only — simulator does not persist config writes",
 )
 
@@ -520,7 +520,7 @@ async def test_maintenance_mode_integer(session):
     await asyncio.sleep(2)
     after_on = await _get_service_mode(session)
     print(f"service_mode after enable: {after_on!r}")
-    if PORT == 8080 and not after_on:
+    if PORT == 9000 and not after_on:
         # The simulator's state() method returns a fresh dict on every call in
         # non-demo mode, so service_mode is never persisted between requests.
         pytest.skip(
@@ -673,19 +673,19 @@ async def test_get_factorybackup(session):
 # ---------------------------------------------------------------------------
 # Admin endpoints — SIMULATOR ONLY
 #
-# These tests only run when SUNRISER_PORT=8080 (the Docker simulator).
+# These tests only run when SUNRISER_PORT=9000 (the Docker simulator).
 # They MUST NOT run against the real device because:
 #   - /restore sends a full config payload and triggers a deep device restart
 #   - /reboot restarts the device immediately
 #
 # Run with:
-#   docker run --rm -p 8080:8080 sunriser-sim
-#   SUNRISER_HOST=127.0.0.1 SUNRISER_PORT=8080 pytest tests/test_device.py -v -s
+#   docker run --rm -p 9000:9000 sunriser-sim
+#   SUNRISER_HOST=127.0.0.1 SUNRISER_PORT=9000 pytest tests/test_device.py -v -s
 # ---------------------------------------------------------------------------
 
 _SIM_ONLY = pytest.mark.skipif(
-    PORT != 8080,
-    reason="Simulator only — run with SUNRISER_HOST=127.0.0.1 SUNRISER_PORT=8080",
+    PORT != 9000,
+    reason="Simulator only — run with SUNRISER_HOST=127.0.0.1 SUNRISER_PORT=9000",
 )
 
 

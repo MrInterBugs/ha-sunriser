@@ -11,6 +11,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN, MANAGER_OPTIONS
 from .coordinator import SunRiserCoordinator
 
+PARALLEL_UPDATES = 1
+
 _MANAGER_TO_INT: dict[str, int] = {v: k for k, v in MANAGER_OPTIONS.items()}
 
 
