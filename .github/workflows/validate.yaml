@@ -42,3 +42,14 @@ jobs:
           python-version: "3.14"
       - run: pip install -r requirements.txt
       - run: pytest tests/ --ignore=tests/test_device.py --cov=custom_components/sunriser --cov-report=term-missing
+
+  mypy:
+    name: mypy strict
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - run: pip install -r requirements.txt mypy
+      - run: mypy --strict --ignore-missing-imports custom_components/sunriser/
