@@ -97,9 +97,17 @@ class SunRiserConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle a device discovered via DHCP."""
         await self.async_set_unique_id(discovery_info.macaddress)
-        self._abort_if_unique_id_configured(updates={CONF_HOST: discovery_info.ip})
 
-        # Test the connection before bothering the user.
+        # If an entry already exists for this MAC, update the host and reload.
+        for entry in self._async_current_entries():
+            if entry.unique_id == discovery_info.macaddress:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data_updates={CONF_HOST: discovery_info.ip},
+                    reason="already_configured",
+                )
+
+        # New device — test connectivity then confirm with user.
         error = await _test_connection(discovery_info.ip, DEFAULT_PORT)
         if error:
             return self.async_abort(reason=error)

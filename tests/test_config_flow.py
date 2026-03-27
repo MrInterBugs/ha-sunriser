@@ -225,7 +225,7 @@ async def test_dhcp_confirm_creates_entry(hass):
 
 
 async def test_dhcp_aborts_if_already_configured(hass):
-    """DHCP flow for a MAC already in HA is aborted as already_configured."""
+    """DHCP flow for a known MAC aborts as already_configured (same IP, no data change)."""
     existing = MockConfigEntry(
         domain=DOMAIN,
         unique_id="aabbccddeeff",
@@ -233,10 +233,28 @@ async def test_dhcp_aborts_if_already_configured(hass):
     )
     existing.add_to_hass(hass)
 
-    result = await _start_dhcp_flow(hass)
+    with patch("custom_components.sunriser.async_setup_entry", return_value=True):
+        result = await _start_dhcp_flow(hass)
 
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "already_configured"
+
+
+async def test_dhcp_updates_host_if_ip_changed(hass):
+    """DHCP with a new IP for a known MAC updates the entry's host and reloads."""
+    existing = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="aabbccddeeff",
+        data={CONF_HOST: "192.168.0.10", CONF_PORT: DEFAULT_PORT},  # old IP
+    )
+    existing.add_to_hass(hass)
+
+    with patch("custom_components.sunriser.async_setup_entry", return_value=True):
+        result = await _start_dhcp_flow(hass)  # DHCP_INFO has ip="192.168.0.50"
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert existing.data[CONF_HOST] == "192.168.0.50"
 
 
 async def test_dhcp_aborts_on_cannot_connect(hass):
