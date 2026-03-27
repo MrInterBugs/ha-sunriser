@@ -13,7 +13,7 @@ from homeassistant.config_entries import (
     ConfigFlowResult,
     OptionsFlow,
 )
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT
+from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import callback
 
 from .const import CONF_SCAN_INTERVAL, DEFAULT_PORT, DEFAULT_SCAN_INTERVAL, DOMAIN
@@ -24,12 +24,11 @@ STEP_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
         vol.Optional(CONF_PORT, default=DEFAULT_PORT): int,
-        vol.Optional(CONF_PASSWORD, default=""): str,
     }
 )
 
 
-async def _test_connection(host: str, port: int, password: str) -> str | None:
+async def _test_connection(host: str, port: int) -> str | None:
     """Return None on success or an error key string on failure."""
     url = f"http://{host}:{port}/ok"
     try:
@@ -68,12 +67,11 @@ class SunRiserConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
             port = user_input.get(CONF_PORT, DEFAULT_PORT)
-            password = user_input.get(CONF_PASSWORD, "")
 
             await self.async_set_unique_id(f"{host}:{port}")
             self._abort_if_unique_id_configured()
 
-            error = await _test_connection(host, port, password)
+            error = await _test_connection(host, port)
             if error:
                 errors["base"] = error
             else:
@@ -82,7 +80,6 @@ class SunRiserConfigFlow(ConfigFlow, domain=DOMAIN):
                     data={
                         CONF_HOST: host,
                         CONF_PORT: port,
-                        CONF_PASSWORD: password or None,
                     },
                 )
 
@@ -100,7 +97,7 @@ class SunRiserConfigFlow(ConfigFlow, domain=DOMAIN):
         self._abort_if_unique_id_configured(updates={CONF_HOST: discovery_info.ip})
 
         # Test the connection before bothering the user.
-        error = await _test_connection(discovery_info.ip, DEFAULT_PORT, "")
+        error = await _test_connection(discovery_info.ip, DEFAULT_PORT)
         if error:
             return self.async_abort(reason=error)
 
@@ -117,7 +114,6 @@ class SunRiserConfigFlow(ConfigFlow, domain=DOMAIN):
                 data={
                     CONF_HOST: self._discovered_host,
                     CONF_PORT: DEFAULT_PORT,
-                    CONF_PASSWORD: None,
                 },
             )
 

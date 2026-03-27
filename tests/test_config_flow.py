@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant import config_entries
 from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT
+from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -45,7 +45,7 @@ async def test_test_connection_success():
     mock_session.__aexit__ = AsyncMock(return_value=False)
 
     with patch("aiohttp.ClientSession", return_value=mock_session):
-        result = await _test_connection(HOST, DEFAULT_PORT, "")
+        result = await _test_connection(HOST, DEFAULT_PORT)
     assert result is None
 
 
@@ -61,7 +61,7 @@ async def test_test_connection_non_200():
     mock_session.__aexit__ = AsyncMock(return_value=False)
 
     with patch("aiohttp.ClientSession", return_value=mock_session):
-        result = await _test_connection(HOST, DEFAULT_PORT, "")
+        result = await _test_connection(HOST, DEFAULT_PORT)
     assert result == "cannot_connect"
 
 
@@ -78,7 +78,7 @@ async def test_test_connection_wrong_body():
     mock_session.__aexit__ = AsyncMock(return_value=False)
 
     with patch("aiohttp.ClientSession", return_value=mock_session):
-        result = await _test_connection(HOST, DEFAULT_PORT, "")
+        result = await _test_connection(HOST, DEFAULT_PORT)
     assert result == "cannot_connect"
 
 
@@ -91,7 +91,7 @@ async def test_test_connection_connector_error():
     mock_session.__aexit__ = AsyncMock(return_value=False)
 
     with patch("aiohttp.ClientSession", return_value=mock_session):
-        result = await _test_connection(HOST, DEFAULT_PORT, "")
+        result = await _test_connection(HOST, DEFAULT_PORT)
     assert result == "cannot_connect"
 
 
@@ -102,7 +102,7 @@ async def test_test_connection_timeout():
     mock_session.__aexit__ = AsyncMock(return_value=False)
 
     with patch("aiohttp.ClientSession", return_value=mock_session):
-        result = await _test_connection(HOST, DEFAULT_PORT, "")
+        result = await _test_connection(HOST, DEFAULT_PORT)
     assert result == "timeout"
 
 
@@ -113,7 +113,7 @@ async def test_test_connection_unknown_error():
     mock_session.__aexit__ = AsyncMock(return_value=False)
 
     with patch("aiohttp.ClientSession", return_value=mock_session):
-        result = await _test_connection(HOST, DEFAULT_PORT, "")
+        result = await _test_connection(HOST, DEFAULT_PORT)
     assert result == "unknown"
 
 
@@ -136,13 +136,12 @@ async def test_step_user_success(hass):
         result = await _start_flow(hass)
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
-            {CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT, CONF_PASSWORD: ""},
+            {CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
         )
 
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_HOST] == HOST
     assert result["data"][CONF_PORT] == DEFAULT_PORT
-    assert result["data"][CONF_PASSWORD] is None  # empty string → None
 
 
 async def test_step_user_cannot_connect(hass):
@@ -153,7 +152,7 @@ async def test_step_user_cannot_connect(hass):
         result = await _start_flow(hass)
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
-            {CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT, CONF_PASSWORD: ""},
+            {CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
         )
 
     assert result["type"] == FlowResultType.FORM
@@ -165,7 +164,7 @@ async def test_step_user_duplicate_aborts(hass):
     existing = MockConfigEntry(
         domain=DOMAIN,
         unique_id=f"{HOST}:{DEFAULT_PORT}",
-        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT, CONF_PASSWORD: None},
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
     )
     existing.add_to_hass(hass)
 
@@ -177,7 +176,7 @@ async def test_step_user_duplicate_aborts(hass):
     ):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
-            {CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT, CONF_PASSWORD: ""},
+            {CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
         )
 
     assert result["type"] == FlowResultType.ABORT
@@ -223,7 +222,6 @@ async def test_dhcp_confirm_creates_entry(hass):
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_HOST] == "192.168.0.50"
     assert result["data"][CONF_PORT] == DEFAULT_PORT
-    assert result["data"][CONF_PASSWORD] is None
 
 
 async def test_dhcp_aborts_if_already_configured(hass):
@@ -231,7 +229,7 @@ async def test_dhcp_aborts_if_already_configured(hass):
     existing = MockConfigEntry(
         domain=DOMAIN,
         unique_id="aabbccddeeff",
-        data={CONF_HOST: "192.168.0.50", CONF_PORT: DEFAULT_PORT, CONF_PASSWORD: None},
+        data={CONF_HOST: "192.168.0.50", CONF_PORT: DEFAULT_PORT},
     )
     existing.add_to_hass(hass)
 
@@ -260,7 +258,7 @@ async def test_dhcp_aborts_on_cannot_connect(hass):
 async def test_options_flow_shows_form(hass):
     entry = MockConfigEntry(
         domain=DOMAIN,
-        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT, CONF_PASSWORD: None},
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
         options={},
     )
     entry.add_to_hass(hass)
@@ -273,7 +271,7 @@ async def test_options_flow_shows_form(hass):
 async def test_options_flow_saves_interval(hass):
     entry = MockConfigEntry(
         domain=DOMAIN,
-        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT, CONF_PASSWORD: None},
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
         options={},
     )
     entry.add_to_hass(hass)
@@ -292,7 +290,7 @@ async def test_options_flow_uses_existing_interval(hass):
     """The form schema default must reflect the stored option, not DEFAULT_SCAN_INTERVAL."""
     entry = MockConfigEntry(
         domain=DOMAIN,
-        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT, CONF_PASSWORD: None},
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
         options={CONF_SCAN_INTERVAL: 120},
     )
     entry.add_to_hass(hass)

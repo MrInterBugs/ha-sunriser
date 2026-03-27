@@ -5,7 +5,7 @@ import os
 from unittest.mock import AsyncMock
 
 import pytest
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT
+from homeassistant.const import CONF_HOST, CONF_PORT
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 # Point hass at our project root so it finds custom_components/sunriser/
@@ -83,7 +83,6 @@ def mock_config_entry():
         data={
             CONF_HOST: HOST,
             CONF_PORT: DEFAULT_PORT,
-            CONF_PASSWORD: None,
         },
         options={},
     )
