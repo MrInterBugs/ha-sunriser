@@ -1,7 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
+from typing import Any, cast
+
+from homeassistant.components.light import ATTR_BRIGHTNESS, LightEntity
+from homeassistant.components.light.const import ColorMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -71,12 +74,12 @@ class SunRiserLight(CoordinatorEntity[SunRiserCoordinator], LightEntity):
     def brightness(self) -> int:
         return _to_ha_brightness(self.coordinator.pwm_value(self._pwm_num))
 
-    async def async_turn_on(self, **kwargs: object) -> None:
-        brightness: int = kwargs.get(ATTR_BRIGHTNESS, 255)
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        brightness: int = cast(int, kwargs.get(ATTR_BRIGHTNESS, 255))
         device_value = _to_device_brightness(brightness)
         await self.coordinator.async_set_pwms({str(self._pwm_num): device_value})
         await self.coordinator.async_request_refresh()
 
-    async def async_turn_off(self, **kwargs: object) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         await self.coordinator.async_set_pwms({str(self._pwm_num): 0})
         await self.coordinator.async_request_refresh()

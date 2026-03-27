@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import logging
 import pathlib
+from typing import Any, TypedDict, cast
 
 import aiohttp
+import msgpack
 import voluptuous as vol
 
 from homeassistant.components.frontend import add_extra_js_url
@@ -17,6 +19,7 @@ from homeassistant.core import (
     Event,
     HomeAssistant,
     ServiceCall,
+    ServiceResponse,
     SupportsResponse,
     callback,
 )
@@ -28,7 +31,7 @@ from .const import DOMAIN, PLATFORMS
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-from .coordinator import SunRiserCoordinator
+from .coordinator import DayplannerMarker, SunRiserCoordinator
 
 _CARD_URL = "/sunriser/sunriser-dayplan-card.js"
 _CARD_PATH = pathlib.Path(__file__).parent / "www" / "sunriser-dayplan-card.js"
@@ -103,7 +106,7 @@ _FACTORY_RESET_SCHEMA = vol.Schema(
 )
 
 
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Serve the Day Planner card JS and register it as a Lovelace resource."""
     await hass.http.async_register_static_paths(
         [StaticPathConfig(_CARD_URL, str(_CARD_PATH), cache_headers=False)]
@@ -203,10 +206,32 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 
+class _FilePathResponse(TypedDict):
+    path: str
+
+
+class _ContentResponse(TypedDict):
+    content: str
+
+
+class _DayplannerScheduleResponse(TypedDict):
+    pwm: int
+    name: str
+    color_id: str
+    markers: list[DayplannerMarker]
+
+
+class _WeekplannerScheduleResponse(TypedDict):
+    pwm: int
+    name: str
+    color_id: str
+    schedule: dict[str, int | None]
+
+
 def _get_coordinator(hass: HomeAssistant) -> SunRiserCoordinator:
     entries = hass.config_entries.async_entries(DOMAIN)
     try:
-        return next(iter(entries)).runtime_data
+        return cast(SunRiserCoordinator, next(iter(entries)).runtime_data)
     except StopIteration:
         raise HomeAssistantError("SunRiser integration not loaded") from None
 
@@ -215,9 +240,14 @@ def _register_services(hass: HomeAssistant) -> None:
     if hass.services.has_service(DOMAIN, _SERVICE_BACKUP):
         return  # already registered (re-entrant safety)
 
-    async def handle_backup(call: ServiceCall) -> dict:
+    async def handle_backup(call: ServiceCall) -> ServiceResponse:
         coordinator = _get_coordinator(hass)
-        data = await coordinator.async_get_backup()
+        try:
+            data = await coordinator.async_get_backup()
+        except aiohttp.ClientError as err:
+            raise HomeAssistantError(
+                f"Failed to retrieve backup from SunRiser: {err}"
+            ) from err
         now = dt_util.now().strftime("%Y%m%d_%H%M%S")
         filename = f"sunriser_backup_{now}.msgpack"
         path = hass.config.path(filename)
@@ -226,9 +256,15 @@ def _register_services(hass: HomeAssistant) -> None:
             with open(path, "wb") as f:
                 f.write(data)
 
-        await hass.async_add_executor_job(_write)
+        try:
+            await hass.async_add_executor_job(_write)
+        except OSError as err:
+            raise HomeAssistantError(
+                f"Failed to write backup file {path}: {err}"
+            ) from err
         _LOGGER.info("SunRiser backup saved to %s", path)
-        return {"path": path}
+        result: _FilePathResponse = {"path": path}
+        return cast(ServiceResponse, result)
 
     async def handle_restore(call: ServiceCall) -> None:
         from pathlib import Path
@@ -243,19 +279,41 @@ def _register_services(hass: HomeAssistant) -> None:
             with open(file_path, "rb") as f:
                 return f.read()
 
-        data = await hass.async_add_executor_job(_read)
+        try:
+            data = await hass.async_add_executor_job(_read)
+        except OSError as err:
+            raise HomeAssistantError(
+                f"Failed to read backup file {file_path}: {err}"
+            ) from err
         coordinator = _get_coordinator(hass)
-        await coordinator.async_restore(data)
+        try:
+            await coordinator.async_restore(data)
+        except aiohttp.ClientError as err:
+            raise HomeAssistantError(
+                f"Failed to restore backup to SunRiser: {err}"
+            ) from err
 
-    async def handle_get_errors(call: ServiceCall) -> dict:
+    async def handle_get_errors(call: ServiceCall) -> ServiceResponse:
         coordinator = _get_coordinator(hass)
-        content = await coordinator.async_get_errors()
-        return {"content": content}
+        try:
+            content = await coordinator.async_get_errors()
+        except aiohttp.ClientError as err:
+            raise HomeAssistantError(
+                f"Failed to retrieve error log from SunRiser: {err}"
+            ) from err
+        result: _ContentResponse = {"content": content}
+        return cast(ServiceResponse, result)
 
-    async def handle_get_log(call: ServiceCall) -> dict:
+    async def handle_get_log(call: ServiceCall) -> ServiceResponse:
         coordinator = _get_coordinator(hass)
-        content = await coordinator.async_get_log()
-        return {"content": content}
+        try:
+            content = await coordinator.async_get_log()
+        except aiohttp.ClientError as err:
+            raise HomeAssistantError(
+                f"Failed to retrieve log from SunRiser: {err}"
+            ) from err
+        result: _ContentResponse = {"content": content}
+        return cast(ServiceResponse, result)
 
     hass.services.async_register(
         DOMAIN,
@@ -282,20 +340,28 @@ def _register_services(hass: HomeAssistant) -> None:
         supports_response=SupportsResponse.OPTIONAL,
     )
 
-    async def handle_get_dayplanner(call: ServiceCall) -> dict:
+    async def handle_get_dayplanner(call: ServiceCall) -> ServiceResponse:
         coordinator = _get_coordinator(hass)
         pwm: int = call.data["pwm"]
         markers = await coordinator.async_get_dayplanner(pwm)
-        return {
+        result: _DayplannerScheduleResponse = {
             "pwm": pwm,
             "name": coordinator.pwm_name(pwm),
             "color_id": coordinator.config.get(f"pwm#{pwm}#color") or "",
             "markers": markers,
         }
+        return cast(ServiceResponse, result)
 
     async def handle_set_dayplanner(call: ServiceCall) -> None:
         coordinator = _get_coordinator(hass)
-        await coordinator.async_set_dayplanner(call.data["pwm"], call.data["markers"])
+        try:
+            await coordinator.async_set_dayplanner(
+                call.data["pwm"], call.data["markers"]
+            )
+        except aiohttp.ClientError as err:
+            raise HomeAssistantError(
+                f"Failed to update day planner for PWM {call.data['pwm']}: {err}"
+            ) from err
 
     hass.services.async_register(
         DOMAIN,
@@ -311,20 +377,33 @@ def _register_services(hass: HomeAssistant) -> None:
         schema=_SET_DAYPLANNER_SCHEMA,
     )
 
-    async def handle_get_weekplanner(call: ServiceCall) -> dict:
+    async def handle_get_weekplanner(call: ServiceCall) -> ServiceResponse:
         coordinator = _get_coordinator(hass)
         pwm: int = call.data["pwm"]
-        schedule = await coordinator.async_get_weekplanner(pwm)
-        return {
+        try:
+            schedule = await coordinator.async_get_weekplanner(pwm)
+        except (aiohttp.ClientError, msgpack.UnpackException) as err:
+            raise HomeAssistantError(
+                f"Failed to retrieve week planner for PWM {pwm}: {err}"
+            ) from err
+        result: _WeekplannerScheduleResponse = {
             "pwm": pwm,
             "name": coordinator.pwm_name(pwm),
             "color_id": coordinator.config.get(f"pwm#{pwm}#color") or "",
             "schedule": schedule,
         }
+        return cast(ServiceResponse, result)
 
     async def handle_set_weekplanner(call: ServiceCall) -> None:
         coordinator = _get_coordinator(hass)
-        await coordinator.async_set_weekplanner(call.data["pwm"], call.data["schedule"])
+        try:
+            await coordinator.async_set_weekplanner(
+                call.data["pwm"], call.data["schedule"]
+            )
+        except aiohttp.ClientError as err:
+            raise HomeAssistantError(
+                f"Failed to update week planner for PWM {call.data['pwm']}: {err}"
+            ) from err
 
     hass.services.async_register(
         DOMAIN,
@@ -340,9 +419,14 @@ def _register_services(hass: HomeAssistant) -> None:
         schema=_SET_WEEKPLANNER_SCHEMA,
     )
 
-    async def handle_factory_backup(call: ServiceCall) -> dict:
+    async def handle_factory_backup(call: ServiceCall) -> ServiceResponse:
         coordinator = _get_coordinator(hass)
-        data = await coordinator.async_get_factory_backup()
+        try:
+            data = await coordinator.async_get_factory_backup()
+        except aiohttp.ClientError as err:
+            raise HomeAssistantError(
+                f"Failed to retrieve factory backup from SunRiser: {err}"
+            ) from err
         now = dt_util.now().strftime("%Y%m%d_%H%M%S")
         filename = f"sunriser_factory_backup_{now}.msgpack"
         path = hass.config.path(filename)
@@ -351,13 +435,24 @@ def _register_services(hass: HomeAssistant) -> None:
             with open(path, "wb") as f:
                 f.write(data)
 
-        await hass.async_add_executor_job(_write)
+        try:
+            await hass.async_add_executor_job(_write)
+        except OSError as err:
+            raise HomeAssistantError(
+                f"Failed to write factory backup file {path}: {err}"
+            ) from err
         _LOGGER.info("SunRiser factory backup saved to %s", path)
-        return {"path": path}
+        result: _FilePathResponse = {"path": path}
+        return cast(ServiceResponse, result)
 
-    async def handle_firmware(call: ServiceCall) -> dict:
+    async def handle_firmware(call: ServiceCall) -> ServiceResponse:
         coordinator = _get_coordinator(hass)
-        data = await coordinator.async_get_firmware()
+        try:
+            data = await coordinator.async_get_firmware()
+        except aiohttp.ClientError as err:
+            raise HomeAssistantError(
+                f"Failed to retrieve firmware info from SunRiser: {err}"
+            ) from err
         now = dt_util.now().strftime("%Y%m%d_%H%M%S")
         filename = f"sunriser_firmware_{now}.msgpack"
         path = hass.config.path(filename)
@@ -366,13 +461,24 @@ def _register_services(hass: HomeAssistant) -> None:
             with open(path, "wb") as f:
                 f.write(data)
 
-        await hass.async_add_executor_job(_write)
+        try:
+            await hass.async_add_executor_job(_write)
+        except OSError as err:
+            raise HomeAssistantError(
+                f"Failed to write firmware file {path}: {err}"
+            ) from err
         _LOGGER.info("SunRiser firmware info saved to %s", path)
-        return {"path": path}
+        result: _FilePathResponse = {"path": path}
+        return cast(ServiceResponse, result)
 
-    async def handle_bootload(call: ServiceCall) -> dict:
+    async def handle_bootload(call: ServiceCall) -> ServiceResponse:
         coordinator = _get_coordinator(hass)
-        data = await coordinator.async_get_bootload()
+        try:
+            data = await coordinator.async_get_bootload()
+        except aiohttp.ClientError as err:
+            raise HomeAssistantError(
+                f"Failed to retrieve bootload info from SunRiser: {err}"
+            ) from err
         now = dt_util.now().strftime("%Y%m%d_%H%M%S")
         filename = f"sunriser_bootload_{now}.msgpack"
         path = hass.config.path(filename)
@@ -381,13 +487,24 @@ def _register_services(hass: HomeAssistant) -> None:
             with open(path, "wb") as f:
                 f.write(data)
 
-        await hass.async_add_executor_job(_write)
+        try:
+            await hass.async_add_executor_job(_write)
+        except OSError as err:
+            raise HomeAssistantError(
+                f"Failed to write bootload file {path}: {err}"
+            ) from err
         _LOGGER.info("SunRiser bootload info saved to %s", path)
-        return {"path": path}
+        result: _FilePathResponse = {"path": path}
+        return cast(ServiceResponse, result)
 
     async def handle_factory_reset(call: ServiceCall) -> None:
         coordinator = _get_coordinator(hass)
-        await coordinator.async_factory_reset()
+        try:
+            await coordinator.async_factory_reset()
+        except aiohttp.ClientError as err:
+            raise HomeAssistantError(
+                f"Failed to send factory reset to SunRiser: {err}"
+            ) from err
         _LOGGER.warning("SunRiser factory reset triggered — all config wiped")
 
     hass.services.async_register(

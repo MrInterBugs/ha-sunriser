@@ -8,6 +8,8 @@ from datetime import timedelta
 import aiohttp
 import msgpack
 
+from typing import Any, TypedDict, cast
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
@@ -27,7 +29,12 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-class SunRiserCoordinator(DataUpdateCoordinator[dict]):
+class DayplannerMarker(TypedDict):
+    time: str
+    percent: int
+
+
+class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator that polls /state and holds device config."""
 
     _REFRESH_SEQUENCE = ("state", "weather")
@@ -45,7 +52,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         self.port: int = entry.data.get(CONF_PORT, DEFAULT_PORT)
 
         # Static device config fetched once at startup and updated on new sensors.
-        self.config: dict = {}
+        self.config: dict[str, Any] = {}
 
         # Number of consecutive poll failures. Entities only go unavailable
         # after this reaches _FAILURE_GRACE (3 missed check-ins).
@@ -56,7 +63,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         self._next_refresh_index = 0
         self._last_state_refresh_succeeded = False
         self._init_step: int = 0
-        self._pending_sensor_roms: list = []
+        self._pending_sensor_roms: list[str] = []
 
     @property
     def base_url(self) -> str:
@@ -102,7 +109,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
     # Low-level API helpers
     # ------------------------------------------------------------------
 
-    async def async_get_config(self, keys: list[str]) -> dict:
+    async def async_get_config(self, keys: list[str]) -> dict[str, Any]:
         """POST / — read config values for the given keys."""
         session = self._get_session()
         body = msgpack.packb(keys, use_bin_type=True)
@@ -114,9 +121,11 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
                 resp.raise_for_status()
-                return msgpack.unpackb(await resp.read(), raw=False)
+                return cast(
+                    dict[str, Any], msgpack.unpackb(await resp.read(), raw=False)
+                )
 
-    async def async_set_config(self, params: dict) -> None:
+    async def async_set_config(self, params: dict[str, Any]) -> None:
         """PUT / — write config key/value pairs.
 
         The device requires save_version (set to factory_version) on every write
@@ -137,7 +146,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
             ) as resp:
                 resp.raise_for_status()
 
-    async def async_get_state(self) -> dict:
+    async def async_get_state(self) -> dict[str, Any]:
         """GET /state — returns PWM values, sensor readings, uptime, etc."""
         session = self._get_session()
         async with self._request_lock:
@@ -146,9 +155,11 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
                 resp.raise_for_status()
-                return msgpack.unpackb(await resp.read(), raw=False)
+                return cast(
+                    dict[str, Any], msgpack.unpackb(await resp.read(), raw=False)
+                )
 
-    async def async_get_weather(self) -> list:
+    async def async_get_weather(self) -> list[Any]:
         """GET /weather — returns per-channel weather simulation state.
 
         The response is a msgpack stream whose first object is a list with one
@@ -319,15 +330,17 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
                 resp.raise_for_status()
                 return await resp.text()
 
-    async def async_get_dayplanner(self, pwm: int) -> list[dict]:
+    async def async_get_dayplanner(self, pwm: int) -> list[DayplannerMarker]:
         """Read the dayplanner schedule for a PWM channel from the config cache.
 
         Returns a list of markers in the form [{"time": "HH:MM", "percent": N}, ...],
         sorted by time. Returns an empty list if no schedule is set.
         """
         flat = self.config.get(f"dayplanner#marker#{pwm}") or []
-        markers = []
+        markers: list[DayplannerMarker] = []
         for i in range(0, len(flat) - 1, 2):
+            if flat[i] is None or flat[i + 1] is None:
+                continue
             daymin = int(flat[i])
             markers.append(
                 {
@@ -372,7 +385,9 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         flat = [schedule.get(day, 0) for day in self._WEEK_DAYS]
         await self.async_set_config({f"weekplanner#programs#{pwm}": flat})
 
-    async def async_set_dayplanner(self, pwm: int, markers: list[dict]) -> None:
+    async def async_set_dayplanner(
+        self, pwm: int, markers: list[DayplannerMarker]
+    ) -> None:
         """Write the dayplanner schedule for a PWM channel.
 
         Each marker must have "time" (HH:MM) and "percent" (0–100).
@@ -407,14 +422,14 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         before the next connection arrives.
         """
 
-    async def _async_init_base_config(self) -> dict:
+    async def _async_init_base_config(self) -> dict[str, Any]:
         """Init tick 0 — fetch name, model, pwm_count, etc."""
         base = await self.async_get_config(self._BASE_CONFIG_KEYS)
         self.config.update(base)
         self._init_step = 1
         return {}
 
-    async def _async_init_state(self) -> dict:
+    async def _async_init_state(self) -> dict[str, Any]:
         """Init tick 1 — fetch /state; derive pwm_count and discover sensor ROMs."""
         state = await self.async_get_state()
         pwm_count = self.config.get("pwm_count") or len(state.get("pwms", {})) or 8
@@ -432,7 +447,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         data.setdefault("weather", [])
         return data
 
-    async def _async_init_pwm_config(self) -> dict:
+    async def _async_init_pwm_config(self) -> dict[str, Any]:
         """Init tick 2 — fetch PWM config and any sensor config discovered in tick 1.
 
         Both key sets are batched into a single POST request.
@@ -460,7 +475,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         self._init_step = 3
         return dict(self.data) if self.data else {}
 
-    async def _async_init_weather(self) -> dict:
+    async def _async_init_weather(self) -> dict[str, Any]:
         """Init tick 3 — fetch /weather so weather sensor entities can be created.
 
         Failure is graceful: an empty weather list is returned so the rest of
@@ -482,7 +497,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
 
     _FAILURE_GRACE = 3
 
-    async def _async_refresh_state(self) -> dict:
+    async def _async_refresh_state(self) -> dict[str, Any]:
         try:
             state = await self.async_get_state()
         except (aiohttp.ClientError, Exception) as err:
@@ -542,7 +557,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
 
         return data
 
-    async def _async_refresh_weather(self, data: dict) -> dict:
+    async def _async_refresh_weather(self, data: dict[str, Any]) -> dict[str, Any]:
         try:
             weather = await self.async_get_weather()
             data["weather"] = weather
@@ -571,7 +586,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
 
         return data
 
-    async def _async_update_data(self) -> dict:
+    async def _async_update_data(self) -> dict[str, Any]:
         # ── Init phase: steps 0–2 retry on failure; step 3 always completes ──
         if 0 <= self._init_step <= 2:
             try:
