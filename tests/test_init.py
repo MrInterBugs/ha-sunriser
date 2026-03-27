@@ -595,3 +595,221 @@ async def test_service_factory_reset_requires_confirm(hass, setup_entry):
         await hass.services.async_call(
             DOMAIN, "factory_reset", {"confirm": False}, blocking=True
         )
+
+
+# ---------------------------------------------------------------------------
+# Error path tests — all service handlers must raise HomeAssistantError
+# ---------------------------------------------------------------------------
+
+
+async def test_service_backup_device_error(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_get_backup = AsyncMock(side_effect=aiohttp.ClientError("down"))
+
+    with pytest.raises(HomeAssistantError, match="Failed to retrieve backup"):
+        await hass.services.async_call(DOMAIN, "backup", {}, blocking=True)
+
+
+async def test_service_backup_write_error(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_get_backup = AsyncMock(return_value=b"\x80")
+
+    with (
+        patch("builtins.open", side_effect=OSError("disk full")),
+        pytest.raises(HomeAssistantError, match="Failed to write backup file"),
+    ):
+        await hass.services.async_call(DOMAIN, "backup", {}, blocking=True)
+
+
+async def test_service_restore_read_error(hass, setup_entry):
+    with (
+        patch.object(hass.config, "is_allowed_path", return_value=True),
+        patch("builtins.open", side_effect=OSError("not found")),
+        pytest.raises(HomeAssistantError, match="Failed to read backup file"),
+    ):
+        await hass.services.async_call(
+            DOMAIN, "restore", {"file_path": "/config/backup.msgpack"}, blocking=True
+        )
+
+
+async def test_service_restore_device_error(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_restore = AsyncMock(side_effect=aiohttp.ClientError("down"))
+
+    from unittest.mock import mock_open as _mock_open
+
+    m = _mock_open(read_data=b"\x80")
+    with (
+        patch.object(hass.config, "is_allowed_path", return_value=True),
+        patch("builtins.open", m),
+        pytest.raises(HomeAssistantError, match="Failed to restore backup"),
+    ):
+        await hass.services.async_call(
+            DOMAIN, "restore", {"file_path": "/config/backup.msgpack"}, blocking=True
+        )
+
+
+async def test_service_get_errors_device_error(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_get_errors = AsyncMock(side_effect=aiohttp.ClientError("down"))
+
+    with pytest.raises(HomeAssistantError, match="Failed to retrieve error log"):
+        await hass.services.async_call(
+            DOMAIN, "get_errors", {}, blocking=True, return_response=True
+        )
+
+
+async def test_service_get_log_device_error(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_get_log = AsyncMock(side_effect=aiohttp.ClientError("down"))
+
+    with pytest.raises(HomeAssistantError, match="Failed to retrieve log"):
+        await hass.services.async_call(
+            DOMAIN, "get_log", {}, blocking=True, return_response=True
+        )
+
+
+async def test_service_set_dayplanner_device_error(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_set_dayplanner = AsyncMock(
+        side_effect=aiohttp.ClientError("down")
+    )
+
+    markers = [{"time": "08:00", "percent": 50}]
+    with pytest.raises(HomeAssistantError, match="Failed to update day planner"):
+        await hass.services.async_call(
+            DOMAIN,
+            "set_dayplanner_schedule",
+            {"pwm": 1, "markers": markers},
+            blocking=True,
+        )
+
+
+async def test_service_get_weekplanner_device_error(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_get_weekplanner = AsyncMock(
+        side_effect=aiohttp.ClientError("down")
+    )
+
+    with pytest.raises(HomeAssistantError, match="Failed to retrieve week planner"):
+        await hass.services.async_call(
+            DOMAIN,
+            "get_weekplanner_schedule",
+            {"pwm": 1},
+            blocking=True,
+            return_response=True,
+        )
+
+
+async def test_service_get_weekplanner_msgpack_error(hass, setup_entry):
+    import msgpack
+
+    coordinator = setup_entry
+    coordinator.async_get_weekplanner = AsyncMock(
+        side_effect=msgpack.UnpackException("bad data")
+    )
+
+    with pytest.raises(HomeAssistantError, match="Failed to retrieve week planner"):
+        await hass.services.async_call(
+            DOMAIN,
+            "get_weekplanner_schedule",
+            {"pwm": 1},
+            blocking=True,
+            return_response=True,
+        )
+
+
+async def test_service_set_weekplanner_device_error(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_set_weekplanner = AsyncMock(
+        side_effect=aiohttp.ClientError("down")
+    )
+
+    with pytest.raises(HomeAssistantError, match="Failed to update week planner"):
+        await hass.services.async_call(
+            DOMAIN,
+            "set_weekplanner_schedule",
+            {"pwm": 1, "schedule": {"default": 0}},
+            blocking=True,
+        )
+
+
+async def test_service_factory_backup_device_error(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_get_factory_backup = AsyncMock(
+        side_effect=aiohttp.ClientError("down")
+    )
+
+    with pytest.raises(HomeAssistantError, match="Failed to retrieve factory backup"):
+        await hass.services.async_call(
+            DOMAIN, "download_factory_backup", {}, blocking=True, return_response=True
+        )
+
+
+async def test_service_factory_backup_write_error(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_get_factory_backup = AsyncMock(return_value=b"\x80")
+
+    with (
+        patch("builtins.open", side_effect=OSError("disk full")),
+        pytest.raises(HomeAssistantError, match="Failed to write factory backup file"),
+    ):
+        await hass.services.async_call(
+            DOMAIN, "download_factory_backup", {}, blocking=True, return_response=True
+        )
+
+
+async def test_service_firmware_device_error(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_get_firmware = AsyncMock(side_effect=aiohttp.ClientError("down"))
+
+    with pytest.raises(HomeAssistantError, match="Failed to retrieve firmware info"):
+        await hass.services.async_call(
+            DOMAIN, "download_firmware", {}, blocking=True, return_response=True
+        )
+
+
+async def test_service_firmware_write_error(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_get_firmware = AsyncMock(return_value=b"\x81")
+
+    with (
+        patch("builtins.open", side_effect=OSError("disk full")),
+        pytest.raises(HomeAssistantError, match="Failed to write firmware file"),
+    ):
+        await hass.services.async_call(
+            DOMAIN, "download_firmware", {}, blocking=True, return_response=True
+        )
+
+
+async def test_service_bootload_device_error(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_get_bootload = AsyncMock(side_effect=aiohttp.ClientError("down"))
+
+    with pytest.raises(HomeAssistantError, match="Failed to retrieve bootload info"):
+        await hass.services.async_call(
+            DOMAIN, "download_bootload", {}, blocking=True, return_response=True
+        )
+
+
+async def test_service_bootload_write_error(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_get_bootload = AsyncMock(return_value=b"\x82")
+
+    with (
+        patch("builtins.open", side_effect=OSError("disk full")),
+        pytest.raises(HomeAssistantError, match="Failed to write bootload file"),
+    ):
+        await hass.services.async_call(
+            DOMAIN, "download_bootload", {}, blocking=True, return_response=True
+        )
+
+
+async def test_service_factory_reset_device_error(hass, setup_entry):
+    coordinator = setup_entry
+    coordinator.async_factory_reset = AsyncMock(side_effect=aiohttp.ClientError("down"))
+
+    with pytest.raises(HomeAssistantError, match="Failed to send factory reset"):
+        await hass.services.async_call(
+            DOMAIN, "factory_reset", {"confirm": True}, blocking=True
+        )

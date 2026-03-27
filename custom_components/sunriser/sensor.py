@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import Any, cast
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -11,7 +12,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import EntityCategory
+from homeassistant.const import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -170,14 +171,14 @@ class SunRiserWeatherChannelSensor(
         self._attr_name = f"{coordinator.pwm_name(channel)} Weather"
         self._attr_device_info = coordinator.device_info
 
-    def _channel_data(self) -> dict | None:
+    def _channel_data(self) -> dict[str, Any] | None:
         if self.coordinator.data is None:
             return None
         weather = self.coordinator.data.get("weather") or []
         idx = self._channel - 1
         if idx >= len(weather):
             return None
-        return weather[idx]
+        return cast(dict[str, Any] | None, weather[idx])
 
     @property
     def native_value(self) -> str | None:
@@ -195,7 +196,7 @@ class SunRiserWeatherChannelSensor(
         return "clear"
 
     @property
-    def extra_state_attributes(self) -> dict:
+    def extra_state_attributes(self) -> dict[str, Any]:
         ch = self._channel_data()
         if not ch:
             return {}
@@ -222,7 +223,7 @@ class SunRiserWeatherChannelSensor(
         exclude = {"weather_program_id", "clouds_state", "thunder_state", "moon_state"}
 
         now = dt_util.utcnow()
-        result = {}
+        result: dict[str, Any] = {}
         for k, v in ch.items():
             if k in exclude:
                 continue

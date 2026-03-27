@@ -755,6 +755,14 @@ async def test_async_get_dayplanner_returns_empty_list_when_unset(coord):
     assert result == []
 
 
+async def test_async_get_dayplanner_skips_none_entries(coord):
+    """None values in the flat marker array are silently skipped (device quirk)."""
+    coord.config["dayplanner#marker#3"] = [None, 50, 480, None, 600, 75]
+    result = await coord.async_get_dayplanner(3)
+
+    assert result == [{"time": "10:00", "percent": 75}]
+
+
 async def test_async_set_dayplanner_sends_flat_array(coord):
     """Marker dicts are converted back to flat [daymin, percent, ...] and PUT."""
     coord.config["factory_version"] = "1.005"

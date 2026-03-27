@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.6.1-beta.1] - 2026-03-27
+
+### Fixed
+
+- **Service action error handling** — all service handlers now raise `HomeAssistantError` on device communication failures (`aiohttp.ClientError`) instead of propagating raw exceptions; file I/O failures in backup/restore/download handlers raise `HomeAssistantError` on `OSError`; `handle_get_weekplanner` also catches `msgpack.UnpackException` for malformed device responses
+- **Day planner `None` guard** — `async_get_dayplanner` now skips marker pairs where either value is `None` (a known device quirk where unset config keys return `None`); previously `int(None)` would raise `TypeError`
+
+### Changed
+
+- **Strict type checking** — all Python source files now pass `mypy --strict`; bare `dict`/`list` annotations replaced with fully-typed generics; `DayplannerMarker` TypedDict added to coordinator; service handler response shapes documented as TypedDicts (`_FilePathResponse`, `_ContentResponse`, `_DayplannerScheduleResponse`, `_WeekplannerScheduleResponse`); `EntityCategory` imported from `homeassistant.const`; `ColorMode` imported from `homeassistant.components.light.const`
+
+### Tests
+
+- 18 new tests covering all service handler error paths (`aiohttp.ClientError`, `OSError`, `msgpack.UnpackException`), the day planner `None` guard, and the weekplanner msgpack error path; overall coverage remains at 100%
+
 ## [1.6.0] - 2026-03-27
 
 ### Fixed

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import aiohttp
 import voluptuous as vol
@@ -62,7 +63,9 @@ class SunRiserConfigFlow(ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(config_entry: ConfigEntry) -> SunRiserOptionsFlow:
         return SunRiserOptionsFlow(config_entry)
 
-    async def async_step_user(self, user_input: dict | None = None) -> ConfigFlowResult:
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -108,7 +111,7 @@ class SunRiserConfigFlow(ConfigFlow, domain=DOMAIN):
         return await self.async_step_dhcp_confirm()
 
     async def async_step_dhcp_confirm(
-        self, user_input: dict | None = None
+        self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Confirm adding a DHCP-discovered device."""
         if user_input is not None:
@@ -134,7 +137,9 @@ class SunRiserOptionsFlow(OptionsFlow):
     def __init__(self, entry: ConfigEntry) -> None:
         self._entry = entry
 
-    async def async_step_init(self, user_input: dict | None = None) -> ConfigFlowResult:
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         if user_input is not None:
             return self.async_create_entry(data=user_input)
 
