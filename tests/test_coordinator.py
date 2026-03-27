@@ -8,7 +8,6 @@ import pytest
 from unittest.mock import AsyncMock
 from aioresponses import aioresponses
 from homeassistant.helpers.update_coordinator import UpdateFailed
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 from yarl import URL
 
 from tests.conftest import ENTRY_ID, FAKE_CONFIG, FAKE_STATE, HOST
@@ -187,41 +186,9 @@ async def test_init_complete_true_after_step_4(coord):
     assert coord.init_complete is True
 
 
-async def test_async_load_device_config_no_password_makes_no_request(coord):
-    """With no password, async_load_device_config completes without any HTTP request."""
-    assert coord.password is None
+async def test_async_load_device_config_makes_no_request(coord):
+    """async_load_device_config is a no-op; no HTTP request is made."""
     await coord.async_load_device_config()  # would raise ConnectionError if a request were made
-
-
-async def test_init_step_0_with_password(hass, mock_config_entry):
-    """When a password is set, the auth POST comes before tick 0."""
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        entry_id=ENTRY_ID,
-        data={"host": HOST, "port": DEFAULT_PORT, "password": "secret"},
-        options={},
-    )
-    coord = SunRiserCoordinator(hass, entry)
-    try:
-        base_resp = {
-            "hostname": "h",
-            "save_version": None,
-            "factory_version": "1",
-            "model": "sr",
-            "pwm_count": 1,
-            "name": "SR",
-            "model_id": "sr8",
-        }
-        with aioresponses() as m:
-            m.post(f"{BASE}/", body=b"OK")  # auth
-            m.post(f"{BASE}/", body=_pack(base_resp))  # tick 0
-            await coord.async_load_device_config()
-            await coord._async_update_data()
-
-        assert coord.config["hostname"] == "h"
-        assert coord._init_step == 1
-    finally:
-        await coord.async_close()
 
 
 # ---------------------------------------------------------------------------

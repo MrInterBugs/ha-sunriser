@@ -9,7 +9,7 @@ import aiohttp
 import msgpack
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT
+from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -43,7 +43,6 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         self._entry_id = entry.entry_id
         self.host: str = entry.data[CONF_HOST]
         self.port: int = entry.data.get(CONF_PORT, DEFAULT_PORT)
-        self.password: str | None = entry.data.get(CONF_PASSWORD)
 
         # Static device config fetched once at startup and updated on new sensors.
         self.config: dict = {}
@@ -75,7 +74,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         )
 
     # ------------------------------------------------------------------
-    # Session / auth
+    # Session
     # ------------------------------------------------------------------
 
     def _get_session(self) -> aiohttp.ClientSession:
@@ -98,25 +97,6 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
     def init_complete(self) -> bool:
         """True once all four init ticks have completed."""
         return self._init_step >= 4
-
-    async def async_authenticate(self) -> None:
-        """Send password to device and store the session cookie.
-
-        The device distinguishes a login POST from a config POST by checking
-        whether the body exactly equals "password=<password>" (form-encoded).
-        No action needed when no password is set (device default).
-        """
-        if not self.password:
-            return
-        session = self._get_session()
-        async with self._request_lock:
-            async with session.post(
-                f"{self.base_url}/",
-                data=f"password={self.password}",
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as resp:
-                resp.raise_for_status()
 
     # ------------------------------------------------------------------
     # Low-level API helpers
@@ -420,13 +400,12 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
     # ------------------------------------------------------------------
 
     async def async_load_device_config(self) -> None:
-        """Authenticate with the device.  All config is loaded lazily by the poll loop.
+        """No-op — all config is loaded lazily by the poll loop.
 
         Steps 0-3 of the init state machine each make exactly one HTTP request so
         the WizFi360 module has a full poll interval to tear down the TCP session
         before the next connection arrives.
         """
-        await self.async_authenticate()
 
     async def _async_init_base_config(self) -> dict:
         """Init tick 0 — fetch name, model, pwm_count, etc."""

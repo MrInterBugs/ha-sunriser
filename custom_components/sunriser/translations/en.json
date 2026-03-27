@@ -19,13 +19,11 @@
         "description": "Enter the IP address or hostname of your SunRiser device.",
         "data": {
           "host": "Host or IP address",
-          "port": "Port",
-          "password": "Password (leave blank if not set)"
+          "port": "Port"
         },
         "data_description": {
           "host": "The IP address or hostname of your SunRiser controller on the local network (e.g. 192.168.1.100 or sunriser).",
-          "port": "The HTTP port the SunRiser web server listens on. Leave as 80 unless you have changed it.",
-          "password": "The password set on the SunRiser device. Leave blank if no password has been configured."
+          "port": "The HTTP port the SunRiser web server listens on. Leave as 80 unless you have changed it."
         }
       },
       "dhcp_confirm": {
