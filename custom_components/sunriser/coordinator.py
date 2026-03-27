@@ -53,8 +53,11 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         self._consecutive_failures: int = 0
 
         self._session: aiohttp.ClientSession | None = None
+        self._request_lock = asyncio.Lock()
         self._next_refresh_index = 0
         self._last_state_refresh_succeeded = False
+        self._init_step: int = 0
+        self._pending_sensor_roms: list = []
 
     @property
     def base_url(self) -> str:
@@ -91,6 +94,11 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         if self._session and not self._session.closed:
             await self._session.close()
 
+    @property
+    def init_complete(self) -> bool:
+        """True once all four init ticks have completed."""
+        return self._init_step >= 4
+
     async def async_authenticate(self) -> None:
         """Send password to device and store the session cookie.
 
@@ -101,13 +109,14 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         if not self.password:
             return
         session = self._get_session()
-        async with session.post(
-            f"{self.base_url}/",
-            data=f"password={self.password}",
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            timeout=aiohttp.ClientTimeout(total=10),
-        ) as resp:
-            resp.raise_for_status()
+        async with self._request_lock:
+            async with session.post(
+                f"{self.base_url}/",
+                data=f"password={self.password}",
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                resp.raise_for_status()
 
     # ------------------------------------------------------------------
     # Low-level API helpers
@@ -117,14 +126,15 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         """POST / — read config values for the given keys."""
         session = self._get_session()
         body = msgpack.packb(keys, use_bin_type=True)
-        async with session.post(
-            f"{self.base_url}/",
-            data=body,
-            headers={"Content-Type": "application/x-msgpack"},
-            timeout=aiohttp.ClientTimeout(total=10),
-        ) as resp:
-            resp.raise_for_status()
-            return msgpack.unpackb(await resp.read(), raw=False)
+        async with self._request_lock:
+            async with session.post(
+                f"{self.base_url}/",
+                data=body,
+                headers={"Content-Type": "application/x-msgpack"},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                resp.raise_for_status()
+                return msgpack.unpackb(await resp.read(), raw=False)
 
     async def async_set_config(self, params: dict) -> None:
         """PUT / — write config key/value pairs.
@@ -138,23 +148,25 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
             payload["save_version"] = factory_version
         session = self._get_session()
         body = msgpack.packb(payload, use_bin_type=True)
-        async with session.put(
-            f"{self.base_url}/",
-            data=body,
-            headers={"Content-Type": "application/x-msgpack"},
-            timeout=aiohttp.ClientTimeout(total=10),
-        ) as resp:
-            resp.raise_for_status()
+        async with self._request_lock:
+            async with session.put(
+                f"{self.base_url}/",
+                data=body,
+                headers={"Content-Type": "application/x-msgpack"},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                resp.raise_for_status()
 
     async def async_get_state(self) -> dict:
         """GET /state — returns PWM values, sensor readings, uptime, etc."""
         session = self._get_session()
-        async with session.get(
-            f"{self.base_url}/state",
-            timeout=aiohttp.ClientTimeout(total=10),
-        ) as resp:
-            resp.raise_for_status()
-            return msgpack.unpackb(await resp.read(), raw=False)
+        async with self._request_lock:
+            async with session.get(
+                f"{self.base_url}/state",
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                resp.raise_for_status()
+                return msgpack.unpackb(await resp.read(), raw=False)
 
     async def async_get_weather(self) -> list:
         """GET /weather — returns per-channel weather simulation state.
@@ -166,14 +178,15 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         rainmins, rain_next_tick, moon_state, moon_next_state_tick.
         """
         session = self._get_session()
-        async with session.get(
-            f"{self.base_url}/weather",
-            timeout=aiohttp.ClientTimeout(total=10),
-        ) as resp:
-            resp.raise_for_status()
-            unpacker = msgpack.Unpacker(raw=False)
-            unpacker.feed(await resp.read())
-            return next(iter(unpacker), None) or []
+        async with self._request_lock:
+            async with session.get(
+                f"{self.base_url}/weather",
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                resp.raise_for_status()
+                unpacker = msgpack.Unpacker(raw=False)
+                unpacker.feed(await resp.read())
+                return next(iter(unpacker), None) or []
 
     async def async_set_service_mode(self, enabled: bool) -> None:
         """PUT /state — enable or disable maintenance mode.
@@ -185,13 +198,14 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         session = self._get_session()
         # Device expects integer 1/0 — msgpack boolean True causes a 500.
         body = msgpack.packb({"service_mode": 1 if enabled else 0}, use_bin_type=True)
-        async with session.put(
-            f"{self.base_url}/state",
-            data=body,
-            headers={"Content-Type": "application/x-msgpack"},
-            timeout=aiohttp.ClientTimeout(total=10),
-        ) as resp:
-            resp.raise_for_status()
+        async with self._request_lock:
+            async with session.put(
+                f"{self.base_url}/state",
+                data=body,
+                headers={"Content-Type": "application/x-msgpack"},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                resp.raise_for_status()
 
     async def async_set_pwms(self, pwm_values: dict[str, int]) -> None:
         """PUT /state — set PWM channels immediately.
@@ -202,83 +216,91 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         """
         session = self._get_session()
         body = msgpack.packb({"pwms": pwm_values}, use_bin_type=True)
-        async with session.put(
-            f"{self.base_url}/state",
-            data=body,
-            headers={"Content-Type": "application/x-msgpack"},
-            timeout=aiohttp.ClientTimeout(total=10),
-        ) as resp:
-            resp.raise_for_status()
+        async with self._request_lock:
+            async with session.put(
+                f"{self.base_url}/state",
+                data=body,
+                headers={"Content-Type": "application/x-msgpack"},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                resp.raise_for_status()
 
     async def async_check_ok(self) -> bool:
         """GET /ok — returns True if device responds with 'OK'."""
         session = self._get_session()
         try:
-            async with session.get(
-                f"{self.base_url}/ok",
-                timeout=aiohttp.ClientTimeout(total=5),
-            ) as resp:
-                return resp.status == 200 and (await resp.text()).strip() == "OK"
+            async with self._request_lock:
+                async with session.get(
+                    f"{self.base_url}/ok",
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as resp:
+                    return resp.status == 200 and (await resp.text()).strip() == "OK"
         except Exception:
             return False
 
     async def async_reboot(self) -> None:
         """GET /reboot — initiate a device reboot."""
         session = self._get_session()
-        async with session.get(
-            f"{self.base_url}/reboot",
-            timeout=aiohttp.ClientTimeout(total=10),
-        ) as resp:
-            resp.raise_for_status()
+        async with self._request_lock:
+            async with session.get(
+                f"{self.base_url}/reboot",
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                resp.raise_for_status()
 
     async def async_get_factory_backup(self) -> bytes:
         """GET /factorybackup — download the factory default configuration as msgpack bytes."""
         session = self._get_session()
-        async with session.get(
-            f"{self.base_url}/factorybackup",
-            timeout=aiohttp.ClientTimeout(total=30),
-        ) as resp:
-            resp.raise_for_status()
-            return await resp.read()
+        async with self._request_lock:
+            async with session.get(
+                f"{self.base_url}/factorybackup",
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as resp:
+                resp.raise_for_status()
+                return await resp.read()
 
     async def async_get_firmware(self) -> bytes:
         """GET /firmware.mp — download firmware info as msgpack bytes."""
         session = self._get_session()
-        async with session.get(
-            f"{self.base_url}/firmware.mp",
-            timeout=aiohttp.ClientTimeout(total=30),
-        ) as resp:
-            resp.raise_for_status()
-            return await resp.read()
+        async with self._request_lock:
+            async with session.get(
+                f"{self.base_url}/firmware.mp",
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as resp:
+                resp.raise_for_status()
+                return await resp.read()
 
     async def async_get_bootload(self) -> bytes:
         """GET /bootload.mp — download bootloader info as msgpack bytes."""
         session = self._get_session()
-        async with session.get(
-            f"{self.base_url}/bootload.mp",
-            timeout=aiohttp.ClientTimeout(total=30),
-        ) as resp:
-            resp.raise_for_status()
-            return await resp.read()
+        async with self._request_lock:
+            async with session.get(
+                f"{self.base_url}/bootload.mp",
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as resp:
+                resp.raise_for_status()
+                return await resp.read()
 
     async def async_factory_reset(self) -> None:
         """DELETE / — reset all device configuration to factory defaults."""
         session = self._get_session()
-        async with session.delete(
-            f"{self.base_url}/",
-            timeout=aiohttp.ClientTimeout(total=10),
-        ) as resp:
-            resp.raise_for_status()
+        async with self._request_lock:
+            async with session.delete(
+                f"{self.base_url}/",
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                resp.raise_for_status()
 
     async def async_get_backup(self) -> bytes:
         """GET /backup — download complete device configuration as msgpack bytes."""
         session = self._get_session()
-        async with session.get(
-            f"{self.base_url}/backup",
-            timeout=aiohttp.ClientTimeout(total=30),
-        ) as resp:
-            resp.raise_for_status()
-            return await resp.read()
+        async with self._request_lock:
+            async with session.get(
+                f"{self.base_url}/backup",
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as resp:
+                resp.raise_for_status()
+                return await resp.read()
 
     async def async_restore(self, data: bytes) -> None:
         """PUT /restore — restore device configuration from msgpack backup bytes.
@@ -286,33 +308,36 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         Unlike PUT /, this triggers a deeper device restart after applying config.
         """
         session = self._get_session()
-        async with session.put(
-            f"{self.base_url}/restore",
-            data=data,
-            headers={"Content-Type": "application/x-msgpack"},
-            timeout=aiohttp.ClientTimeout(total=30),
-        ) as resp:
-            resp.raise_for_status()
+        async with self._request_lock:
+            async with session.put(
+                f"{self.base_url}/restore",
+                data=data,
+                headers={"Content-Type": "application/x-msgpack"},
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as resp:
+                resp.raise_for_status()
 
     async def async_get_errors(self) -> str:
         """GET /errors — retrieve the device error log."""
         session = self._get_session()
-        async with session.get(
-            f"{self.base_url}/errors",
-            timeout=aiohttp.ClientTimeout(total=10),
-        ) as resp:
-            resp.raise_for_status()
-            return await resp.text()
+        async with self._request_lock:
+            async with session.get(
+                f"{self.base_url}/errors",
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                resp.raise_for_status()
+                return await resp.text()
 
     async def async_get_log(self) -> str:
         """GET /log — retrieve the device diagnostic log."""
         session = self._get_session()
-        async with session.get(
-            f"{self.base_url}/log",
-            timeout=aiohttp.ClientTimeout(total=10),
-        ) as resp:
-            resp.raise_for_status()
-            return await resp.text()
+        async with self._request_lock:
+            async with session.get(
+                f"{self.base_url}/log",
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                resp.raise_for_status()
+                return await resp.text()
 
     async def async_get_dayplanner(self, pwm: int) -> list[dict]:
         """Read the dayplanner schedule for a PWM channel from the config cache.
@@ -380,39 +405,63 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         await self.async_set_config({f"dayplanner#marker#{pwm}": flat})
         self.config[f"dayplanner#marker#{pwm}"] = flat
 
+    _BASE_CONFIG_KEYS: list[str] = [
+        "name",
+        "model",
+        "model_id",
+        "pwm_count",
+        "hostname",
+        "factory_version",
+        "save_version",
+    ]
+
     # ------------------------------------------------------------------
     # Setup
     # ------------------------------------------------------------------
 
     async def async_load_device_config(self) -> None:
-        """Fetch static device config (PWM names, onoff flags, etc.).
+        """Authenticate with the device.  All config is loaded lazily by the poll loop.
 
-        Called once during entry setup before the first state poll.
+        Steps 0-3 of the init state machine each make exactly one HTTP request so
+        the WizFi360 module has a full poll interval to tear down the TCP session
+        before the next connection arrives.
         """
         await self.async_authenticate()
 
-        base_keys = [
-            "name",
-            "model",
-            "model_id",
-            "pwm_count",
-            "hostname",
-            "factory_version",
-            "save_version",
-        ]
-        base = await self.async_get_config(base_keys)
+    async def _async_init_base_config(self) -> dict:
+        """Init tick 0 — fetch name, model, pwm_count, etc."""
+        base = await self.async_get_config(self._BASE_CONFIG_KEYS)
         self.config.update(base)
+        self._init_step = 1
+        return {}
 
-        # pwm_count may be None on some firmware versions; derive it from
-        # the actual pwms dict in state instead, which is always accurate.
-        await asyncio.sleep(2)
+    async def _async_init_state(self) -> dict:
+        """Init tick 1 — fetch /state; derive pwm_count and discover sensor ROMs."""
         state = await self.async_get_state()
-        pwm_count: int = base.get("pwm_count") or len(state.get("pwms", {})) or 8
+        pwm_count = self.config.get("pwm_count") or len(state.get("pwms", {})) or 8
         self.config["pwm_count"] = pwm_count
+        self._pending_sensor_roms = [
+            rom
+            for rom in state.get("sensors", {})
+            if f"sensors#sensor#{rom}#name" not in self.config
+        ]
+        self._last_state_refresh_succeeded = True
+        self._consecutive_failures = 0
+        self._init_step = 2
+        data = dict(state)
+        data["ok"] = True
+        data.setdefault("weather", [])
+        return data
 
-        pwm_keys: list[str] = []
+    async def _async_init_pwm_config(self) -> dict:
+        """Init tick 2 — fetch PWM config and any sensor config discovered in tick 1.
+
+        Both key sets are batched into a single POST request.
+        """
+        pwm_count = self.config.get("pwm_count") or 8
+        keys: list[str] = []
         for i in range(1, pwm_count + 1):
-            pwm_keys += [
+            keys += [
                 f"pwm#{i}#name",
                 f"pwm#{i}#onoff",
                 f"pwm#{i}#max",
@@ -421,10 +470,32 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
                 f"pwm#{i}#fixed",
                 f"dayplanner#marker#{i}",
             ]
+        for rom in self._pending_sensor_roms:
+            keys += [
+                f"sensors#sensor#{rom}#name",
+                f"sensors#sensor#{rom}#unit",
+                f"sensors#sensor#{rom}#unitcomma",
+            ]
+        config = await self.async_get_config(keys)
+        self.config.update(config)
+        self._init_step = 3
+        return dict(self.data) if self.data else {}
 
-        await asyncio.sleep(2)
-        pwm_config = await self.async_get_config(pwm_keys)
-        self.config.update(pwm_config)
+    async def _async_init_weather(self) -> dict:
+        """Init tick 3 — fetch /weather so weather sensor entities can be created.
+
+        Failure is graceful: an empty weather list is returned so the rest of
+        init still completes and entities are set up.
+        """
+        data = dict(self.data) if self.data else {}
+        try:
+            data["weather"] = await self.async_get_weather()
+        except (aiohttp.ClientError, Exception) as err:
+            _LOGGER.debug("Could not fetch initial weather data: %s", err)
+            data.setdefault("weather", [])
+        self._init_step = 4
+        self._next_refresh_index = 0
+        return data
 
     # ------------------------------------------------------------------
     # Coordinator update
@@ -521,19 +592,24 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
 
         return data
 
-    async def _async_refresh_all(self) -> dict:
-        """Build an initial full snapshot before switching to round-robin refreshes."""
-        data = await self._async_refresh_state()
-        data["ok"] = self._last_state_refresh_succeeded
-        await asyncio.sleep(2)
-        return await self._async_refresh_weather(data)
-
     async def _async_update_data(self) -> dict:
-        if self.data is None:
-            data = await self._async_refresh_all()
-            self._next_refresh_index = 1
-            return data
+        # ── Init phase: steps 0–2 retry on failure; step 3 always completes ──
+        if 0 <= self._init_step <= 2:
+            try:
+                if self._init_step == 0:
+                    return await self._async_init_base_config()
+                if self._init_step == 1:
+                    return await self._async_init_state()
+                return await self._async_init_pwm_config()
+            except (aiohttp.ClientError, Exception) as err:
+                raise UpdateFailed(
+                    f"Error communicating with SunRiser at {self.host}: {err}"
+                ) from err
 
+        if self._init_step == 3:
+            return await self._async_init_weather()
+
+        # ── Normal round-robin ──────────────────────────────────────────────────
         refresh_kind = self._REFRESH_SEQUENCE[self._next_refresh_index]
 
         if refresh_kind == "state":
@@ -548,7 +624,6 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict]):
         self._next_refresh_index = (self._next_refresh_index + 1) % len(
             self._REFRESH_SEQUENCE
         )
-
         return data
 
     # ------------------------------------------------------------------

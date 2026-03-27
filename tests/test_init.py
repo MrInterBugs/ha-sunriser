@@ -143,6 +143,51 @@ async def test_unload_entry(hass, mock_config_entry):
     assert result is True
 
 
+async def test_platforms_forwarded_when_init_complete(hass, mock_config_entry):
+    """_on_coordinator_update triggers async_forward_entry_setups once init_complete is True."""
+    mock_config_entry.add_to_hass(hass)
+
+    with (
+        patch(
+            "custom_components.sunriser.coordinator.SunRiserCoordinator.async_load_device_config",
+            new=AsyncMock(),
+        ),
+        patch(
+            "custom_components.sunriser.coordinator.SunRiserCoordinator._async_update_data",
+            new=AsyncMock(return_value=FAKE_STATE),
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data
+    assert not coordinator.init_complete
+
+    coordinator._init_step = 4
+    with (
+        patch(
+            "custom_components.sunriser.coordinator.SunRiserCoordinator._async_update_data",
+            new=AsyncMock(return_value={**FAKE_STATE, "ok": True, "weather": []}),
+        ),
+        patch.object(
+            hass.config_entries, "async_forward_entry_setups", new=AsyncMock()
+        ) as mock_forward,
+    ):
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+    mock_forward.assert_awaited_once()
+
+    # A second coordinator update must not forward platforms again.
+    with patch.object(
+        hass.config_entries, "async_forward_entry_setups", new=AsyncMock()
+    ) as mock_forward2:
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+    mock_forward2.assert_not_awaited()
+
+
 # ---------------------------------------------------------------------------
 # Helpers for service tests
 # ---------------------------------------------------------------------------

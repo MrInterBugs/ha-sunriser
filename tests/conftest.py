@@ -2,7 +2,7 @@
 """Shared fixtures for SunRiser HA integration unit tests."""
 
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT
@@ -20,14 +20,6 @@ def hass_config_dir():
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
     """Allow HA to load custom integrations from custom_components/ in this repo."""
-
-
-@pytest.fixture(autouse=True)
-def mock_coordinator_sleep():
-    """Patch asyncio.sleep in the coordinator so tests return immediately without
-    lingering event-loop tasks that PHCC's verify_cleanup fixture would flag."""
-    with patch("custom_components.sunriser.coordinator.asyncio.sleep", new=AsyncMock()):
-        yield
 
 
 from custom_components.sunriser.const import DEFAULT_PORT, DOMAIN
@@ -120,9 +112,8 @@ def coordinator(hass, mock_config_entry):
     """Real SunRiserCoordinator pre-populated with fake data; network calls mocked."""
     coord = SunRiserCoordinator(hass, mock_config_entry)
     coord.config = dict(FAKE_CONFIG)
-    # Provide initial data so entities don't start unavailable
     coord.data = dict(FAKE_STATE)
-    # Prevent any real HTTP during property/action tests
+    coord._init_step = 4  # skip init state machine in unit tests
     coord.async_set_pwms = AsyncMock()
     coord.async_set_service_mode = AsyncMock()
     coord.async_request_refresh = AsyncMock()
