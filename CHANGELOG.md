@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.6.0] - 2026-03-27
+
+### Fixed
+
+- **Services registered in `async_setup`** — all service actions (`backup`, `restore`, `get_errors`, `get_log`, `get_dayplanner_schedule`, `set_dayplanner_schedule`, `get_weekplanner_schedule`, `set_weekplanner_schedule`, `download_factory_backup`, `download_firmware`, `download_bootload`, `factory_reset`) are now registered once in `async_setup` instead of `async_setup_entry`; prevents duplicate service registration errors when a config entry is reloaded
+
+### Changed
+
+- **4-step init state machine** — replaces `asyncio.sleep()` startup delays with a proper state machine; each of the four init ticks (base config, state, PWM config, weather) makes exactly one HTTP request so the WizFi360 has a full poll interval between connections
+- **Deferred platform setup** — entity platforms are not loaded until all four init ticks complete, ensuring PWM names, colors, and weather data are fully populated before any entity is created
+- **Sensor ROM discovery during init** — temperature sensor ROMs are discovered in tick 1 (state fetch) and their config keys are batched into the tick 2 request, eliminating a separate config round-trip
+- **Request serialisation lock** — `asyncio.Lock` added to the coordinator so only one TCP connection is ever in-flight at a time; prevents concurrent entity writes from crashing the WizFi360 module
+- **`PARALLEL_UPDATES`** declared at module level in all platform files — `0` for read-only platforms (`binary_sensor`, `sensor`), `1` for write platforms (`button`, `light`, `number`, `select`, `switch`)
+- **Availability logging** — the coordinator now logs a `WARNING` once when the device becomes unavailable (after the grace period) and an `INFO` when it recovers; previously it raised `UpdateFailed` silently on every failed poll without a distinct recovery message
+- **Runtime data** — coordinator instance now stored in `ConfigEntry.runtime_data` instead of `hass.data`
+
 ## [1.5.4-beta.1 & 1.5.4-beta.2] - 2026-03-26
 
 ### Changed
