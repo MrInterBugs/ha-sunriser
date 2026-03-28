@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.2] - 2026-03-28
+
+### Changed
+
+- **Fixed value and manager entities disabled by default** — `SunRiserPWMFixedNumber` and `SunRiserPWMManagerSelect` now have `entity_registry_enabled_default = False`. Both are advanced config set once at install time.
+- **Uptime sensor disabled by default** — `SunRiserUptimeSensor` changes on every poll and adds noise to history. Enable it manually if needed.
+
 ## [1.6.1-beta.1] - 2026-03-27
 
 ### Fixed
