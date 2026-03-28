@@ -36,6 +36,8 @@ class SunRiserPWMManagerSelect(CoordinatorEntity[SunRiserCoordinator], SelectEnt
     _attr_translation_key = "pwm_manager"
     _attr_entity_category = EntityCategory.CONFIG
     _attr_options = list(MANAGER_OPTIONS.values())
+    # Advanced config — most users set once and never revisit; disabled by default.
+    _attr_entity_registry_enabled_default = False
 
     def __init__(
         self,

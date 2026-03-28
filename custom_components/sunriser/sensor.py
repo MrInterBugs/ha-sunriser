@@ -63,6 +63,8 @@ class SunRiserUptimeSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity)
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = "s"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    # Changes every poll — creates many state changes; disabled by default.
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator: SunRiserCoordinator) -> None:
         super().__init__(coordinator)

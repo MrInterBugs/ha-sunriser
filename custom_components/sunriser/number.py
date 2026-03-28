@@ -33,6 +33,8 @@ class SunRiserPWMFixedNumber(CoordinatorEntity[SunRiserCoordinator], NumberEntit
     _attr_has_entity_name = True
     _attr_translation_key = "fixed_value"
     _attr_entity_category = EntityCategory.CONFIG
+    # Only relevant when manager is set to "fixed"; disabled by default to reduce noise.
+    _attr_entity_registry_enabled_default = False
     _attr_mode = NumberMode.SLIDER
     _attr_native_min_value = 0
     _attr_native_max_value = PWM_MAX
