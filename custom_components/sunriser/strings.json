@@ -96,6 +96,12 @@
       }
     }
   },
+  "issues": {
+    "device_unreachable": {
+      "title": "SunRiser device unreachable",
+      "description": "The SunRiser controller at **{host}** has been unreachable for multiple consecutive poll cycles.\n\nIf the device crashed, its built-in watchdog (dead man's switch) will restart it automatically — wait a minute and check whether it comes back on its own.\n\nIf it does not recover, check that the device is powered on and connected to your network. If the IP address has changed, use **Settings → Devices & Services → SunRiser → Reconfigure** to update it."
+    }
+  },
   "exceptions": {
     "integration_not_loaded": {
       "message": "SunRiser integration not loaded"

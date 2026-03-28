@@ -358,6 +358,83 @@ async def test_recovery_after_unavailable_logs_info(coord, caplog):
     assert coord._consecutive_failures == 0
 
 
+async def test_repair_issue_created_at_failure_grace(coord):
+    """A repair issue is created when failures reach _FAILURE_GRACE."""
+    coord._init_step = 4
+    coord._next_refresh_index = 0
+    coord.data = dict(FAKE_STATE)
+    coord._consecutive_failures = coord._FAILURE_GRACE - 1
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("down"))
+        from unittest.mock import patch
+
+        with patch(
+            "custom_components.sunriser.coordinator.async_create_issue"
+        ) as mock_create:
+            with pytest.raises(Exception):
+                await coord._async_update_data()
+
+    mock_create.assert_called_once()
+    call_kwargs = mock_create.call_args
+    assert call_kwargs.args[2] == "device_unreachable"
+    assert call_kwargs.kwargs["translation_placeholders"]["host"] == coord.host
+
+
+async def test_repair_issue_not_created_before_grace(coord):
+    """No repair issue fires during the grace period (failures < _FAILURE_GRACE)."""
+    coord._init_step = 4
+    coord._next_refresh_index = 0
+    coord.data = dict(FAKE_STATE)
+    coord._consecutive_failures = 0
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("blip"))
+        from unittest.mock import patch
+
+        with patch(
+            "custom_components.sunriser.coordinator.async_create_issue"
+        ) as mock_create:
+            await coord._async_update_data()
+
+    mock_create.assert_not_called()
+
+
+async def test_repair_issue_deleted_on_recovery(coord):
+    """Repair issue is deleted when the device comes back after >= FAILURE_GRACE failures."""
+    coord.config = dict(FAKE_CONFIG)
+    coord._consecutive_failures = coord._FAILURE_GRACE
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        from unittest.mock import patch
+
+        with patch(
+            "custom_components.sunriser.coordinator.async_delete_issue"
+        ) as mock_delete:
+            await coord._async_refresh_state()
+
+    mock_delete.assert_called_once()
+    assert mock_delete.call_args.args[2] == "device_unreachable"
+
+
+async def test_repair_issue_not_deleted_on_normal_recovery(coord):
+    """async_delete_issue is not called when failures never reached the grace threshold."""
+    coord.config = dict(FAKE_CONFIG)
+    coord._consecutive_failures = 1  # below FAILURE_GRACE
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        from unittest.mock import patch
+
+        with patch(
+            "custom_components.sunriser.coordinator.async_delete_issue"
+        ) as mock_delete:
+            await coord._async_refresh_state()
+
+    mock_delete.assert_not_called()
+
+
 async def test_update_data_sensor_config_fetch_error_logs_warning(coord, caplog):
     """If the sensor config POST fails, log a warning but don't crash."""
     coord._init_step = 4

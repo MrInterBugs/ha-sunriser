@@ -14,6 +14,11 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.issue_registry import (
+    IssueSeverity,
+    async_create_issue,
+    async_delete_issue,
+)
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
@@ -523,12 +528,22 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self.host,
                     self._FAILURE_GRACE,
                 )
+                async_create_issue(
+                    self.hass,
+                    DOMAIN,
+                    "device_unreachable",
+                    is_fixable=False,
+                    severity=IssueSeverity.WARNING,
+                    translation_key="device_unreachable",
+                    translation_placeholders={"host": self.host},
+                )
             raise UpdateFailed(
                 f"Error communicating with SunRiser at {self.host}: {err}"
             ) from err
 
         if self._consecutive_failures >= self._FAILURE_GRACE:
             _LOGGER.info("SunRiser at %s is available again", self.host)
+            async_delete_issue(self.hass, DOMAIN, "device_unreachable")
         self._consecutive_failures = 0
         self._last_state_refresh_succeeded = True
         data = dict(self.data or {})
