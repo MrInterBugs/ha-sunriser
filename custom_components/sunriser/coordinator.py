@@ -42,7 +42,7 @@ class DayplannerMarker(TypedDict):
 class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator that polls /state and holds device config."""
 
-    _REFRESH_SEQUENCE = ("state", "weather")
+    _REFRESH_SEQUENCE = ("state", "weather", "pwm_config")
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
@@ -597,10 +597,6 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 except aiohttp.ClientError as err:
                     _LOGGER.warning("Could not fetch sensor config: %s", err)
 
-        # Re-fetch PWM channel config so platforms can detect newly
-        # activated or deactivated channels without a full entry reload.
-        await self.async_refresh_pwm_config()
-
         return data
 
     async def _async_refresh_weather(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -657,6 +653,9 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             data["ok"] = self._last_state_refresh_succeeded
             if not self._last_state_refresh_succeeded:
                 return data
+        elif refresh_kind == "pwm_config":
+            data = dict(self.data)
+            await self.async_refresh_pwm_config()
         else:
             data = dict(self.data)
             data = await self._async_refresh_weather(data)

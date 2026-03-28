@@ -225,6 +225,45 @@ async def test_update_data_weather_tick(coord):
 
     assert data["uptime"] == FAKE_STATE["uptime"]
     assert data["weather"] == [None, {"weather_program_id": 1}]
+    assert coord._next_refresh_index == 2
+
+
+async def test_update_data_pwm_config_tick(coord):
+    """PWM config tick re-fetches channel config, preserves existing data, advances index."""
+    coord._init_step = 4
+    coord.config = dict(FAKE_CONFIG)
+    coord.data = {**FAKE_STATE, "ok": True, "weather": []}
+    coord._next_refresh_index = 2
+
+    pwm_keys = [
+        f"pwm#{i}#{k}"
+        for i in range(1, 9)
+        for k in ("color", "onoff", "name", "manager", "fixed")
+    ]
+    fresh = {k: coord.config.get(k) for k in pwm_keys}
+
+    with aioresponses() as m:
+        m.post(f"{BASE}/", body=_pack(fresh))
+        data = await coord._async_update_data()
+
+    assert data["uptime"] == FAKE_STATE["uptime"]
+    assert coord._next_refresh_index == 0
+
+
+async def test_update_data_pwm_config_tick_failure_returns_stale(coord, caplog):
+    """PWM config fetch failure logs a debug message and returns stale data."""
+    coord._init_step = 4
+    coord.config = dict(FAKE_CONFIG)
+    coord.data = {**FAKE_STATE, "ok": True, "weather": []}
+    coord._next_refresh_index = 2
+
+    with aioresponses() as m:
+        m.post(f"{BASE}/", exception=aiohttp.ClientConnectionError("down"))
+        with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
+            data = await coord._async_update_data()
+
+    assert data["uptime"] == FAKE_STATE["uptime"]
+    assert "Could not refresh PWM config" in caplog.text
     assert coord._next_refresh_index == 0
 
 
@@ -464,7 +503,7 @@ async def test_update_data_round_robins_to_weather(coord):
     assert data["ok"] is True  # preserved from stale data
     assert data["weather"] == [None, {"weather_program_id": 5}]
     assert data["uptime"] == FAKE_STATE["uptime"]
-    assert coord._next_refresh_index == 0
+    assert coord._next_refresh_index == 2
 
 
 async def test_update_data_weather_failure_keeps_stale_weather(coord, caplog):
