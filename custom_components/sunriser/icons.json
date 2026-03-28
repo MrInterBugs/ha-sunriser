@@ -1,0 +1,51 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "connectivity": {
+        "default": "mdi:lan-connect",
+        "state": {
+          "on": "mdi:lan-connect",
+          "off": "mdi:lan-disconnect"
+        }
+      }
+    },
+    "button": {
+      "reboot": {
+        "default": "mdi:restart"
+      }
+    },
+    "number": {
+      "fixed_value": {
+        "default": "mdi:numeric"
+      }
+    },
+    "select": {
+      "pwm_manager": {
+        "default": "mdi:calendar-clock"
+      }
+    },
+    "sensor": {
+      "uptime": {
+        "default": "mdi:timer-outline"
+      },
+      "firmware_version": {
+        "default": "mdi:chip"
+      },
+      "hostname": {
+        "default": "mdi:network"
+      },
+      "weather_channel": {
+        "default": "mdi:weather-partly-cloudy"
+      }
+    },
+    "switch": {
+      "maintenance_mode": {
+        "default": "mdi:wrench",
+        "state": {
+          "on": "mdi:wrench",
+          "off": "mdi:wrench-outline"
+        }
+      }
+    }
+  }
+}
