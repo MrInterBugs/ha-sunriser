@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.6.3-beta.1] - 2026-03-28
+
+### Added
+
+- **Dynamic entity add/remove** — PWM light, switch, number, and select entities are now added and removed at runtime when channels are activated or deactivated on the device, without requiring a full integration reload; DS1820 temperature sensors are also added dynamically as new probes appear
+
+### Changed
+
+- **Staggered polling — one request per tick** — the coordinator round-robin now cycles through three slots (`state → weather → pwm_config`) so every poll tick sends exactly one HTTP request; previously the state tick fired a second `POST /` to re-check PWM config in the same interval, which could race the WizFi360 TCP teardown window
+
 ## [1.6.2] - 2026-03-28
 
 ### Added
