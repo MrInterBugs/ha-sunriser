@@ -1,0 +1,62 @@
+site_name: SunRiser HA Integration
+site_description: Home Assistant custom integration for the SunRiser 8/10 LED aquarium controller
+site_url: https://mrinterbugs.github.io/ha-sunriser/
+repo_url: https://github.com/MrInterBugs/ha-sunriser
+repo_name: MrInterBugs/ha-sunriser
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: blue
+      accent: cyan
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue
+      accent: cyan
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_category_heading: true
+            members_order: source
+            inherited_members: false
+            filters:
+              - "!^_"
+
+nav:
+  - Home: index.md
+  - API Reference:
+    - Overview: api/index.md
+    - Coordinator: api/coordinator.md
+    - Config Flow: api/config_flow.md
+    - Constants: api/const.md
+    - Light: api/light.md
+    - Switch: api/switch.md
+    - Sensor: api/sensor.md
+    - Binary Sensor: api/binary_sensor.md
+    - Button: api/button.md
+    - Number: api/number.md
+    - Select: api/select.md
+    - Diagnostics: api/diagnostics.md
+    - Integration Setup: api/init.md
