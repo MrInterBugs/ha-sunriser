@@ -502,6 +502,33 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     _FAILURE_GRACE = 3
 
+    async def async_refresh_pwm_config(self) -> bool:
+        """Re-fetch PWM channel config to detect activation/deactivation changes.
+
+        Fetches color, onoff, name, manager and fixed for every channel and
+        updates self.config.  Returns True if any channel's active state
+        (color empty vs non-empty) changed since the last fetch.
+        """
+        pwm_count = self.config.get("pwm_count") or 8
+        keys: list[str] = []
+        for i in range(1, pwm_count + 1):
+            keys += [
+                f"pwm#{i}#color",
+                f"pwm#{i}#onoff",
+                f"pwm#{i}#name",
+                f"pwm#{i}#manager",
+                f"pwm#{i}#fixed",
+            ]
+        try:
+            fresh = await self.async_get_config(keys)
+        except aiohttp.ClientError as err:
+            _LOGGER.debug("Could not refresh PWM config: %s", err)
+            return False
+
+        changed = any(self.config.get(k) != v for k, v in fresh.items())
+        self.config.update(fresh)
+        return changed
+
     async def _async_refresh_state(self) -> dict[str, Any]:
         try:
             state = await self.async_get_state()
@@ -569,6 +596,10 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self.config.update(sensor_config)
                 except aiohttp.ClientError as err:
                     _LOGGER.warning("Could not fetch sensor config: %s", err)
+
+        # Re-fetch PWM channel config so platforms can detect newly
+        # activated or deactivated channels without a full entry reload.
+        await self.async_refresh_pwm_config()
 
         return data
 

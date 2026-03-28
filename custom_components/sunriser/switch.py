@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from homeassistant.components.switch import SwitchEntity, SwitchDeviceClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -19,14 +20,33 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunRiserCoordinator = entry.runtime_data
+    _added: set[int] = set()
+    er = entity_registry.async_get(hass)
 
-    entities: list[SwitchEntity] = [SunRiserMaintenanceSwitch(coordinator, entry)]
-    entities += [
-        SunRiserSwitch(coordinator, entry, pwm_num)
-        for pwm_num in range(1, coordinator.pwm_count + 1)
-        if coordinator.pwm_is_onoff(pwm_num) and not coordinator.pwm_is_unused(pwm_num)
-    ]
-    async_add_entities(entities)
+    # Maintenance switch is static — add it once at setup.
+    async_add_entities([SunRiserMaintenanceSwitch(coordinator, entry)])
+
+    @callback
+    def _check_pwm_entities() -> None:
+        new_entities: list[SunRiserSwitch] = []
+        for pwm_num in range(1, coordinator.pwm_count + 1):
+            is_switch = coordinator.pwm_is_onoff(
+                pwm_num
+            ) and not coordinator.pwm_is_unused(pwm_num)
+            if is_switch and pwm_num not in _added:
+                _added.add(pwm_num)
+                new_entities.append(SunRiserSwitch(coordinator, entry, pwm_num))
+            elif not is_switch and pwm_num in _added:
+                _added.discard(pwm_num)
+                uid = f"{entry.entry_id}_pwm_{pwm_num}"
+                eid = er.async_get_entity_id("switch", DOMAIN, uid)
+                if eid:
+                    er.async_remove(eid)
+        if new_entities:
+            async_add_entities(new_entities)
+
+    _check_pwm_entities()
+    entry.async_on_unload(coordinator.async_add_listener(_check_pwm_entities))
 
 
 class SunRiserMaintenanceSwitch(CoordinatorEntity[SunRiserCoordinator], SwitchEntity):

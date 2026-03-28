@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.const import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -34,25 +34,47 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunRiserCoordinator = entry.runtime_data
-    entities: list[SensorEntity] = [
-        SunRiserUptimeSensor(coordinator),
-        SunRiserFirmwareSensor(coordinator),
-        SunRiserHostnameSensor(coordinator),
-    ]
 
-    # Add temperature sensors discovered in the initial state poll.
-    if coordinator.data and coordinator.data.get("sensors"):
-        for rom, reading in coordinator.data["sensors"].items():
+    # Static diagnostic sensors — always present.
+    async_add_entities(
+        [
+            SunRiserUptimeSensor(coordinator),
+            SunRiserFirmwareSensor(coordinator),
+            SunRiserHostnameSensor(coordinator),
+        ]
+    )
+
+    # Weather channel sensors are fixed at setup time (weather list length
+    # is determined by pwm_count and doesn't change without a reload).
+    weather = coordinator.data.get("weather") or [] if coordinator.data else []
+    weather_entities: list[SunRiserWeatherChannelSensor] = [
+        SunRiserWeatherChannelSensor(coordinator, i + 1)
+        for i, ch in enumerate(weather)
+        if ch is not None
+    ]
+    if weather_entities:
+        async_add_entities(weather_entities)
+
+    # DS1820 temperature sensors: add at setup and dynamically as new ROMs appear.
+    _added_roms: set[str] = set()
+
+    @callback
+    def _check_ds1820_sensors() -> None:
+        if coordinator.data is None:
+            return
+        new_entities: list[SunRiserTemperatureSensor] = []
+        for rom, reading in (coordinator.data.get("sensors") or {}).items():
+            if rom in _added_roms:
+                continue
             device_type = reading[0]
             if device_type == _DS1820:
-                entities.append(SunRiserTemperatureSensor(coordinator, entry, rom))
+                _added_roms.add(rom)
+                new_entities.append(SunRiserTemperatureSensor(coordinator, entry, rom))
+        if new_entities:
+            async_add_entities(new_entities)
 
-    weather = coordinator.data.get("weather") or [] if coordinator.data else []
-    for i, ch in enumerate(weather):
-        if ch is not None:
-            entities.append(SunRiserWeatherChannelSensor(coordinator, i + 1))
-
-    async_add_entities(entities)
+    _check_ds1820_sensors()
+    entry.async_on_unload(coordinator.async_add_listener(_check_ds1820_sensors))
 
 
 class SunRiserUptimeSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity):
