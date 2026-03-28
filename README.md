@@ -19,6 +19,24 @@ A community-made Home Assistant custom integration for the [SunRiser 8/10](https
 
 ![SunRiser device page in Home Assistant](images/device_page.png)
 
+## Use Cases
+
+### Tank Temperature Monitoring
+
+Include the temperature on your aquarium dashboard alongside other tank sensors. Set an HA alert if the temperature drifts outside your safe range — useful as a backup check independent of any device-side alarms.
+
+### Connectivity Monitoring
+
+The binary sensor tracks whether the SunRiser responded on the last poll. Add it to a dashboard or use it in an HA notification automation so you know immediately if the controller has crashed or lost network — before your lighting program silently stops running.
+
+### Config Backup Before Changes
+
+Before making changes to the device's schedule, call `sunriser.backup` from a HA script to snapshot the current config to your HA config directory. If something goes wrong, `sunriser.restore` sends the saved file back to the device.
+
+### Current Light State at a Glance
+
+The light and switch entities reflect the device's live PWM values, so you can see exactly what each channel is doing right now from your HA dashboard — whether the device is running a dayplanner, a weekplanner, or a manual override.
+
 ## Requirements
 
 - Home Assistant 2024.1.0 or newer
@@ -115,6 +133,34 @@ data:
 ## Known Limitations & Warnings
 
 > **Warning:** Do not use the SunRiser web interface while this integration is running. The device has limited capacity for concurrent connections, and accessing the web UI at the same time as the integration polls the device can cause the controller to crash and require either a manual power cycle or waiting for the device's watchdog (dead man's switch) to trigger and restart it automatically.
+
+## Troubleshooting
+
+### Cannot Connect to the Device
+
+**Symptom:** Integration setup fails or the connectivity binary sensor stays `Off`.
+
+Check that the SunRiser is on the same network as HA and is reachable. Open `http://<host>/` in a browser — you should see a web page for the device. Ensure no firewall or VLAN is blocking port 80 between HA and the device.
+
+### No Entities Appear After Setup
+
+**Symptom:** The device is found but no light, switch, number, or select entities are created.
+
+This is expected, entities will take up to two minutes to show up when first adding the device otherwise the SunRiser will crash due to too many concurrent requests.
+
+PWM channel entities are only created when the channel has a `color` field set in the device config (an empty `color` means the channel is physically unused). Log into the SunRiser web UI, assign a colour to each active channel, and then reload the integration. Channels will be picked up automatically on the next coordinator poll.
+
+### State Values Stop Updating
+
+**Symptom:** Entity states are stale or show as unavailable.
+
+Check the poll interval under **Settings → Devices & Services → SunRiser → Configure** — a very long interval means infrequent updates. Confirm nothing is blocking HTTP between HA and the device. Avoid using the SunRiser web UI simultaneously with the integration (see Known Limitations).
+
+### Light Brightness Reverts After ~60 Seconds
+
+**Symptom:** Setting a light to a specific brightness from HA works, but then it changes back on its own.
+
+This is expected device behaviour. A direct PWM write from HA overrides the running program for approximately one minute, after which the device's own dayplanner or weekplanner schedule resumes. To keep manual control permanently, use the **Manager** select entity for that channel and set it to `none`.
 
 ## Notes
 
