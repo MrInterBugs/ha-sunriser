@@ -40,10 +40,13 @@ A community-made Home Assistant custom integration for the [SunRiser 8/10](https
 2. Search for **SunRiser**
 3. Enter your device's IP address or hostname (default hostname: `sunriser`)
 4. Enter the port if you changed it from the default (default: `80`)
-5. Enter the password if you set one on the device (leave blank if not set)
-6. Click **Submit**
+5. Click **Submit**
 
 The integration will automatically detect all PWM channels and temperature sensors on your device.
+
+### Updating the Host or Port
+
+If your device's IP address changes, go to **Settings → Devices & Services → SunRiser → three-dot menu → Reconfigure**. You can update the host and port without removing the integration — all automations and entity history are preserved.
 
 ![Example aquarium dashboard with Day Planner card](images/example_dashboard.png)
 
@@ -51,11 +54,10 @@ The integration will automatically detect all PWM channels and temperature senso
 
 ### Initial Configuration
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| Host | IP address or hostname of the SunRiser device | — |
-| Port | HTTP port the device listens on | `80` |
-| Password | Device password (leave blank if not set) | — |
+| Parameter | Description                                    | Default |
+|-----------|------------------------------------------------|---------|
+| Host      | IP address or hostname of the SunRiser device  | —       |
+| Port      | HTTP port the device listens on                | `80`    |
 
 ### Options
 

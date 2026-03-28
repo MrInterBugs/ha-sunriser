@@ -13,6 +13,18 @@
           "port": "The HTTP port the SunRiser web server listens on. Leave as 80 unless you have changed it."
         }
       },
+      "reconfigure": {
+        "title": "Update SunRiser connection",
+        "description": "Update the host or port for your SunRiser device.",
+        "data": {
+          "host": "Host or IP address",
+          "port": "Port"
+        },
+        "data_description": {
+          "host": "The new IP address or hostname of your SunRiser controller.",
+          "port": "The HTTP port the SunRiser web server listens on."
+        }
+      },
       "dhcp_confirm": {
         "title": "SunRiser discovered",
         "description": "A SunRiser device was found at {host}. Do you want to add it?"

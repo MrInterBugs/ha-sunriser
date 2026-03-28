@@ -184,6 +184,80 @@ async def test_step_user_duplicate_aborts(hass):
 
 
 # ---------------------------------------------------------------------------
+# Reconfigure flow
+# ---------------------------------------------------------------------------
+
+NEW_HOST = "192.168.0.200"
+
+
+async def _start_reconfigure_flow(hass, entry):
+    return await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={
+            "source": config_entries.SOURCE_RECONFIGURE,
+            "entry_id": entry.entry_id,
+        },
+    )
+
+
+async def test_reconfigure_shows_form_prefilled(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
+    )
+    entry.add_to_hass(hass)
+
+    result = await _start_reconfigure_flow(hass, entry)
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+    schema = result["data_schema"]
+    host_keys = [k for k in schema.schema if str(k) == CONF_HOST]
+    assert host_keys[0].default() == HOST
+
+
+async def test_reconfigure_success(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
+    )
+    entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.sunriser.config_flow._test_connection", return_value=None
+    ), patch("custom_components.sunriser.async_setup_entry", return_value=True):
+        result = await _start_reconfigure_flow(hass, entry)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_HOST: NEW_HOST, CONF_PORT: DEFAULT_PORT},
+        )
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data[CONF_HOST] == NEW_HOST
+
+
+async def test_reconfigure_cannot_connect(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
+    )
+    entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.sunriser.config_flow._test_connection",
+        return_value="cannot_connect",
+    ):
+        result = await _start_reconfigure_flow(hass, entry)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_HOST: NEW_HOST, CONF_PORT: DEFAULT_PORT},
+        )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"]["base"] == "cannot_connect"
+
+
+# ---------------------------------------------------------------------------
 # DHCP discovery flow
 # ---------------------------------------------------------------------------
 
