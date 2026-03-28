@@ -2,8 +2,18 @@
 
 ## [1.6.2] - 2026-03-28
 
+### Added
+
+- **Diagnostics** — `diagnostics.py` implements `async_get_config_entry_diagnostics`; redacts the host but exposes coordinator config and state for HA diagnostic reports
+- **Entity translations** — `strings.json` and `icons.json` added; all entity names and icons now use translation keys instead of hardcoded strings
+
+### Fixed
+
+- **Password field removed** — the SunRiser device has no authentication mechanism; the `password` field has been removed from the config flow, coordinator, and all tests
+
 ### Changed
 
+- **DHCP discovery reloads on IP change** — if a known device is rediscovered with a new IP, the existing config entry is updated and reloaded instead of prompting the user again
 - **Fixed value and manager entities disabled by default** — `SunRiserPWMFixedNumber` and `SunRiserPWMManagerSelect` now have `entity_registry_enabled_default = False`. Both are advanced config set once at install time.
 - **Uptime sensor disabled by default** — `SunRiserUptimeSensor` changes on every poll and adds noise to history. Enable it manually if needed.
 
