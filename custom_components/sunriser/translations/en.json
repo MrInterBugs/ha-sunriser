@@ -1,17 +1,4 @@
 {
-  "options": {
-    "step": {
-      "init": {
-        "title": "SunRiser Options",
-        "data": {
-          "scan_interval": "Polling interval (seconds)"
-        },
-        "data_description": {
-          "scan_interval": "How often (in seconds) to poll the device for updated PWM and sensor values. Lower values give faster updates but increase load on the controller."
-        }
-      }
-    }
-  },
   "config": {
     "step": {
       "user": {
@@ -41,6 +28,116 @@
       "cannot_connect": "Cannot connect to the discovered device.",
       "timeout": "Connection to the discovered device timed out.",
       "unknown": "Unexpected error connecting to the discovered device."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "SunRiser Options",
+        "data": {
+          "scan_interval": "Polling interval (seconds)"
+        },
+        "data_description": {
+          "scan_interval": "How often (in seconds) to poll the device for updated PWM and sensor values. Lower values give faster updates but increase load on the controller."
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "connectivity": {
+        "name": "Connectivity"
+      }
+    },
+    "button": {
+      "reboot": {
+        "name": "Reboot"
+      }
+    },
+    "number": {
+      "fixed_value": {
+        "name": "{channel} Fixed Value"
+      }
+    },
+    "select": {
+      "pwm_manager": {
+        "name": "{channel} Manager"
+      }
+    },
+    "sensor": {
+      "uptime": {
+        "name": "Uptime"
+      },
+      "firmware_version": {
+        "name": "Firmware Version"
+      },
+      "hostname": {
+        "name": "Hostname"
+      },
+      "weather_channel": {
+        "name": "{channel} Weather"
+      }
+    },
+    "switch": {
+      "maintenance_mode": {
+        "name": "Maintenance Mode"
+      }
+    }
+  },
+  "exceptions": {
+    "integration_not_loaded": {
+      "message": "SunRiser integration not loaded"
+    },
+    "backup_retrieve_failed": {
+      "message": "Failed to retrieve backup from SunRiser: {error}"
+    },
+    "backup_write_failed": {
+      "message": "Failed to write backup file: {error}"
+    },
+    "path_not_allowed": {
+      "message": "Path not allowed by Home Assistant: {path}"
+    },
+    "restore_read_failed": {
+      "message": "Failed to read backup file: {error}"
+    },
+    "restore_failed": {
+      "message": "Failed to restore backup to SunRiser: {error}"
+    },
+    "get_errors_failed": {
+      "message": "Failed to retrieve error log from SunRiser: {error}"
+    },
+    "get_log_failed": {
+      "message": "Failed to retrieve log from SunRiser: {error}"
+    },
+    "set_dayplanner_failed": {
+      "message": "Failed to update day planner: {error}"
+    },
+    "get_weekplanner_failed": {
+      "message": "Failed to retrieve week planner: {error}"
+    },
+    "set_weekplanner_failed": {
+      "message": "Failed to update week planner: {error}"
+    },
+    "factory_backup_retrieve_failed": {
+      "message": "Failed to retrieve factory backup from SunRiser: {error}"
+    },
+    "factory_backup_write_failed": {
+      "message": "Failed to write factory backup file: {error}"
+    },
+    "firmware_retrieve_failed": {
+      "message": "Failed to retrieve firmware info from SunRiser: {error}"
+    },
+    "firmware_write_failed": {
+      "message": "Failed to write firmware file: {error}"
+    },
+    "bootload_retrieve_failed": {
+      "message": "Failed to retrieve bootload info from SunRiser: {error}"
+    },
+    "bootload_write_failed": {
+      "message": "Failed to write bootload file: {error}"
+    },
+    "factory_reset_failed": {
+      "message": "Failed to send factory reset to SunRiser: {error}"
     }
   }
 }

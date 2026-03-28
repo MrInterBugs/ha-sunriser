@@ -20,7 +20,7 @@ def test_reboot_button_unique_id(coordinator):
 
 def test_reboot_button_name(coordinator):
     button = SunRiserRebootButton(coordinator, _FakeEntry())
-    assert button.name == "Reboot"
+    assert button._attr_translation_key == "reboot"
 
 
 async def test_reboot_button_press_calls_coordinator(coordinator):

@@ -119,9 +119,10 @@ def test_unique_id(coordinator, mock_config_entry):
 
 
 def test_name_includes_channel_name(coordinator, mock_config_entry):
-    """Entity name should be '<channel name> Manager'."""
+    """Entity name should be '<channel name> Manager' via translation placeholder."""
     sel = _make_select(coordinator, mock_config_entry, pwm_num=1)
-    assert sel.name == "TROPIC 4500K Manager"
+    assert sel._attr_translation_key == "pwm_manager"
+    assert sel._attr_translation_placeholders == {"channel": "TROPIC 4500K"}
 
 
 def test_options_list_is_complete(coordinator, mock_config_entry):

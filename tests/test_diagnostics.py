@@ -7,7 +7,9 @@ from custom_components.sunriser.diagnostics import async_get_config_entry_diagno
 from tests.conftest import FAKE_CONFIG, FAKE_STATE, HOST
 
 
-async def test_diagnostics_includes_coordinator_data(hass, coordinator, mock_config_entry):
+async def test_diagnostics_includes_coordinator_data(
+    hass, coordinator, mock_config_entry
+):
     """Diagnostics must include coordinator config and state snapshots."""
     mock_config_entry.add_to_hass(hass)
     mock_config_entry.runtime_data = coordinator

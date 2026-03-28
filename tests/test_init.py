@@ -218,8 +218,9 @@ async def setup_entry(hass, mock_config_entry):
 
 
 async def test_get_coordinator_raises_when_not_loaded(hass):
-    with pytest.raises(HomeAssistantError, match="not loaded"):
+    with pytest.raises(HomeAssistantError) as exc_info:
         _get_coordinator(hass)
+    assert exc_info.value.translation_key == "integration_not_loaded"
 
 
 async def test_register_services_is_reentrant(hass, setup_entry):

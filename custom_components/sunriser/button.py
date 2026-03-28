@@ -27,8 +27,7 @@ class SunRiserRebootButton(CoordinatorEntity[SunRiserCoordinator], ButtonEntity)
     """Button that reboots the SunRiser device."""
 
     _attr_has_entity_name = True
-    _attr_name = "Reboot"
-    _attr_icon = "mdi:restart"
+    _attr_translation_key = "reboot"
     _attr_device_class = ButtonDeviceClass.RESTART
     _attr_entity_category = EntityCategory.CONFIG
 

@@ -318,10 +318,11 @@ def test_weather_channel_unique_id(coordinator):
 
 
 def test_weather_channel_name(coordinator):
-    # Name is derived from the PWM channel name, not a generic "Weather Channel X".
+    # Channel name is passed as a translation placeholder so HA can localise the suffix.
     # FAKE_CONFIG has pwm#2#color = "pump" → COLOR_NAMES maps "pump" to "Mini Pump".
     sensor = _make_weather_channel_sensor(coordinator, channel=2)
-    assert sensor._attr_name == "Mini Pump Weather"
+    assert sensor._attr_translation_key == "weather_channel"
+    assert sensor._attr_translation_placeholders == {"channel": "Mini Pump"}
 
 
 def test_weather_channel_attributes_rename_passthrough(coordinator):

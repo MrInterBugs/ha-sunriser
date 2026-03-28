@@ -19,7 +19,7 @@ def test_connectivity_sensor_unique_id(coordinator):
 
 def test_connectivity_sensor_name(coordinator):
     sensor = SunRiserConnectivitySensor(coordinator, _FakeEntry())
-    assert sensor.name == "Connectivity"
+    assert sensor._attr_translation_key == "connectivity"
 
 
 def test_connectivity_sensor_is_on_when_ok_true(coordinator):

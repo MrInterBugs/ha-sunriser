@@ -101,7 +101,8 @@ def test_unique_id(coordinator, mock_config_entry):
 
 def test_name_includes_channel_name(coordinator, mock_config_entry):
     num = _make_number(coordinator, mock_config_entry, pwm_num=1)
-    assert num.name == "TROPIC 4500K Fixed Value"
+    assert num._attr_translation_key == "fixed_value"
+    assert num._attr_translation_placeholders == {"channel": "TROPIC 4500K"}
 
 
 def test_range(coordinator, mock_config_entry):

@@ -33,8 +33,8 @@ class SunRiserPWMManagerSelect(CoordinatorEntity[SunRiserCoordinator], SelectEnt
     """Select which planner controls a PWM channel (pwm#X#manager)."""
 
     _attr_has_entity_name = True
+    _attr_translation_key = "pwm_manager"
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_icon = "mdi:calendar-clock"
     _attr_options = list(MANAGER_OPTIONS.values())
 
     def __init__(
@@ -46,7 +46,7 @@ class SunRiserPWMManagerSelect(CoordinatorEntity[SunRiserCoordinator], SelectEnt
         super().__init__(coordinator)
         self._pwm_num = pwm_num
         self._attr_unique_id = f"{entry.entry_id}_pwm_{pwm_num}_manager"
-        self._attr_name = f"{coordinator.pwm_name(pwm_num)} Manager"
+        self._attr_translation_placeholders = {"channel": coordinator.pwm_name(pwm_num)}
         self._attr_device_info = coordinator.device_info
 
     @property

@@ -31,8 +31,8 @@ class SunRiserPWMFixedNumber(CoordinatorEntity[SunRiserCoordinator], NumberEntit
     """Number entity for pwm#X#fixed — the value used when manager is set to 'fixed'."""
 
     _attr_has_entity_name = True
+    _attr_translation_key = "fixed_value"
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_icon = "mdi:numeric"
     _attr_mode = NumberMode.SLIDER
     _attr_native_min_value = 0
     _attr_native_max_value = PWM_MAX
@@ -47,7 +47,7 @@ class SunRiserPWMFixedNumber(CoordinatorEntity[SunRiserCoordinator], NumberEntit
         super().__init__(coordinator)
         self._pwm_num = pwm_num
         self._attr_unique_id = f"{entry.entry_id}_pwm_{pwm_num}_fixed"
-        self._attr_name = f"{coordinator.pwm_name(pwm_num)} Fixed Value"
+        self._attr_translation_placeholders = {"channel": coordinator.pwm_name(pwm_num)}
         self._attr_device_info = coordinator.device_info
 
     @property

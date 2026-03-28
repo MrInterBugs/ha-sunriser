@@ -59,10 +59,9 @@ class SunRiserUptimeSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity)
     """Device uptime in seconds."""
 
     _attr_has_entity_name = True
-    _attr_name = "Uptime"
+    _attr_translation_key = "uptime"
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = "s"
-    _attr_icon = "mdi:timer-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SunRiserCoordinator) -> None:
@@ -81,8 +80,7 @@ class SunRiserFirmwareSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntit
     """Firmware version reported by the device."""
 
     _attr_has_entity_name = True
-    _attr_name = "Firmware Version"
-    _attr_icon = "mdi:chip"
+    _attr_translation_key = "firmware_version"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SunRiserCoordinator) -> None:
@@ -99,8 +97,7 @@ class SunRiserHostnameSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntit
     """Hostname configured on the device."""
 
     _attr_has_entity_name = True
-    _attr_name = "Hostname"
-    _attr_icon = "mdi:network"
+    _attr_translation_key = "hostname"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SunRiserCoordinator) -> None:
@@ -162,13 +159,13 @@ class SunRiserWeatherChannelSensor(
     """
 
     _attr_has_entity_name = True
-    _attr_icon = "mdi:weather-partly-cloudy"
+    _attr_translation_key = "weather_channel"
 
     def __init__(self, coordinator: SunRiserCoordinator, channel: int) -> None:
         super().__init__(coordinator)
         self._channel = channel
         self._attr_unique_id = f"{coordinator._entry_id}_weather_{channel}"
-        self._attr_name = f"{coordinator.pwm_name(channel)} Weather"
+        self._attr_translation_placeholders = {"channel": coordinator.pwm_name(channel)}
         self._attr_device_info = coordinator.device_info
 
     def _channel_data(self) -> dict[str, Any] | None:

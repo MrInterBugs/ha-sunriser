@@ -33,9 +33,8 @@ class SunRiserMaintenanceSwitch(CoordinatorEntity[SunRiserCoordinator], SwitchEn
     """Maintenance mode switch — freezes all PWM channels on the device."""
 
     _attr_has_entity_name = True
-    _attr_name = "Maintenance Mode"
+    _attr_translation_key = "maintenance_mode"
     _attr_device_class = SwitchDeviceClass.SWITCH
-    _attr_icon = "mdi:wrench"
 
     def __init__(self, coordinator: SunRiserCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)

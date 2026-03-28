@@ -32,7 +32,7 @@ class SunRiserConnectivitySensor(
     """Reports whether the most recent GET /ok refresh returned OK."""
 
     _attr_has_entity_name = True
-    _attr_name = "Connectivity"
+    _attr_translation_key = "connectivity"
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
