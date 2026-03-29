@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.3-dst-timelapse-modes-beta.3] - 2026-03-29
+
+### Fixed
+
+- **en.json** - Was missing string names for the new devices as well resulting in still only showing the IP address rather than the name of the new tools.
+
 ## [1.6.3-dst-timelapse-modes-beta.2] - 2026-03-29
 
 ### Fixed
