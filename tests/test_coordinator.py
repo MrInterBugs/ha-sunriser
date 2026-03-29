@@ -725,6 +725,199 @@ def test_pwm_count_property(coordinator):
     assert coordinator.pwm_count == 4
 
 
+# ---------------------------------------------------------------------------
+# async_set_timewarp
+# ---------------------------------------------------------------------------
+
+
+async def test_async_set_timewarp_on(coord):
+    """timewarp=1 (integer) must be sent — boolean True would cause a 500."""
+    with aioresponses() as m:
+        m.put(f"{BASE}/state", status=200)
+        await coord.async_set_timewarp(True)
+
+    sent = msgpack.unpackb(
+        m.requests[("PUT", URL(f"{BASE}/state"))][0].kwargs["data"], raw=False
+    )
+    assert sent["timewarp"] == 1
+    assert type(sent["timewarp"]) is int
+
+
+async def test_async_set_timewarp_off(coord):
+    """timewarp=0 (integer) must be sent — boolean False would cause a 500."""
+    with aioresponses() as m:
+        m.put(f"{BASE}/state", status=200)
+        await coord.async_set_timewarp(False)
+
+    sent = msgpack.unpackb(
+        m.requests[("PUT", URL(f"{BASE}/state"))][0].kwargs["data"], raw=False
+    )
+    assert sent["timewarp"] == 0
+    assert type(sent["timewarp"]) is int
+
+
+# ---------------------------------------------------------------------------
+# async_set_dst_auto_track
+# ---------------------------------------------------------------------------
+
+
+async def test_async_set_dst_auto_track_true_syncs_immediately(coordinator):
+    """Enabling DST auto-track fires an immediate PUT / with current summertime."""
+    from unittest.mock import patch
+    import datetime
+
+    fixed_dst = datetime.timedelta(hours=1)
+    with patch(
+        "custom_components.sunriser.coordinator.dt_util.now"
+    ) as mock_now:
+        mock_now.return_value.dst.return_value = fixed_dst
+        await coordinator.async_set_dst_auto_track(True)
+
+    assert coordinator._dst_auto_track is True
+    assert coordinator._last_known_dst is True
+    coordinator.async_set_config.assert_awaited_once_with({"summertime": 1})
+    assert coordinator.config["summertime"] == 1
+
+
+async def test_async_set_dst_auto_track_true_no_dst(coordinator):
+    """Enabling DST auto-track in non-DST timezone sends summertime=0."""
+    from unittest.mock import patch
+    import datetime
+
+    with patch(
+        "custom_components.sunriser.coordinator.dt_util.now"
+    ) as mock_now:
+        mock_now.return_value.dst.return_value = datetime.timedelta(0)
+        await coordinator.async_set_dst_auto_track(True)
+
+    coordinator.async_set_config.assert_awaited_once_with({"summertime": 0})
+    assert coordinator._last_known_dst is False
+
+
+async def test_async_set_dst_auto_track_false_does_not_sync(coordinator):
+    """Disabling DST auto-track should not make any HTTP call."""
+    await coordinator.async_set_dst_auto_track(False)
+
+    assert coordinator._dst_auto_track is False
+    coordinator.async_set_config.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# _check_dst_changed
+# ---------------------------------------------------------------------------
+
+
+def test_check_dst_changed_sets_pending_when_dst_changes(coordinator):
+    """When DST status differs from last known, _dst_sync_pending is set."""
+    from unittest.mock import patch
+    import datetime
+
+    coordinator._dst_auto_track = True
+    coordinator._last_known_dst = False  # was non-DST
+
+    with patch(
+        "custom_components.sunriser.coordinator.dt_util.now"
+    ) as mock_now:
+        mock_now.return_value.dst.return_value = datetime.timedelta(hours=1)  # now DST
+        coordinator._check_dst_changed()
+
+    assert coordinator._dst_sync_pending is True
+
+
+def test_check_dst_changed_no_change_leaves_pending_false(coordinator):
+    """When DST status is unchanged, _dst_sync_pending stays False."""
+    from unittest.mock import patch
+    import datetime
+
+    coordinator._dst_auto_track = True
+    coordinator._last_known_dst = True  # already DST
+
+    with patch(
+        "custom_components.sunriser.coordinator.dt_util.now"
+    ) as mock_now:
+        mock_now.return_value.dst.return_value = datetime.timedelta(hours=1)  # still DST
+        coordinator._check_dst_changed()
+
+    assert coordinator._dst_sync_pending is False
+
+
+def test_check_dst_changed_disabled_is_noop(coordinator):
+    """When _dst_auto_track is False, _check_dst_changed does nothing."""
+    coordinator._dst_auto_track = False
+    coordinator._dst_sync_pending = False
+    coordinator._check_dst_changed()
+    assert coordinator._dst_sync_pending is False
+
+
+# ---------------------------------------------------------------------------
+# _async_do_dst_sync
+# ---------------------------------------------------------------------------
+
+
+async def test_async_do_dst_sync_success(coordinator):
+    """Successful DST sync updates config and clears _dst_sync_pending."""
+    from unittest.mock import patch
+    import datetime
+
+    coordinator.data = dict(FAKE_STATE)
+    coordinator._dst_sync_pending = False
+
+    with patch(
+        "custom_components.sunriser.coordinator.dt_util.now"
+    ) as mock_now:
+        mock_now.return_value.dst.return_value = datetime.timedelta(hours=1)
+        result = await coordinator._async_do_dst_sync()
+
+    coordinator.async_set_config.assert_awaited_once_with({"summertime": 1})
+    assert coordinator.config["summertime"] == 1
+    assert coordinator._last_known_dst is True
+    assert coordinator._dst_sync_pending is False
+    assert result["uptime"] == FAKE_STATE["uptime"]
+
+
+async def test_async_do_dst_sync_failure_retries(coordinator, caplog):
+    """If async_set_config raises ClientError, log a warning and re-queue the sync."""
+    import aiohttp
+    from unittest.mock import patch
+    import datetime
+    import logging
+
+    coordinator.data = dict(FAKE_STATE)
+    coordinator.async_set_config.side_effect = aiohttp.ClientConnectionError("down")
+
+    with patch(
+        "custom_components.sunriser.coordinator.dt_util.now"
+    ) as mock_now:
+        mock_now.return_value.dst.return_value = datetime.timedelta(hours=1)
+        with caplog.at_level(logging.WARNING, logger="custom_components.sunriser"):
+            result = await coordinator._async_do_dst_sync()
+
+    assert "Could not sync DST to device" in caplog.text
+    assert coordinator._dst_sync_pending is True  # queued for retry
+    assert result["uptime"] == FAKE_STATE["uptime"]
+
+
+# ---------------------------------------------------------------------------
+# _async_update_data — DST sync pending branch
+# ---------------------------------------------------------------------------
+
+
+async def test_update_data_dst_sync_pending_replaces_tick(coordinator):
+    """When _dst_sync_pending is True, _async_update_data calls _async_do_dst_sync."""
+    from unittest.mock import patch, AsyncMock as _AsyncMock
+
+    coordinator._dst_sync_pending = True
+    coordinator.data = dict(FAKE_STATE)
+
+    mock_dst_sync = _AsyncMock(return_value=dict(FAKE_STATE))
+    with patch.object(coordinator, "_async_do_dst_sync", mock_dst_sync):
+        result = await coordinator._async_update_data()
+
+    mock_dst_sync.assert_awaited_once()
+    assert coordinator._dst_sync_pending is False  # cleared before call
+    assert result["uptime"] == FAKE_STATE["uptime"]
+
+
 def test_pwm_count_fallback(coordinator):
     coordinator.config["pwm_count"] = None
     assert coordinator.pwm_count == 8
