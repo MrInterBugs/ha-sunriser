@@ -305,11 +305,13 @@ async def test_update_data_fetches_new_sensor_config(coord):
         for k in ("color", "onoff", "name", "manager", "fixed")
     ]
     fresh = {k: coord.config.get(k) for k in pwm_keys}
-    fresh.update({
-        "sensors#sensor#AABBCCDDEEFF#name": "Water Temp",
-        "sensors#sensor#AABBCCDDEEFF#unit": 1,
-        "sensors#sensor#AABBCCDDEEFF#unitcomma": 1,
-    })
+    fresh.update(
+        {
+            "sensors#sensor#AABBCCDDEEFF#name": "Water Temp",
+            "sensors#sensor#AABBCCDDEEFF#unit": 1,
+            "sensors#sensor#AABBCCDDEEFF#unitcomma": 1,
+        }
+    )
     coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
     with aioresponses() as m:
         m.post(f"{BASE}/", body=_pack(fresh))
