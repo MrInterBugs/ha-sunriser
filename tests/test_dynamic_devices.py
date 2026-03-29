@@ -140,8 +140,8 @@ async def test_switch_dynamic_add_when_channel_becomes_active(
 
     added = []
     await switch_setup(hass, mock_config_entry, lambda e, **kw: added.extend(e))
-    # Maintenance switch + pwm2 (pump, onoff=True)
-    assert len(added) == 2
+    # Maintenance + timelapse + DST auto + pwm2 (pump, onoff=True)
+    assert len(added) == 4
 
     # Activate channel 3 as an on/off switch.
     coordinator.config["pwm#3#color"] = "pump"
@@ -149,7 +149,7 @@ async def test_switch_dynamic_add_when_channel_becomes_active(
 
     captured[0]()
 
-    assert len(added) == 3
+    assert len(added) == 5
     from custom_components.sunriser.switch import SunRiserSwitch
 
     new_switches = [e for e in added if isinstance(e, SunRiserSwitch)]

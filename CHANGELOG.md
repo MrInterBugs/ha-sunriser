@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.3-dynamic-stale-devices-beta.4] - 2026-03-29
+
+### Changed
+
+- **Merged latest `main` into this beta line** — brings in the time-lapse switch, DST auto-track switch, device-name fallback to model, and the missing translation strings fix while keeping the dynamic entity polling changes from this branch
+
 ## [1.6.3-dynamic-stale-devices-beta.3] - 2026-03-29
 
 ### Tests
