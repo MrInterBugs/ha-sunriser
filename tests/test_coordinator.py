@@ -225,15 +225,15 @@ async def test_update_data_weather_tick(coord):
 
     assert data["uptime"] == FAKE_STATE["uptime"]
     assert data["weather"] == [None, {"weather_program_id": 1}]
-    assert coord._next_refresh_index == 2
+    assert coord._next_refresh_index == 0
 
 
 async def test_update_data_pwm_config_tick(coord):
-    """PWM config tick re-fetches channel config, preserves existing data, advances index."""
+    """PWM config tick re-fetches channel config, preserves existing data, does not advance index."""
     coord._init_step = 4
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True, "weather": []}
-    coord._next_refresh_index = 2
+    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
 
     pwm_keys = [
         f"pwm#{i}#{k}"
@@ -255,7 +255,7 @@ async def test_update_data_pwm_config_tick_failure_returns_stale(coord, caplog):
     coord._init_step = 4
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True, "weather": []}
-    coord._next_refresh_index = 2
+    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
 
     with aioresponses() as m:
         m.post(f"{BASE}/", exception=aiohttp.ClientConnectionError("down"))
@@ -268,24 +268,39 @@ async def test_update_data_pwm_config_tick_failure_returns_stale(coord, caplog):
 
 
 async def test_update_data_fetches_new_sensor_config(coord):
-    """New DS1820 ROMs appearing in state trigger a config fetch."""
+    """New DS1820 ROMs are queued on the state tick and fetched on the next pwm_config tick."""
     coord._init_step = 4
     coord._next_refresh_index = 0
     coord.config = dict(FAKE_CONFIG)
-    # Remove sensor config so it looks new
     del coord.config["sensors#sensor#AABBCCDDEEFF#name"]
 
-    sensor_cfg = {
+    # State tick: new ROM queued, no second POST fired
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        await coord._async_update_data()
+
+    assert "sensors#sensor#AABBCCDDEEFF#name" in coord._pending_config_keys
+    assert "sensors#sensor#AABBCCDDEEFF#name" not in coord.config
+
+    # pwm_config tick: queued sensor keys batched into the single PWM config POST
+    pwm_keys = [
+        f"pwm#{i}#{k}"
+        for i in range(1, 9)
+        for k in ("color", "onoff", "name", "manager", "fixed")
+    ]
+    fresh = {k: coord.config.get(k) for k in pwm_keys}
+    fresh.update({
         "sensors#sensor#AABBCCDDEEFF#name": "Water Temp",
         "sensors#sensor#AABBCCDDEEFF#unit": 1,
         "sensors#sensor#AABBCCDDEEFF#unitcomma": 1,
-    }
+    })
+    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
     with aioresponses() as m:
-        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
-        m.post(f"{BASE}/", body=_pack(sensor_cfg))
-        data = await coord._async_update_data()
+        m.post(f"{BASE}/", body=_pack(fresh))
+        await coord._async_update_data()
 
     assert coord.config["sensors#sensor#AABBCCDDEEFF#name"] == "Water Temp"
+    assert "sensors#sensor#AABBCCDDEEFF#name" not in coord._pending_config_keys
 
 
 async def test_update_data_client_error_raises_update_failed(coord):
@@ -475,20 +490,31 @@ async def test_repair_issue_not_deleted_on_normal_recovery(coord):
 
 
 async def test_update_data_sensor_config_fetch_error_logs_warning(coord, caplog):
-    """If the sensor config POST fails, log a warning but don't crash."""
+    """If the pwm_config POST fails, pending sensor keys stay queued and debug is logged."""
     coord._init_step = 4
     coord._next_refresh_index = 0
     coord.config = dict(FAKE_CONFIG)
     del coord.config["sensors#sensor#AABBCCDDEEFF#name"]
 
+    # State tick: queues the pending sensor keys, no POST
     with aioresponses() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        data = await coord._async_update_data()
+
+    assert data["uptime"] == 12345
+    assert "sensors#sensor#AABBCCDDEEFF#name" in coord._pending_config_keys
+    coord.data = data  # simulate coordinator storing the result
+
+    # pwm_config tick: POST fails — keys stay queued, debug logged
+    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
+    with aioresponses() as m:
         m.post(f"{BASE}/", exception=aiohttp.ClientConnectionError("down"))
-        with caplog.at_level(logging.WARNING, logger="custom_components.sunriser"):
+        with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
             data = await coord._async_update_data()
 
-    assert data["uptime"] == 12345  # main data still returned despite the fetch failure
-    assert "Could not fetch sensor config" in caplog.text
+    assert data["uptime"] == 12345
+    assert "Could not refresh PWM config" in caplog.text
+    assert "sensors#sensor#AABBCCDDEEFF#name" in coord._pending_config_keys
 
 
 async def test_update_data_round_robins_to_weather(coord):
@@ -503,7 +529,7 @@ async def test_update_data_round_robins_to_weather(coord):
     assert data["ok"] is True  # preserved from stale data
     assert data["weather"] == [None, {"weather_program_id": 5}]
     assert data["uptime"] == FAKE_STATE["uptime"]
-    assert coord._next_refresh_index == 2
+    assert coord._next_refresh_index == 0
 
 
 async def test_update_data_weather_failure_keeps_stale_weather(coord, caplog):
@@ -733,20 +759,36 @@ def test_weather_program_name_returns_name_when_loaded(coordinator):
 
 
 async def test_update_data_fetches_new_weather_program_names(coord):
-    """First time a weather program ID is seen its name is fetched from config."""
+    """New weather program IDs are queued on the weather tick and fetched on the next pwm_config tick."""
     coord._init_step = 4
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True}
     coord._next_refresh_index = 1
     weather = [{"weather_program_id": 7}]
-    program_cfg = {"weather#setup#7#name": "Storm Program"}
 
+    # Weather tick: new program ID queued, no second POST fired
     with aioresponses() as m:
         m.get(f"{BASE}/weather", body=_pack(weather))
-        m.post(f"{BASE}/", body=_pack(program_cfg))
+        await coord._async_update_data()
+
+    assert "weather#setup#7#name" in coord._pending_config_keys
+    assert "weather#setup#7#name" not in coord.config
+
+    # pwm_config tick: queued key batched into the single PWM config POST
+    pwm_keys = [
+        f"pwm#{i}#{k}"
+        for i in range(1, 9)
+        for k in ("color", "onoff", "name", "manager", "fixed")
+    ]
+    fresh = {k: coord.config.get(k) for k in pwm_keys}
+    fresh["weather#setup#7#name"] = "Storm Program"
+    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
+    with aioresponses() as m:
+        m.post(f"{BASE}/", body=_pack(fresh))
         await coord._async_update_data()
 
     assert coord.config["weather#setup#7#name"] == "Storm Program"
+    assert "weather#setup#7#name" not in coord._pending_config_keys
 
 
 def test_sensor_value_raw_unit(coordinator):

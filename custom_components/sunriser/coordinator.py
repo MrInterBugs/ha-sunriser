@@ -656,7 +656,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._ticks_since_pwm_refresh += 1
         if self._ticks_since_pwm_refresh >= self._PWM_CONFIG_INTERVAL:
             self._ticks_since_pwm_refresh = 0
-            data = dict(self.data)
+            data = dict(self.data or {})
             await self.async_refresh_pwm_config()
             data["ok"] = self._last_state_refresh_succeeded
             return data
