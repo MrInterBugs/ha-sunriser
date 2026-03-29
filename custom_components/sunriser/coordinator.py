@@ -13,6 +13,7 @@ from typing import Any, TypedDict, cast
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.issue_registry import (
     IssueSeverity,
@@ -70,6 +71,14 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._init_step: int = 0
         self._pending_sensor_roms: list[str] = []
 
+        # DST auto-tracking — when enabled the coordinator syncs the device's
+        # summertime config key to the actual HA timezone DST state.
+        # _dst_sync_pending is set when a DST transition is detected; the sync
+        # then replaces the next poll tick (one request, no double-request).
+        self._dst_auto_track: bool = False
+        self._last_known_dst: bool | None = None
+        self._dst_sync_pending: bool = False
+
     @property
     def base_url(self) -> str:
         return f"http://{self.host}:{self.port}"
@@ -78,7 +87,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
             identifiers={(DOMAIN, self._entry_id)},
-            name=self.config.get("name") or self.host,
+            name=self.config.get("name") or self.config.get("model") or self.host,
             model=self.config.get("model"),
             sw_version=self.config.get("save_version"),
             manufacturer="LEDaquaristik",
@@ -202,6 +211,63 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
                 resp.raise_for_status()
+
+    async def async_set_timewarp(self, enabled: bool) -> None:
+        """PUT /state — activate or deactivate time-lapse (timewarp) mode.
+
+        When active the device runs the day/week planner at ~1800× speed.
+        Weather simulation is suspended while time-lapse is active.
+        Device expects integer 1/0 — msgpack boolean causes a 500.
+        """
+        session = self._get_session()
+        body = msgpack.packb({"timewarp": 1 if enabled else 0}, use_bin_type=True)
+        async with self._request_lock:
+            async with session.put(
+                f"{self.base_url}/state",
+                data=body,
+                headers={"Content-Type": "application/x-msgpack"},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                resp.raise_for_status()
+
+    async def async_set_dst_auto_track(self, enabled: bool) -> None:
+        """Enable or disable automatic DST tracking.
+
+        User-initiated: fires a PUT / immediately to sync summertime so the
+        device is correct the moment the switch is turned on.  Poll-detected
+        transitions are handled via _dst_sync_pending (replaces one tick).
+        """
+        self._dst_auto_track = enabled
+        if enabled:
+            is_dst = bool(dt_util.now().dst())
+            self._last_known_dst = is_dst
+            await self.async_set_config({"summertime": 1 if is_dst else 0})
+            self.config["summertime"] = 1 if is_dst else 0
+
+    def _check_dst_changed(self) -> None:
+        """After each successful poll tick, check whether DST has transitioned.
+
+        No HTTP request — pure Python.  Sets _dst_sync_pending so the *next*
+        tick becomes a dedicated PUT / instead of state or weather.  This keeps
+        every tick to exactly one request.
+        """
+        if not self._dst_auto_track:
+            return
+        is_dst = bool(dt_util.now().dst())
+        if is_dst != self._last_known_dst:
+            self._dst_sync_pending = True
+
+    async def _async_do_dst_sync(self) -> dict[str, Any]:
+        """Execute the pending DST sync — replaces one poll tick entirely."""
+        is_dst = bool(dt_util.now().dst())
+        self._last_known_dst = is_dst
+        try:
+            await self.async_set_config({"summertime": 1 if is_dst else 0})
+            self.config["summertime"] = 1 if is_dst else 0
+        except aiohttp.ClientError as err:
+            _LOGGER.warning("Could not sync DST to device: %s", err)
+            self._dst_sync_pending = True  # retry next tick
+        return dict(self.data or {})
 
     async def async_set_pwms(self, pwm_values: dict[str, int]) -> None:
         """PUT /state — set PWM channels immediately.
@@ -547,6 +613,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._consecutive_failures = 0
         self._last_state_refresh_succeeded = True
         data = dict(self.data or {})
+        data["timewarp"] = 0  # reset before merge; device omits the key when inactive
         data.update(state)
 
         # Fetch config for any sensors that have appeared since last update.
@@ -618,6 +685,11 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._init_step == 3:
             return await self._async_init_weather()
 
+        # ── Pending DST sync — replaces one tick, keeps 1 request/tick ──────────
+        if self._dst_sync_pending:
+            self._dst_sync_pending = False
+            return await self._async_do_dst_sync()
+
         # ── Normal round-robin ──────────────────────────────────────────────────
         refresh_kind = self._REFRESH_SEQUENCE[self._next_refresh_index]
 
@@ -633,6 +705,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._next_refresh_index = (self._next_refresh_index + 1) % len(
             self._REFRESH_SEQUENCE
         )
+        self._check_dst_changed()
         return data
 
     # ------------------------------------------------------------------

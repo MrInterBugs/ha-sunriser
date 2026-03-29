@@ -45,6 +45,20 @@
           "on": "mdi:wrench",
           "off": "mdi:wrench-outline"
         }
+      },
+      "timelapse": {
+        "default": "mdi:fast-forward",
+        "state": {
+          "on": "mdi:fast-forward",
+          "off": "mdi:fast-forward-outline"
+        }
+      },
+      "dst_auto_track": {
+        "default": "mdi:clock-time-eight",
+        "state": {
+          "on": "mdi:clock-time-eight",
+          "off": "mdi:clock-time-eight-outline"
+        }
       }
     }
   }
