@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.3-beta.3] - 2026-03-29
+
+### Tests
+
+- Updated coordinator tests to reflect the new pwm_config tick trigger (`_ticks_since_pwm_refresh` counter instead of `_next_refresh_index = 2`); sensor and weather program name fetch tests rewritten as two-tick scenarios (state/weather tick queues keys, pwm_config tick drains them)
+
 ## [1.6.3-beta.2] - 2026-03-29
 
 ### Fixed
