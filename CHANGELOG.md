@@ -23,6 +23,26 @@
 
 - **Staggered polling — one request per tick** — the coordinator round-robin now cycles through three slots (`state → weather → pwm_config`) so every poll tick sends exactly one HTTP request; previously the state tick fired a second `POST /` to re-check PWM config in the same interval, which could race the WizFi360 TCP teardown window
 
+## [1.6.3-dst-timelapse-modes-beta.3] - 2026-03-29
+
+### Fixed
+
+- **en.json** - Was missing string names for the new devices as well resulting in still only showing the IP address rather than the name of the new tools.
+
+## [1.6.3-dst-timelapse-modes-beta.2] - 2026-03-29
+
+### Fixed
+
+- **Device name falls back to model** — when the device's `name` config key is `None` (factory default), the HA device name now uses the model string (e.g. "SunRiser 10") instead of the IP address; all entities now show as "SunRiser 10 · Time-lapse" rather than "192.168.0.13 · Time-lapse"
+- **Timelapse switch stuck ON** — the device omits `timewarp` from `/state` when inactive (confirmed on real hardware); the coordinator now resets `timewarp` to `0` before merging each fresh state response, so the switch correctly reflects off after being disabled
+
+## [1.6.3-dst-timelapse-modes-beta.1] - 2026-03-29
+
+### Added
+
+- **Time-lapse switch** — enables/disables the device's timewarp mode (~1800× planner speed); weather simulation is suspended while active
+- **DST Auto-Track switch** — keeps the device's `summertime` config in sync with the HA timezone automatically; fires immediately on enable and replaces one poll tick when a DST transition is detected, so every tick still makes exactly one HTTP request
+
 ## [1.6.2] - 2026-03-28
 
 ### Added

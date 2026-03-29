@@ -93,6 +93,12 @@
     "switch": {
       "maintenance_mode": {
         "name": "Maintenance Mode"
+      },
+      "timelapse": {
+        "name": "Time-lapse"
+      },
+      "dst_auto_track": {
+        "name": "DST Auto-Track"
       }
     }
   },
