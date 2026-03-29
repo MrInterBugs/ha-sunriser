@@ -257,7 +257,9 @@ def test_dst_unique_id(coordinator, mock_config_entry):
     assert switch.unique_id == f"{ENTRY_ID}_dst_auto_track"
 
 
-async def test_dst_restores_on_state_from_last_state(hass, coordinator, mock_config_entry):
+async def test_dst_restores_on_state_from_last_state(
+    hass, coordinator, mock_config_entry
+):
     """async_added_to_hass restores auto-track when last state was ON."""
     from homeassistant.const import STATE_ON
     from unittest.mock import MagicMock
@@ -268,7 +270,9 @@ async def test_dst_restores_on_state_from_last_state(hass, coordinator, mock_con
     last_state = MagicMock()
     last_state.state = STATE_ON
 
-    with patch.object(switch, "async_get_last_state", AsyncMock(return_value=last_state)):
+    with patch.object(
+        switch, "async_get_last_state", AsyncMock(return_value=last_state)
+    ):
         with patch.object(switch, "async_write_ha_state"):
             # super().async_added_to_hass() requires entity to be in hass; patch it
             with patch(
@@ -280,7 +284,9 @@ async def test_dst_restores_on_state_from_last_state(hass, coordinator, mock_con
     coordinator.async_set_dst_auto_track.assert_awaited_once_with(True)
 
 
-async def test_dst_does_not_restore_when_last_state_off(hass, coordinator, mock_config_entry):
+async def test_dst_does_not_restore_when_last_state_off(
+    hass, coordinator, mock_config_entry
+):
     """async_added_to_hass does not enable auto-track when last state was OFF."""
     from homeassistant.const import STATE_OFF
     from unittest.mock import MagicMock
@@ -291,7 +297,9 @@ async def test_dst_does_not_restore_when_last_state_off(hass, coordinator, mock_
     last_state = MagicMock()
     last_state.state = STATE_OFF
 
-    with patch.object(switch, "async_get_last_state", AsyncMock(return_value=last_state)):
+    with patch.object(
+        switch, "async_get_last_state", AsyncMock(return_value=last_state)
+    ):
         with patch(
             "homeassistant.helpers.update_coordinator.CoordinatorEntity.async_added_to_hass",
             AsyncMock(),
@@ -301,7 +309,9 @@ async def test_dst_does_not_restore_when_last_state_off(hass, coordinator, mock_
     coordinator.async_set_dst_auto_track.assert_not_awaited()
 
 
-async def test_dst_does_not_restore_when_no_last_state(hass, coordinator, mock_config_entry):
+async def test_dst_does_not_restore_when_no_last_state(
+    hass, coordinator, mock_config_entry
+):
     """async_added_to_hass does not enable auto-track when there is no prior state."""
     coordinator.async_set_dst_auto_track = AsyncMock()
     switch = _make_dst(coordinator, mock_config_entry)

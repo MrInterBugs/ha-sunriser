@@ -87,7 +87,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
             identifiers={(DOMAIN, self._entry_id)},
-            name=self.config.get("name") or self.host,
+            name=self.config.get("name") or self.config.get("model") or self.host,
             model=self.config.get("model"),
             sw_version=self.config.get("save_version"),
             manufacturer="LEDaquaristik",
@@ -613,6 +613,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._consecutive_failures = 0
         self._last_state_refresh_succeeded = True
         data = dict(self.data or {})
+        data["timewarp"] = 0  # reset before merge; device omits the key when inactive
         data.update(state)
 
         # Fetch config for any sensors that have appeared since last update.

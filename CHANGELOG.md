@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.3-dst-timelapse-modes-beta.2] - 2026-03-29
+
+### Fixed
+
+- **Device name falls back to model** — when the device's `name` config key is `None` (factory default), the HA device name now uses the model string (e.g. "SunRiser 10") instead of the IP address; all entities now show as "SunRiser 10 · Time-lapse" rather than "192.168.0.13 · Time-lapse"
+- **Timelapse switch stuck ON** — the device omits `timewarp` from `/state` when inactive (confirmed on real hardware); the coordinator now resets `timewarp` to `0` before merging each fresh state response, so the switch correctly reflects off after being disabled
+
 ## [1.6.3-dst-timelapse-modes-beta.1] - 2026-03-29
 
 ### Added

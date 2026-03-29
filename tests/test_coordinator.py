@@ -196,6 +196,22 @@ async def test_async_load_device_config_makes_no_request(coord):
 # ---------------------------------------------------------------------------
 
 
+async def test_update_data_state_tick_resets_timewarp_when_absent(coord):
+    """timewarp is reset to 0 each state tick so stale ON state doesn't linger."""
+    coord._init_step = 4
+    coord.config = dict(FAKE_CONFIG)
+    coord.data = {**FAKE_STATE, "ok": True, "weather": [], "timewarp": 1}
+    coord._next_refresh_index = 0
+
+    with aioresponses() as m:
+        m.get(
+            f"{BASE}/state", body=_pack(FAKE_STATE)
+        )  # device omits timewarp when inactive
+        data = await coord._async_update_data()
+
+    assert data["timewarp"] == 0
+
+
 async def test_update_data_state_tick(coord):
     """State tick fetches /state, sets ok=True, advances round-robin index."""
     coord._init_step = 4
@@ -767,9 +783,7 @@ async def test_async_set_dst_auto_track_true_syncs_immediately(coordinator):
     import datetime
 
     fixed_dst = datetime.timedelta(hours=1)
-    with patch(
-        "custom_components.sunriser.coordinator.dt_util.now"
-    ) as mock_now:
+    with patch("custom_components.sunriser.coordinator.dt_util.now") as mock_now:
         mock_now.return_value.dst.return_value = fixed_dst
         await coordinator.async_set_dst_auto_track(True)
 
@@ -784,9 +798,7 @@ async def test_async_set_dst_auto_track_true_no_dst(coordinator):
     from unittest.mock import patch
     import datetime
 
-    with patch(
-        "custom_components.sunriser.coordinator.dt_util.now"
-    ) as mock_now:
+    with patch("custom_components.sunriser.coordinator.dt_util.now") as mock_now:
         mock_now.return_value.dst.return_value = datetime.timedelta(0)
         await coordinator.async_set_dst_auto_track(True)
 
@@ -815,9 +827,7 @@ def test_check_dst_changed_sets_pending_when_dst_changes(coordinator):
     coordinator._dst_auto_track = True
     coordinator._last_known_dst = False  # was non-DST
 
-    with patch(
-        "custom_components.sunriser.coordinator.dt_util.now"
-    ) as mock_now:
+    with patch("custom_components.sunriser.coordinator.dt_util.now") as mock_now:
         mock_now.return_value.dst.return_value = datetime.timedelta(hours=1)  # now DST
         coordinator._check_dst_changed()
 
@@ -832,10 +842,10 @@ def test_check_dst_changed_no_change_leaves_pending_false(coordinator):
     coordinator._dst_auto_track = True
     coordinator._last_known_dst = True  # already DST
 
-    with patch(
-        "custom_components.sunriser.coordinator.dt_util.now"
-    ) as mock_now:
-        mock_now.return_value.dst.return_value = datetime.timedelta(hours=1)  # still DST
+    with patch("custom_components.sunriser.coordinator.dt_util.now") as mock_now:
+        mock_now.return_value.dst.return_value = datetime.timedelta(
+            hours=1
+        )  # still DST
         coordinator._check_dst_changed()
 
     assert coordinator._dst_sync_pending is False
@@ -862,9 +872,7 @@ async def test_async_do_dst_sync_success(coordinator):
     coordinator.data = dict(FAKE_STATE)
     coordinator._dst_sync_pending = False
 
-    with patch(
-        "custom_components.sunriser.coordinator.dt_util.now"
-    ) as mock_now:
+    with patch("custom_components.sunriser.coordinator.dt_util.now") as mock_now:
         mock_now.return_value.dst.return_value = datetime.timedelta(hours=1)
         result = await coordinator._async_do_dst_sync()
 
@@ -885,9 +893,7 @@ async def test_async_do_dst_sync_failure_retries(coordinator, caplog):
     coordinator.data = dict(FAKE_STATE)
     coordinator.async_set_config.side_effect = aiohttp.ClientConnectionError("down")
 
-    with patch(
-        "custom_components.sunriser.coordinator.dt_util.now"
-    ) as mock_now:
+    with patch("custom_components.sunriser.coordinator.dt_util.now") as mock_now:
         mock_now.return_value.dst.return_value = datetime.timedelta(hours=1)
         with caplog.at_level(logging.WARNING, logger="custom_components.sunriser"):
             result = await coordinator._async_do_dst_sync()
