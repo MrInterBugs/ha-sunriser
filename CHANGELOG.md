@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.3-beta.2] - 2026-03-29
+
+### Fixed
+
+- **Device instability with dynamic entities** — the `pwm_config` slot was added to `_REFRESH_SEQUENCE` in beta.1, which caused the WizFi360 TCP stack to become unresponsive for ~30-minute periods. The sequence is reverted to `(state, weather)` and PWM config is instead refreshed every 60 ticks (~30 min at the default 30 s interval), replacing one normal tick rather than adding an extra request
+- **No more double requests per tick** — new DS1820 sensor ROMs and weather program names discovered during state/weather ticks are now queued in `_pending_config_keys` and fetched in bulk on the next pwm_config tick, so no tick ever makes two back-to-back HTTP requests
+
 ## [1.6.3-beta.1] - 2026-03-28
 
 ### Added
