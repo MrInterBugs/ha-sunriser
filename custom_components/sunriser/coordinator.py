@@ -42,7 +42,13 @@ class DayplannerMarker(TypedDict):
 class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator that polls /state and holds device config."""
 
-    _REFRESH_SEQUENCE = ("state", "weather", "pwm_config")
+    _REFRESH_SEQUENCE = ("state", "weather")
+    # How many normal ticks between PWM config refreshes.  Each tick is one HTTP
+    # request; the WizFi360 TCP stack becomes unresponsive if POST / (the config
+    # read endpoint) fires too frequently.  20 ticks ≈ 10 min at the default 30 s
+    # scan interval — frequent enough to satisfy dynamic-devices/stale-devices
+    # rules, rare enough not to stress the WiFi module.
+    _PWM_CONFIG_INTERVAL = 60
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
@@ -69,6 +75,10 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_state_refresh_succeeded = False
         self._init_step: int = 0
         self._pending_sensor_roms: list[str] = []
+        self._ticks_since_pwm_refresh: int = 0
+        # Config keys discovered during state/weather ticks that need fetching.
+        # Drained on the next pwm_config tick so no tick ever makes two requests.
+        self._pending_config_keys: set[str] = set()
 
     @property
     def base_url(self) -> str:
@@ -505,9 +515,13 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def async_refresh_pwm_config(self) -> bool:
         """Re-fetch PWM channel config to detect activation/deactivation changes.
 
-        Fetches color, onoff, name, manager and fixed for every channel and
-        updates self.config.  Returns True if any channel's active state
-        (color empty vs non-empty) changed since the last fetch.
+        Fetches color, onoff, name, manager and fixed for every channel, plus
+        any keys queued in _pending_config_keys (new sensor ROMs, weather program
+        names discovered during state/weather ticks).  Everything is batched into
+        a single POST so this tick never makes more than one HTTP request.
+
+        Returns True if any channel's active state (color empty vs non-empty)
+        changed since the last fetch.
         """
         pwm_count = self.config.get("pwm_count") or 8
         keys: list[str] = []
@@ -519,12 +533,15 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 f"pwm#{i}#manager",
                 f"pwm#{i}#fixed",
             ]
+        pending = list(self._pending_config_keys)
+        keys += pending
         try:
             fresh = await self.async_get_config(keys)
         except aiohttp.ClientError as err:
             _LOGGER.debug("Could not refresh PWM config: %s", err)
             return False
 
+        self._pending_config_keys.difference_update(pending)
         changed = any(self.config.get(k) != v for k, v in fresh.items())
         self.config.update(fresh)
         return changed
@@ -576,26 +593,19 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         data = dict(self.data or {})
         data.update(state)
 
-        # Fetch config for any sensors that have appeared since last update.
+        # Queue config keys for any sensors that have appeared since last update.
+        # Fetching here would make a second request in the same tick; instead we
+        # drain the queue on the next pwm_config tick alongside the PWM keys.
         if state.get("sensors"):
-            new_roms = [
-                rom
-                for rom in state["sensors"]
-                if f"sensors#sensor#{rom}#name" not in self.config
-            ]
-            if new_roms:
-                sensor_keys: list[str] = []
-                for rom in new_roms:
-                    sensor_keys += [
-                        f"sensors#sensor#{rom}#name",
-                        f"sensors#sensor#{rom}#unit",
-                        f"sensors#sensor#{rom}#unitcomma",
-                    ]
-                try:
-                    sensor_config = await self.async_get_config(sensor_keys)
-                    self.config.update(sensor_config)
-                except aiohttp.ClientError as err:
-                    _LOGGER.warning("Could not fetch sensor config: %s", err)
+            for rom in state["sensors"]:
+                if f"sensors#sensor#{rom}#name" not in self.config:
+                    self._pending_config_keys.update(
+                        [
+                            f"sensors#sensor#{rom}#name",
+                            f"sensors#sensor#{rom}#unit",
+                            f"sensors#sensor#{rom}#unitcomma",
+                        ]
+                    )
 
         return data
 
@@ -604,21 +614,14 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             weather = await self.async_get_weather()
             data["weather"] = weather
 
-            # Lazy-load names for any weather program IDs we haven't seen before.
-            new_ids = [
-                ch["weather_program_id"]
-                for ch in weather
-                if ch is not None
-                and ch.get("weather_program_id") is not None
-                and f"weather#setup#{ch['weather_program_id']}#name" not in self.config
-            ]
-            if new_ids:
-                name_keys = [f"weather#setup#{pid}#name" for pid in new_ids]
-                try:
-                    program_config = await self.async_get_config(name_keys)
-                    self.config.update(program_config)
-                except aiohttp.ClientError as err:
-                    _LOGGER.debug("Could not fetch weather program names: %s", err)
+            # Queue names for any weather program IDs we haven't seen before.
+            # Fetching here would make a second request in the same tick; drained
+            # on the next pwm_config tick instead.
+            for ch in weather:
+                if ch is not None and ch.get("weather_program_id") is not None:
+                    pid = ch["weather_program_id"]
+                    if f"weather#setup#{pid}#name" not in self.config:
+                        self._pending_config_keys.add(f"weather#setup#{pid}#name")
         except aiohttp.ClientError as err:
             _LOGGER.debug("Could not fetch weather data: %s", err)
             data.setdefault("weather", [])
@@ -646,6 +649,18 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return await self._async_init_weather()
 
         # ── Normal round-robin ──────────────────────────────────────────────────
+        # Every _PWM_CONFIG_INTERVAL ticks, replace this tick with a PWM config
+        # refresh so dynamic entity add/remove works without extra requests per
+        # cycle.  The long interval keeps POST / infrequent enough that the
+        # WizFi360 TCP stack remains stable.
+        self._ticks_since_pwm_refresh += 1
+        if self._ticks_since_pwm_refresh >= self._PWM_CONFIG_INTERVAL:
+            self._ticks_since_pwm_refresh = 0
+            data = dict(self.data)
+            await self.async_refresh_pwm_config()
+            data["ok"] = self._last_state_refresh_succeeded
+            return data
+
         refresh_kind = self._REFRESH_SEQUENCE[self._next_refresh_index]
 
         if refresh_kind == "state":
@@ -653,9 +668,6 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             data["ok"] = self._last_state_refresh_succeeded
             if not self._last_state_refresh_succeeded:
                 return data
-        elif refresh_kind == "pwm_config":
-            data = dict(self.data)
-            await self.async_refresh_pwm_config()
         else:
             data = dict(self.data)
             data = await self._async_refresh_weather(data)
