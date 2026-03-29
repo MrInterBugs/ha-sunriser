@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.3-dst-timelapse-modes-beta.1] - 2026-03-29
+
+### Added
+
+- **Time-lapse switch** — enables/disables the device's timewarp mode (~1800× planner speed); weather simulation is suspended while active
+- **DST Auto-Track switch** — keeps the device's `summertime` config in sync with the HA timezone automatically; fires immediately on enable and replaces one poll tick when a DST transition is detected, so every tick still makes exactly one HTTP request
+
 ## [1.6.2] - 2026-03-28
 
 ### Added
