@@ -133,8 +133,8 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # Low-level API helpers
     # ------------------------------------------------------------------
 
-    async def async_get_config(self, keys: list[str]) -> dict[str, Any]:
-        """POST / — read config values for the given keys."""
+    async def _async_get_config_raw(self, keys: list[str]) -> dict[str, Any]:
+        """POST / — read config values for a single batch of keys."""
         session = self._get_session()
         body = msgpack.packb(keys, use_bin_type=True)
         async with self._request_lock:
@@ -148,6 +148,23 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return cast(
                     dict[str, Any], msgpack.unpackb(await resp.read(), raw=False)
                 )
+
+    async def async_get_config(self, keys: list[str]) -> dict[str, Any]:
+        """POST / — read config values, chunking to avoid AT+IPD overflow.
+
+        The WizFi360 delivers incoming TCP data via AT+IPD events.  When the
+        request body exceeds the module's buffer (~500–600 bytes this is a best guess) the payload is split across two AT+IPD events and the MCU firmware misparses the second chunk as additional msgpack array elements, causing
+        '!!! element N is not msgpack str' errors and eventual watchdog resets.
+        Keeping each batch ≤ 25 keys (~300–400 bytes total) stays well inside
+        one AT+IPD delivery.
+        """
+        _CHUNK = 25
+        if len(keys) <= _CHUNK:
+            return await self._async_get_config_raw(keys)
+        result: dict[str, Any] = {}
+        for i in range(0, len(keys), _CHUNK):
+            result.update(await self._async_get_config_raw(keys[i : i + _CHUNK]))
+        return result
 
     async def async_set_config(self, params: dict[str, Any]) -> None:
         """PUT / — write config key/value pairs.
@@ -581,24 +598,33 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def async_refresh_pwm_config(self) -> bool:
         """Re-fetch PWM channel config to detect activation/deactivation changes.
 
-        Fetches color, onoff, name, manager and fixed for every channel, plus
-        any keys queued in _pending_config_keys (new sensor ROMs, weather program
-        names discovered during state/weather ticks).  Everything is batched into
-        a single POST so this tick never makes more than one HTTP request.
+        Always fetches pwm#X#color for every channel so activations and
+        deactivations are detected.  The four remaining keys (onoff, name,
+        manager, fixed) are only fetched for channels that are currently active
+        — unused channels (empty color) contribute nothing useful and padding
+        the request with their keys was pushing the body past the WizFi360
+        AT+IPD buffer limit (~600 bytes), causing firmware parse errors.
+
+        Also drains _pending_config_keys (new sensor ROMs, weather program
+        names) in the same request.
 
         Returns True if any channel's active state (color empty vs non-empty)
         changed since the last fetch.
         """
         pwm_count = self.config.get("pwm_count") or 8
         keys: list[str] = []
+        # Color for every channel — detects new activations/deactivations.
         for i in range(1, pwm_count + 1):
-            keys += [
-                f"pwm#{i}#color",
-                f"pwm#{i}#onoff",
-                f"pwm#{i}#name",
-                f"pwm#{i}#manager",
-                f"pwm#{i}#fixed",
-            ]
+            keys.append(f"pwm#{i}#color")
+        # Extra keys only for channels already known to be active.
+        for i in range(1, pwm_count + 1):
+            if not self.pwm_is_unused(i):
+                keys += [
+                    f"pwm#{i}#onoff",
+                    f"pwm#{i}#name",
+                    f"pwm#{i}#manager",
+                    f"pwm#{i}#fixed",
+                ]
         pending = list(self._pending_config_keys)
         keys += pending
         try:
@@ -654,6 +680,10 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._consecutive_failures >= self._FAILURE_GRACE:
             _LOGGER.info("SunRiser at %s is available again", self.host)
             async_delete_issue(self.hass, DOMAIN, "device_unreachable")
+            # Reset the PWM config refresh counter so it doesn't fire
+            # immediately on the first tick back — a freshly booted device
+            # needs time to stabilise before it can handle a large batch.
+            self._ticks_since_pwm_refresh = 0
         self._consecutive_failures = 0
         self._last_state_refresh_succeeded = True
         data = dict(self.data or {})

@@ -245,18 +245,20 @@ async def test_update_data_weather_tick(coord):
 
 
 async def test_update_data_pwm_config_tick(coord):
-    """PWM config tick re-fetches channel config, preserves existing data, does not advance index."""
+    """PWM config tick fetches color for all channels, extra keys only for active ones."""
     coord._init_step = 4
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True, "weather": []}
     coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
 
-    pwm_keys = [
-        f"pwm#{i}#{k}"
-        for i in range(1, 9)
-        for k in ("color", "onoff", "name", "manager", "fixed")
+    # pwm_count=4; channels 1,2,4 active (non-empty color), channel 3 unused.
+    # Expect: color for 1-4, plus onoff/name/manager/fixed for 1,2,4 only.
+    active = [i for i in range(1, 5) if FAKE_CONFIG.get(f"pwm#{i}#color")]
+    color_keys = [f"pwm#{i}#color" for i in range(1, 5)]
+    extra_keys = [
+        f"pwm#{i}#{k}" for i in active for k in ("onoff", "name", "manager", "fixed")
     ]
-    fresh = {k: coord.config.get(k) for k in pwm_keys}
+    fresh = {k: coord.config.get(k) for k in color_keys + extra_keys}
 
     with aioresponses() as m:
         m.post(f"{BASE}/", body=_pack(fresh))
@@ -264,6 +266,21 @@ async def test_update_data_pwm_config_tick(coord):
 
     assert data["uptime"] == FAKE_STATE["uptime"]
     assert coord._next_refresh_index == 0
+
+
+async def test_async_get_config_chunks_large_requests(coord):
+    """async_get_config splits >25-key requests into multiple POST calls."""
+    keys = [f"key#{i}" for i in range(30)]
+    chunk1 = {k: f"val_{k}" for k in keys[:25]}
+    chunk2 = {k: f"val_{k}" for k in keys[25:]}
+
+    with aioresponses() as m:
+        m.post(f"{BASE}/", body=_pack(chunk1))
+        m.post(f"{BASE}/", body=_pack(chunk2))
+        result = await coord.async_get_config(keys)
+
+    assert result == {**chunk1, **chunk2}
+    assert len(m.requests[("POST", URL(f"{BASE}/"))]) == 2
 
 
 async def test_update_data_pwm_config_tick_failure_returns_stale(coord, caplog):

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.3-dynamic-stale-devices-beta.6] - 2026-03-30
+
+### Fixed
+
+- **Chunk large config requests to ≤ 25 keys per POST** to avoid overflowing the WizFi360 AT+IPD buffer. Requests larger than ~600 bytes were being split across two AT+IPD events; the MCU firmware misread the second chunk as additional msgpack array elements, producing `!!! element N is not msgpack str` errors and eventual watchdog resets.
+- **Reset PWM config refresh counter on device recovery** so the large batch refresh does not fire on the first tick immediately after a reboot, preventing cascading watchdog crashes.
+
 ## [1.6.3-dynamic-stale-devices-beta.5] - 2026-03-30
 
 ### Fixed
