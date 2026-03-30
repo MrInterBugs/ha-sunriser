@@ -80,6 +80,11 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Config keys discovered during state/weather ticks that need fetching.
         # Drained on the next pwm_config tick so no tick ever makes two requests.
         self._pending_config_keys: set[str] = set()
+        # PWM config refresh chunks queued by _enqueue_pwm_refresh; drained one
+        # per tick by _async_drain_one_refresh_chunk to preserve the one-request-
+        # per-tick contract even when the full key list spans multiple chunks.
+        self._pending_refresh_chunks: list[list[str]] = []
+        self._refresh_accumulator: dict[str, Any] = {}
 
         # DST auto-tracking — when enabled the coordinator syncs the device's
         # summertime config key to the actual HA timezone DST state.
@@ -595,28 +600,21 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     _FAILURE_GRACE = 3
 
-    async def async_refresh_pwm_config(self) -> bool:
-        """Re-fetch PWM channel config to detect activation/deactivation changes.
+    def _enqueue_pwm_refresh(self) -> None:
+        """Build the PWM config key list and queue it as per-tick chunks.
 
-        Always fetches pwm#X#color for every channel so activations and
-        deactivations are detected.  The four remaining keys (onoff, name,
-        manager, fixed) are only fetched for channels that are currently active
-        — unused channels (empty color) contribute nothing useful and padding
-        the request with their keys was pushing the body past the WizFi360
-        AT+IPD buffer limit (~600 bytes), causing firmware parse errors.
+        Fetches pwm#X#color for every channel (activation detection) plus the
+        four detail keys only for currently-active channels.  Also drains
+        _pending_config_keys (new sensor ROMs, weather program names).
 
-        Also drains _pending_config_keys (new sensor ROMs, weather program
-        names) in the same request.
-
-        Returns True if any channel's active state (color empty vs non-empty)
-        changed since the last fetch.
+        The full list is split into ≤ 25-key chunks; _async_update_data drains
+        one chunk per tick so the one-request-per-tick contract is preserved
+        even when the key list is too large for a single AT+IPD delivery.
         """
         pwm_count = self.config.get("pwm_count") or 8
         keys: list[str] = []
-        # Color for every channel — detects new activations/deactivations.
         for i in range(1, pwm_count + 1):
             keys.append(f"pwm#{i}#color")
-        # Extra keys only for channels already known to be active.
         for i in range(1, pwm_count + 1):
             if not self.pwm_is_unused(i):
                 keys += [
@@ -626,17 +624,43 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     f"pwm#{i}#fixed",
                 ]
         pending = list(self._pending_config_keys)
+        self._pending_config_keys.difference_update(pending)
         keys += pending
+        _CHUNK = 25
+        self._pending_refresh_chunks = [
+            keys[i : i + _CHUNK] for i in range(0, len(keys), _CHUNK)
+        ]
+        self._refresh_accumulator = {}
+
+    async def _async_drain_one_refresh_chunk(self) -> dict[str, Any]:
+        """Send the next queued PWM config chunk — one HTTP request, one tick.
+
+        Returns the unchanged data object (suppressing listener notification)
+        while chunks remain.  On the final chunk applies the accumulated config
+        and returns new data so listeners are notified only if something changed.
+        """
+        chunk = self._pending_refresh_chunks.pop(0)
         try:
-            fresh = await self.async_get_config(keys)
+            fresh = await self._async_get_config_raw(chunk)
+            self._refresh_accumulator.update(fresh)
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Could not refresh PWM config: %s", err)
-            return False
+            self._pending_refresh_chunks.clear()
+            self._refresh_accumulator.clear()
+            return self.data or {}
 
-        self._pending_config_keys.difference_update(pending)
+        if self._pending_refresh_chunks:
+            # More chunks still queued — hold off notifying listeners.
+            return self.data or {}
+
+        # Final chunk — apply accumulated results and signal if anything changed.
+        fresh = self._refresh_accumulator
+        self._refresh_accumulator = {}
         changed = any(self.config.get(k) != v for k, v in fresh.items())
         self.config.update(fresh)
-        return changed
+        data = dict(self.data or {})
+        data["ok"] = self._last_state_refresh_succeeded
+        return data if changed else (self.data or data)
 
     async def _async_refresh_state(self) -> dict[str, Any]:
         try:
@@ -751,23 +775,17 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return await self._async_do_dst_sync()
 
         # ── Normal round-robin ──────────────────────────────────────────────────
-        # Every _PWM_CONFIG_INTERVAL ticks, replace this tick with a PWM config
-        # refresh so dynamic entity add/remove works without extra requests per
-        # cycle.  The long interval keeps POST / infrequent enough that the
-        # WizFi360 TCP stack remains stable.
+        # Every _PWM_CONFIG_INTERVAL ticks enqueue a PWM config refresh.
+        # _enqueue_pwm_refresh splits the key list into ≤ 25-key chunks;
+        # _async_drain_one_refresh_chunk sends exactly one chunk per tick so
+        # the one-request-per-tick contract is never broken.
         self._ticks_since_pwm_refresh += 1
         if self._ticks_since_pwm_refresh >= self._PWM_CONFIG_INTERVAL:
             self._ticks_since_pwm_refresh = 0
-            data = dict(self.data or {})
-            config_changed = await self.async_refresh_pwm_config()
-            data["ok"] = self._last_state_refresh_succeeded
-            # Only signal listeners when config actually changed so the
-            # _check_entities callbacks in each platform don't run every tick.
-            if config_changed:
-                return data
-            # No config change: skip listener notification by returning the
-            # same object reference that is already stored in self.data.
-            return self.data or data
+            self._enqueue_pwm_refresh()
+
+        if self._pending_refresh_chunks:
+            return await self._async_drain_one_refresh_chunk()
 
         refresh_kind = self._REFRESH_SEQUENCE[self._next_refresh_index]
 

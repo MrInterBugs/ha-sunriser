@@ -300,6 +300,48 @@ async def test_update_data_pwm_config_tick_failure_returns_stale(coord, caplog):
     assert coord._next_refresh_index == 0
 
 
+async def test_pwm_config_refresh_drains_one_chunk_per_tick(coord):
+    """When the key list exceeds 25, each tick sends exactly one chunk."""
+    coord._init_step = 4
+    coord.data = {**FAKE_STATE, "ok": True, "weather": []}
+    # 10 active channels → 10 colors + 10×4 = 50 keys → 2 chunks (25 + 25).
+    coord.config = {
+        **FAKE_CONFIG,
+        "pwm_count": 10,
+        **{f"pwm#{i}#color": "4500k" for i in range(1, 11)},
+        **{f"pwm#{i}#onoff": False for i in range(1, 11)},
+        **{f"pwm#{i}#name": None for i in range(1, 11)},
+        **{f"pwm#{i}#manager": 0 for i in range(1, 11)},
+        **{f"pwm#{i}#fixed": 0 for i in range(1, 11)},
+    }
+    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
+
+    keys = [f"pwm#{i}#color" for i in range(1, 11)]
+    keys += [
+        f"pwm#{i}#{k}"
+        for i in range(1, 11)
+        for k in ("onoff", "name", "manager", "fixed")
+    ]
+    chunk1 = {k: coord.config.get(k) for k in keys[:25]}
+    chunk2 = {k: coord.config.get(k) for k in keys[25:]}
+
+    # Tick 1: enqueue fires, first chunk sent, one chunk still pending.
+    with aioresponses() as m:
+        m.post(f"{BASE}/", body=_pack(chunk1))
+        data1 = await coord._async_update_data()
+
+    assert len(coord._pending_refresh_chunks) == 1
+    assert data1 is coord.data  # same object — no listener notification yet
+
+    # Tick 2: second (final) chunk sent, config applied.
+    with aioresponses() as m:
+        m.post(f"{BASE}/", body=_pack(chunk2))
+        await coord._async_update_data()
+
+    assert len(coord._pending_refresh_chunks) == 0
+    assert coord._next_refresh_index == 0  # state/weather not advanced during drain
+
+
 async def test_update_data_fetches_new_sensor_config(coord):
     """New DS1820 ROMs are queued on the state tick and fetched on the next pwm_config tick."""
     coord._init_step = 4
@@ -525,7 +567,12 @@ async def test_repair_issue_not_deleted_on_normal_recovery(coord):
 
 
 async def test_update_data_sensor_config_fetch_error_logs_warning(coord, caplog):
-    """If the pwm_config POST fails, pending sensor keys stay queued and debug is logged."""
+    """If the pwm_config POST fails, stale data is returned and debug is logged.
+
+    Keys are drained from _pending_config_keys at enqueue time (not after the
+    fetch), so they are not in the set after a failed refresh.  The next state
+    tick will re-queue them because the sensor name is still absent from config.
+    """
     coord._init_step = 4
     coord._next_refresh_index = 0
     coord.config = dict(FAKE_CONFIG)
@@ -540,7 +587,8 @@ async def test_update_data_sensor_config_fetch_error_logs_warning(coord, caplog)
     assert "sensors#sensor#AABBCCDDEEFF#name" in coord._pending_config_keys
     coord.data = data  # simulate coordinator storing the result
 
-    # pwm_config tick: POST fails — keys stay queued, debug logged
+    # pwm_config tick: enqueue drains pending keys, then POST fails.
+    # Keys are no longer in _pending_config_keys (drained at enqueue).
     coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
     with aioresponses() as m:
         m.post(f"{BASE}/", exception=aiohttp.ClientConnectionError("down"))
@@ -549,7 +597,7 @@ async def test_update_data_sensor_config_fetch_error_logs_warning(coord, caplog)
 
     assert data["uptime"] == 12345
     assert "Could not refresh PWM config" in caplog.text
-    assert "sensors#sensor#AABBCCDDEEFF#name" in coord._pending_config_keys
+    assert "sensors#sensor#AABBCCDDEEFF#name" not in coord._pending_config_keys
 
 
 async def test_update_data_round_robins_to_weather(coord):

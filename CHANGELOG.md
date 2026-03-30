@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.3-dynamic-stale-devices-beta.7] - 2026-03-30
+
+### Changed
+
+- **Queue PWM config refresh chunks, drain one per tick** — replaced `async_refresh_pwm_config` with `_enqueue_pwm_refresh` + `_async_drain_one_refresh_chunk`. The full key list is split into ≤ 25-key chunks at enqueue time; each coordinator tick drains exactly one chunk, preserving the one-request-per-tick contract even when the key list spans multiple batches. Listener notification is deferred until the final chunk is applied.
+
 ## [1.6.3-dynamic-stale-devices-beta.6] - 2026-03-30
 
 ### Fixed
