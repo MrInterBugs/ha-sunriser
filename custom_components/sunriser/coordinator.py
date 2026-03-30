@@ -46,9 +46,9 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     _REFRESH_SEQUENCE = ("state", "weather")
     # How many normal ticks between PWM config refreshes.  Each tick is one HTTP
     # request; the WizFi360 TCP stack becomes unresponsive if POST / (the config
-    # read endpoint) fires too frequently.  20 ticks ≈ 10 min at the default 30 s
-    # scan interval — frequent enough to satisfy dynamic-devices/stale-devices
-    # rules, rare enough not to stress the WiFi module.
+    # read endpoint) fires too frequently.  60 ticks ≈ 30 min at the default 30 s
+    # scan interval — frequent enough to detect channel changes within a session,
+    # rare enough not to stress the WiFi module.
     _PWM_CONFIG_INTERVAL = 60
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -603,7 +603,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         keys += pending
         try:
             fresh = await self.async_get_config(keys)
-        except aiohttp.ClientError as err:
+        except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Could not refresh PWM config: %s", err)
             return False
 
@@ -729,9 +729,15 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._ticks_since_pwm_refresh >= self._PWM_CONFIG_INTERVAL:
             self._ticks_since_pwm_refresh = 0
             data = dict(self.data or {})
-            await self.async_refresh_pwm_config()
+            config_changed = await self.async_refresh_pwm_config()
             data["ok"] = self._last_state_refresh_succeeded
-            return data
+            # Only signal listeners when config actually changed so the
+            # _check_entities callbacks in each platform don't run every tick.
+            if config_changed:
+                return data
+            # No config change: skip listener notification by returning the
+            # same object reference that is already stored in self.data.
+            return self.data or data
 
         refresh_kind = self._REFRESH_SEQUENCE[self._next_refresh_index]
 

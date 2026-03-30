@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.3-dynamic-stale-devices-beta.5] - 2026-03-30
+
+### Fixed
+
+- **Only signal listeners when config actually changed** so the _check_entities callbacks in each platform don't run every tick.
+
 ## [1.6.3-dynamic-stale-devices-beta.4] - 2026-03-29
 
 ### Changed
