@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.3] - 2026-03-31
+
+### Changed
+
+- Merged branch `dst-timelapse-modes-beta` into main to introduce day light saving time syncing as the controller is dumb when it comes to knowing if it should be on or off. Also includes a time lapse switch to enable or disable the time lapse feature of the controller.
+
 ## [1.6.3-dst-timelapse-modes-beta.3] - 2026-03-29
 
 ### Fixed
