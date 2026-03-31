@@ -32,6 +32,17 @@ jobs:
       - run: pip install black
       - run: black --check custom_components/
 
+  docs:
+    name: MkDocs validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - run: pip install mkdocs mkdocs-material "mkdocstrings[python]"
+      - run: mkdocs build --strict
+
   tests:
     name: Unit tests
     runs-on: ubuntu-latest
