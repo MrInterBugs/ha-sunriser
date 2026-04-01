@@ -21,6 +21,31 @@ def _pack(data):
     return msgpack.packb(data, use_bin_type=True)
 
 
+def _chunked_responses(
+    coord: SunRiserCoordinator,
+    keys: list[str],
+    values: dict[str, object],
+    max_body_bytes: int | None = None,
+) -> tuple[list[list[str]], list[dict[str, object]]]:
+    chunks = coord._chunk_config_keys(keys, max_body_bytes=max_body_bytes)
+    return chunks, [{k: values.get(k) for k in chunk} for chunk in chunks]
+
+
+def _pwm_refresh_keys(coord: SunRiserCoordinator) -> list[str]:
+    keys = [f"pwm#{i}#color" for i in range(1, coord.pwm_count + 1)]
+    for i in range(1, coord.pwm_count + 1):
+        if not coord.pwm_is_unused(i):
+            keys.extend(
+                [
+                    f"pwm#{i}#onoff",
+                    f"pwm#{i}#name",
+                    f"pwm#{i}#manager",
+                    f"pwm#{i}#fixed",
+                ]
+            )
+    return keys
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -268,19 +293,44 @@ async def test_update_data_pwm_config_tick(coord):
     assert coord._next_refresh_index == 0
 
 
-async def test_async_get_config_chunks_large_requests(coord):
-    """async_get_config splits >25-key requests into multiple POST calls."""
+def test_chunk_config_keys_respects_body_limit(coord):
+    """Config key chunks stay within the configured msgpack body size limit."""
     keys = [f"key#{i}" for i in range(30)]
-    chunk1 = {k: f"val_{k}" for k in keys[:25]}
-    chunk2 = {k: f"val_{k}" for k in keys[25:]}
+    limit = 70
+
+    chunks = coord._chunk_config_keys(keys, max_body_bytes=limit)
+
+    assert len(chunks) > 1
+    assert [key for chunk in chunks for key in chunk] == keys
+    assert all(len(_pack(chunk)) <= limit for chunk in chunks)
+
+
+def test_chunk_config_keys_empty_returns_no_chunks(coord):
+    """Empty key lists should not produce any request chunks."""
+    assert coord._chunk_config_keys([]) == []
+
+
+async def test_async_get_config_chunks_large_requests(coord):
+    """async_get_config splits requests when the msgpack body exceeds the limit."""
+    keys = [f"key#{i}" for i in range(30)]
+    limit = 70
+    expected = {k: f"val_{k}" for k in keys}
+    chunks, responses = _chunked_responses(
+        coord, keys, expected, max_body_bytes=limit
+    )
+    coord._MAX_CONFIG_REQUEST_BODY_BYTES = limit
 
     with aioresponses() as m:
-        m.post(f"{BASE}/", body=_pack(chunk1))
-        m.post(f"{BASE}/", body=_pack(chunk2))
+        for response in responses:
+            m.post(f"{BASE}/", body=_pack(response))
         result = await coord.async_get_config(keys)
 
-    assert result == {**chunk1, **chunk2}
-    assert len(m.requests[("POST", URL(f"{BASE}/"))]) == 2
+    assert result == expected
+    assert len(m.requests[("POST", URL(f"{BASE}/"))]) == len(chunks)
+    assert all(
+        len(req.kwargs["data"]) <= limit
+        for req in m.requests[("POST", URL(f"{BASE}/"))]
+    )
 
 
 async def test_update_data_pwm_config_tick_failure_returns_stale(coord, caplog):
@@ -301,10 +351,11 @@ async def test_update_data_pwm_config_tick_failure_returns_stale(coord, caplog):
 
 
 async def test_pwm_config_refresh_drains_one_chunk_per_tick(coord):
-    """When the key list exceeds 25, each tick sends exactly one chunk."""
+    """When the key list exceeds the byte limit, each tick sends exactly one chunk."""
     coord._init_step = 4
     coord.data = {**FAKE_STATE, "ok": True, "weather": []}
-    # 10 active channels → 10 colors + 10×4 = 50 keys → 2 chunks (25 + 25).
+    limit = 250
+    coord._MAX_CONFIG_REQUEST_BODY_BYTES = limit
     coord.config = {
         **FAKE_CONFIG,
         "pwm_count": 10,
@@ -322,21 +373,19 @@ async def test_pwm_config_refresh_drains_one_chunk_per_tick(coord):
         for i in range(1, 11)
         for k in ("onoff", "name", "manager", "fixed")
     ]
-    chunk1 = {k: coord.config.get(k) for k in keys[:25]}
-    chunk2 = {k: coord.config.get(k) for k in keys[25:]}
+    chunks, responses = _chunked_responses(coord, keys, coord.config, max_body_bytes=limit)
 
-    # Tick 1: enqueue fires, first chunk sent, one chunk still pending.
-    with aioresponses() as m:
-        m.post(f"{BASE}/", body=_pack(chunk1))
-        data1 = await coord._async_update_data()
+    assert len(chunks) > 1
 
-    assert len(coord._pending_refresh_chunks) == 1
-    assert data1 is coord.data  # same object — no listener notification yet
+    for idx, response in enumerate(responses, start=1):
+        with aioresponses() as m:
+            m.post(f"{BASE}/", body=_pack(response))
+            data = await coord._async_update_data()
 
-    # Tick 2: second (final) chunk sent, config applied.
-    with aioresponses() as m:
-        m.post(f"{BASE}/", body=_pack(chunk2))
-        await coord._async_update_data()
+        remaining = len(chunks) - idx
+        assert len(coord._pending_refresh_chunks) == remaining
+        if remaining:
+            assert data is coord.data  # no listener notification until final chunk
 
     assert len(coord._pending_refresh_chunks) == 0
     assert coord._next_refresh_index == 0  # state/weather not advanced during drain
@@ -352,17 +401,13 @@ async def test_update_data_fetches_new_sensor_config(coord):
     # State tick: new ROM queued, no second POST fired
     with aioresponses() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
-        await coord._async_update_data()
+        coord.data = await coord._async_update_data()
 
     assert "sensors#sensor#AABBCCDDEEFF#name" in coord._pending_config_keys
     assert "sensors#sensor#AABBCCDDEEFF#name" not in coord.config
 
-    # pwm_config tick: queued sensor keys batched into the single PWM config POST
-    pwm_keys = [
-        f"pwm#{i}#{k}"
-        for i in range(1, 9)
-        for k in ("color", "onoff", "name", "manager", "fixed")
-    ]
+    # pwm_config tick(s): queued sensor keys are drained via PWM config POST chunks
+    pwm_keys = _pwm_refresh_keys(coord)
     fresh = {k: coord.config.get(k) for k in pwm_keys}
     fresh.update(
         {
@@ -372,9 +417,16 @@ async def test_update_data_fetches_new_sensor_config(coord):
         }
     )
     coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
-    with aioresponses() as m:
-        m.post(f"{BASE}/", body=_pack(fresh))
-        await coord._async_update_data()
+    keys = pwm_keys + [
+        "sensors#sensor#AABBCCDDEEFF#name",
+        "sensors#sensor#AABBCCDDEEFF#unit",
+        "sensors#sensor#AABBCCDDEEFF#unitcomma",
+    ]
+    _, responses = _chunked_responses(coord, keys, fresh)
+    for response in responses:
+        with aioresponses() as m:
+            m.post(f"{BASE}/", body=_pack(response))
+            coord.data = await coord._async_update_data()
 
     assert coord.config["sensors#sensor#AABBCCDDEEFF#name"] == "Water Temp"
     assert "sensors#sensor#AABBCCDDEEFF#name" not in coord._pending_config_keys
@@ -857,18 +909,17 @@ async def test_update_data_fetches_new_weather_program_names(coord):
     assert "weather#setup#7#name" in coord._pending_config_keys
     assert "weather#setup#7#name" not in coord.config
 
-    # pwm_config tick: queued key batched into the single PWM config POST
-    pwm_keys = [
-        f"pwm#{i}#{k}"
-        for i in range(1, 9)
-        for k in ("color", "onoff", "name", "manager", "fixed")
-    ]
+    # pwm_config tick(s): queued key is drained via PWM config POST chunks
+    pwm_keys = _pwm_refresh_keys(coord)
     fresh = {k: coord.config.get(k) for k in pwm_keys}
     fresh["weather#setup#7#name"] = "Storm Program"
     coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
-    with aioresponses() as m:
-        m.post(f"{BASE}/", body=_pack(fresh))
-        await coord._async_update_data()
+    keys = pwm_keys + ["weather#setup#7#name"]
+    _, responses = _chunked_responses(coord, keys, fresh)
+    for response in responses:
+        with aioresponses() as m:
+            m.post(f"{BASE}/", body=_pack(response))
+            await coord._async_update_data()
 
     assert coord.config["weather#setup#7#name"] == "Storm Program"
     assert "weather#setup#7#name" not in coord._pending_config_keys

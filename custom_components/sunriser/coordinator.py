@@ -44,6 +44,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator that polls /state and holds device config."""
 
     _REFRESH_SEQUENCE = ("state", "weather")
+    _MAX_CONFIG_REQUEST_BODY_BYTES = 450
     # How many normal ticks between PWM config refreshes.  Each tick is one HTTP
     # request; the WizFi360 TCP stack becomes unresponsive if POST / (the config
     # read endpoint) fires too frequently.  60 ticks ≈ 30 min at the default 30 s
@@ -154,21 +155,49 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     dict[str, Any], msgpack.unpackb(await resp.read(), raw=False)
                 )
 
+    def _chunk_config_keys(
+        self, keys: list[str], max_body_bytes: int | None = None
+    ) -> list[list[str]]:
+        """Split config key reads into msgpack bodies no larger than max_body_bytes.
+
+        The limit applies to the msgpack request body only, not HTTP headers.
+        If a single key exceeds the limit by itself, it is sent alone so the
+        caller can still attempt the request instead of failing locally.
+        """
+        if not keys:
+            return []
+
+        limit = max_body_bytes or self._MAX_CONFIG_REQUEST_BODY_BYTES
+        chunks: list[list[str]] = []
+        current: list[str] = []
+
+        for key in keys:
+            trial = current + [key]
+            if current and len(msgpack.packb(trial, use_bin_type=True)) > limit:
+                chunks.append(current)
+                current = [key]
+            else:
+                current = trial
+
+        if current:
+            chunks.append(current)
+
+        return chunks
+
     async def async_get_config(self, keys: list[str]) -> dict[str, Any]:
-        """POST / — read config values, chunking to avoid AT+IPD overflow.
+        """POST / — read config values, chunking by msgpack body size.
 
         The WizFi360 delivers incoming TCP data via AT+IPD events.  When the
-        request body exceeds the module's buffer (~500–600 bytes this is a best guess) the payload is split across two AT+IPD events and the MCU firmware misparses the second chunk as additional msgpack array elements, causing
-        '!!! element N is not msgpack str' errors and eventual watchdog resets.
-        Keeping each batch ≤ 25 keys (~300–400 bytes total) stays well inside
-        one AT+IPD delivery.
+        request body exceeds the module's buffer (~500–600 bytes this is a best
+        guess) the payload is split across two AT+IPD events and the MCU
+        firmware misparses the second chunk as additional msgpack array
+        elements, causing '!!! element N is not msgpack str' errors and
+        eventual watchdog resets. Keeping each msgpack body at or below
+        _MAX_CONFIG_REQUEST_BODY_BYTES stays safely inside one AT+IPD delivery.
         """
-        _CHUNK = 25
-        if len(keys) <= _CHUNK:
-            return await self._async_get_config_raw(keys)
         result: dict[str, Any] = {}
-        for i in range(0, len(keys), _CHUNK):
-            result.update(await self._async_get_config_raw(keys[i : i + _CHUNK]))
+        for chunk in self._chunk_config_keys(keys):
+            result.update(await self._async_get_config_raw(chunk))
         return result
 
     async def async_set_config(self, params: dict[str, Any]) -> None:
@@ -607,9 +636,10 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         four detail keys only for currently-active channels.  Also drains
         _pending_config_keys (new sensor ROMs, weather program names).
 
-        The full list is split into ≤ 25-key chunks; _async_update_data drains
-        one chunk per tick so the one-request-per-tick contract is preserved
-        even when the key list is too large for a single AT+IPD delivery.
+        The full list is split into msgpack bodies no larger than
+        _MAX_CONFIG_REQUEST_BODY_BYTES; _async_update_data drains one chunk per
+        tick so the one-request-per-tick contract is preserved even when the
+        key list is too large for a single AT+IPD delivery.
         """
         pwm_count = self.config.get("pwm_count") or 8
         keys: list[str] = []
@@ -626,10 +656,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         pending = list(self._pending_config_keys)
         self._pending_config_keys.difference_update(pending)
         keys += pending
-        _CHUNK = 25
-        self._pending_refresh_chunks = [
-            keys[i : i + _CHUNK] for i in range(0, len(keys), _CHUNK)
-        ]
+        self._pending_refresh_chunks = self._chunk_config_keys(keys)
         self._refresh_accumulator = {}
 
     async def _async_drain_one_refresh_chunk(self) -> dict[str, Any]:
@@ -776,9 +803,9 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # ── Normal round-robin ──────────────────────────────────────────────────
         # Every _PWM_CONFIG_INTERVAL ticks enqueue a PWM config refresh.
-        # _enqueue_pwm_refresh splits the key list into ≤ 25-key chunks;
-        # _async_drain_one_refresh_chunk sends exactly one chunk per tick so
-        # the one-request-per-tick contract is never broken.
+        # _enqueue_pwm_refresh splits the key list into byte-sized chunks;
+        # _async_drain_one_refresh_chunk sends exactly one chunk per tick so the
+        # one-request-per-tick contract is never broken.
         self._ticks_since_pwm_refresh += 1
         if self._ticks_since_pwm_refresh >= self._PWM_CONFIG_INTERVAL:
             self._ticks_since_pwm_refresh = 0
