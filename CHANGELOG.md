@@ -6,6 +6,54 @@
 
 - Merged branch `dst-timelapse-modes-beta` into main to introduce day light saving time syncing as the controller is dumb when it comes to knowing if it should be on or off. Also includes a time lapse switch to enable or disable the time lapse feature of the controller.
 
+## [1.6.3-dynamic-stale-devices-beta.7] - 2026-03-30
+
+### Changed
+
+- **Queue PWM config refresh chunks, drain one per tick** — replaced `async_refresh_pwm_config` with `_enqueue_pwm_refresh` + `_async_drain_one_refresh_chunk`. The full key list is split into ≤ 25-key chunks at enqueue time; each coordinator tick drains exactly one chunk, preserving the one-request-per-tick contract even when the key list spans multiple batches. Listener notification is deferred until the final chunk is applied.
+
+## [1.6.3-dynamic-stale-devices-beta.6] - 2026-03-30
+
+### Fixed
+
+- **Chunk large config requests to ≤ 25 keys per POST** to avoid overflowing the WizFi360 AT+IPD buffer. Requests larger than ~600 bytes were being split across two AT+IPD events; the MCU firmware misread the second chunk as additional msgpack array elements, producing `!!! element N is not msgpack str` errors and eventual watchdog resets.
+- **Reset PWM config refresh counter on device recovery** so the large batch refresh does not fire on the first tick immediately after a reboot, preventing cascading watchdog crashes.
+
+## [1.6.3-dynamic-stale-devices-beta.5] - 2026-03-30
+
+### Fixed
+
+- **Only signal listeners when config actually changed** so the _check_entities callbacks in each platform don't run every tick.
+
+## [1.6.3-dynamic-stale-devices-beta.4] - 2026-03-29
+
+### Changed
+
+- **Merged latest `main` into this beta line** — brings in the time-lapse switch, DST auto-track switch, device-name fallback to model, and the missing translation strings fix while keeping the dynamic entity polling changes from this branch
+
+## [1.6.3-dynamic-stale-devices-beta.3] - 2026-03-29
+
+### Tests
+
+- Updated coordinator tests to reflect the new pwm_config tick trigger (`_ticks_since_pwm_refresh` counter instead of `_next_refresh_index = 2`); sensor and weather program name fetch tests rewritten as two-tick scenarios (state/weather tick queues keys, pwm_config tick drains them)
+
+## [1.6.3-dynamic-stale-devices-beta.2] - 2026-03-29
+
+### Fixed
+
+- **Device instability with dynamic entities** — the `pwm_config` slot was added to `_REFRESH_SEQUENCE` in beta.1, which caused the WizFi360 TCP stack to become unresponsive for ~30-minute periods. The sequence is reverted to `(state, weather)` and PWM config is instead refreshed every 60 ticks (~30 min at the default 30 s interval), replacing one normal tick rather than adding an extra request
+- **No more double requests per tick** — new DS1820 sensor ROMs and weather program names discovered during state/weather ticks are now queued in `_pending_config_keys` and fetched in bulk on the next pwm_config tick, so no tick ever makes two back-to-back HTTP requests
+
+## [1.6.3-dynamic-stale-devices-beta.1] - 2026-03-28
+
+### Added
+
+- **Dynamic entity add/remove** — PWM light, switch, number, and select entities are now added and removed at runtime when channels are activated or deactivated on the device, without requiring a full integration reload; DS1820 temperature sensors are also added dynamically as new probes appear
+
+### Changed
+
+- **Staggered polling — one request per tick** — the coordinator round-robin now cycles through three slots (`state → weather → pwm_config`) so every poll tick sends exactly one HTTP request; previously the state tick fired a second `POST /` to re-check PWM config in the same interval, which could race the WizFi360 TCP teardown window
+
 ## [1.6.3-dst-timelapse-modes-beta.3] - 2026-03-29
 
 ### Fixed
