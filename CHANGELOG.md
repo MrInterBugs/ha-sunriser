@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.4-dynamic-stale-devices-beta.1] - 2026-04-01
+
+### Changed
+
+- **Chunk config POST bodies by size instead of key count** — config read requests are now split by msgpack body size with a 450-byte cap, keeping batching tunable and better aligned with the WizFi360 buffer limits than the previous fixed 25-key chunks.
+
 ## [1.6.3] - 2026-03-31
 
 ### Changed
