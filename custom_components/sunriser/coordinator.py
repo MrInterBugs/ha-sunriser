@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import timedelta
+from collections.abc import Callable
+from datetime import datetime, timedelta
 
 import aiohttp
 import msgpack
@@ -12,9 +13,10 @@ from typing import Any, TypedDict, cast
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.issue_registry import (
     IssueSeverity,
     async_create_issue,
@@ -24,8 +26,11 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .const import (
     COLOR_NAMES,
+    CONF_REBOOT_TIME,
     CONF_SCAN_INTERVAL,
+    CONF_SCHEDULED_REBOOT,
     DEFAULT_PORT,
+    DEFAULT_REBOOT_TIME,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MANAGER_OPTIONS,
@@ -47,10 +52,10 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     _MAX_CONFIG_REQUEST_BODY_BYTES = 450
     # How many normal ticks between PWM config refreshes.  Each tick is one HTTP
     # request; the WizFi360 TCP stack becomes unresponsive if POST / (the config
-    # read endpoint) fires too frequently.  60 ticks ≈ 30 min at the default 30 s
+    # read endpoint) fires too frequently.  240 ticks ≈ 4 h at the default 60 s
     # scan interval — frequent enough to detect channel changes within a session,
     # rare enough not to stress the WiFi module.
-    _PWM_CONFIG_INTERVAL = 60
+    _PWM_CONFIG_INTERVAL = 240
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
@@ -95,6 +100,9 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_known_dst: bool | None = None
         self._dst_sync_pending: bool = False
 
+        self._scheduled_reboot_cancel: Callable[[], None] | None = None
+        self._setup_scheduled_reboot(entry)
+
     @property
     def base_url(self) -> str:
         return f"http://{self.host}:{self.port}"
@@ -127,8 +135,39 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def async_close(self) -> None:
         """Close the dedicated HTTP session, if one was created."""
+        if self._scheduled_reboot_cancel is not None:
+            self._scheduled_reboot_cancel()
+            self._scheduled_reboot_cancel = None
         if self._session and not self._session.closed:
             await self._session.close()
+
+    def _setup_scheduled_reboot(self, entry: ConfigEntry) -> None:
+        """Register a daily time-based reboot if enabled in options."""
+        if not entry.options.get(CONF_SCHEDULED_REBOOT, True):
+            return
+        time_str = entry.options.get(CONF_REBOOT_TIME, DEFAULT_REBOOT_TIME)
+        try:
+            hour, minute = (int(p) for p in time_str.split(":"))
+        except (ValueError, AttributeError):
+            _LOGGER.warning(
+                "SunRiser: invalid scheduled reboot time %r — skipping", time_str
+            )
+            return
+
+        @callback
+        def _trigger(_now: datetime) -> None:
+            _LOGGER.info("SunRiser: scheduled reboot at %s", time_str)
+            self.hass.async_create_task(self._async_do_scheduled_reboot())
+
+        self._scheduled_reboot_cancel = async_track_time_change(
+            self.hass, _trigger, hour=hour, minute=minute, second=0
+        )
+
+    async def _async_do_scheduled_reboot(self) -> None:
+        try:
+            await self.async_reboot()
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("SunRiser: scheduled reboot failed: %s", err)
 
     @property
     def init_complete(self) -> bool:

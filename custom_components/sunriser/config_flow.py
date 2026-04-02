@@ -17,7 +17,15 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import callback
 
-from .const import CONF_SCAN_INTERVAL, DEFAULT_PORT, DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import (
+    CONF_REBOOT_TIME,
+    CONF_SCAN_INTERVAL,
+    CONF_SCHEDULED_REBOOT,
+    DEFAULT_PORT,
+    DEFAULT_REBOOT_TIME,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -176,11 +184,25 @@ class SunRiserOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+
         if user_input is not None:
-            return self.async_create_entry(data=user_input)
+            reboot_time = user_input.get(CONF_REBOOT_TIME, DEFAULT_REBOOT_TIME)
+            try:
+                hour, minute = (int(p) for p in reboot_time.split(":"))
+                if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                    raise ValueError
+            except (ValueError, AttributeError):
+                errors[CONF_REBOOT_TIME] = "invalid_time"
+            if not errors:
+                return self.async_create_entry(data=user_input)
 
         current_interval = self._entry.options.get(
             CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+        )
+        current_reboot_enabled = self._entry.options.get(CONF_SCHEDULED_REBOOT, True)
+        current_reboot_time = self._entry.options.get(
+            CONF_REBOOT_TIME, DEFAULT_REBOOT_TIME
         )
         return self.async_show_form(
             step_id="init",
@@ -189,6 +211,11 @@ class SunRiserOptionsFlow(OptionsFlow):
                     vol.Optional(CONF_SCAN_INTERVAL, default=current_interval): vol.All(
                         int, vol.Range(min=5, max=3600)
                     ),
+                    vol.Optional(
+                        CONF_SCHEDULED_REBOOT, default=current_reboot_enabled
+                    ): bool,
+                    vol.Optional(CONF_REBOOT_TIME, default=current_reboot_time): str,
                 }
             ),
+            errors=errors,
         )

@@ -1408,3 +1408,194 @@ async def test_async_set_weekplanner_missing_days_default_to_zero(coord):
         m.requests[("PUT", URL(f"{BASE}/"))][0].kwargs["data"], raw=False
     )
     assert sent["weekplanner#programs#1"] == [0, 3, 0, 0, 0, 0, 0, 0]
+
+
+# ---------------------------------------------------------------------------
+# Scheduled reboot
+# ---------------------------------------------------------------------------
+
+
+async def test_scheduled_reboot_disabled_skips_setup(hass):
+    """When CONF_SCHEDULED_REBOOT=False, no time-change listener is registered."""
+    from homeassistant.const import CONF_HOST, CONF_PORT
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.sunriser.const import (
+        CONF_SCHEDULED_REBOOT,
+        DEFAULT_PORT,
+        DOMAIN,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="reboot_test",
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
+        options={CONF_SCHEDULED_REBOOT: False},
+    )
+    coord = SunRiserCoordinator(hass, entry)
+    try:
+        assert coord._scheduled_reboot_cancel is None
+    finally:
+        await coord.async_close()
+
+
+async def test_scheduled_reboot_invalid_time_logs_warning(hass, caplog):
+    """An unparseable reboot time logs a warning and leaves cancel as None."""
+    from homeassistant.const import CONF_HOST, CONF_PORT
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.sunriser.const import (
+        CONF_REBOOT_TIME,
+        CONF_SCHEDULED_REBOOT,
+        DEFAULT_PORT,
+        DOMAIN,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="reboot_test2",
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
+        options={CONF_SCHEDULED_REBOOT: True, CONF_REBOOT_TIME: "not-a-time"},
+    )
+    with caplog.at_level(logging.WARNING, logger="custom_components.sunriser"):
+        coord = SunRiserCoordinator(hass, entry)
+    try:
+        assert coord._scheduled_reboot_cancel is None
+        assert "invalid scheduled reboot time" in caplog.text
+    finally:
+        await coord.async_close()
+
+
+async def test_scheduled_reboot_trigger_fires_on_time_event(hass):
+    """The _trigger callback creates a task that eventually calls async_reboot."""
+    from homeassistant.const import CONF_HOST, CONF_PORT
+    from unittest.mock import AsyncMock, patch
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.sunriser.const import (
+        CONF_REBOOT_TIME,
+        CONF_SCHEDULED_REBOOT,
+        DEFAULT_PORT,
+        DOMAIN,
+    )
+    from datetime import datetime
+    from homeassistant.helpers.event import async_track_time_change
+
+    captured_trigger = None
+
+    def mock_track(hass_arg, action, **kwargs):
+        nonlocal captured_trigger
+        captured_trigger = action
+        return lambda: None  # return a no-op cancel
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="reboot_test3",
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
+        options={CONF_SCHEDULED_REBOOT: True, CONF_REBOOT_TIME: "04:00"},
+    )
+    with patch(
+        "custom_components.sunriser.coordinator.async_track_time_change", mock_track
+    ):
+        coord = SunRiserCoordinator(hass, entry)
+
+    try:
+        assert captured_trigger is not None
+
+        reboot_mock = AsyncMock()
+        coord.async_reboot = reboot_mock
+
+        # Invoke the trigger callback directly (as HA would at 04:00:00)
+        captured_trigger(datetime(2026, 1, 1, 4, 0, 0))
+        await hass.async_block_till_done()
+
+        reboot_mock.assert_called_once()
+    finally:
+        await coord.async_close()
+
+
+async def test_scheduled_reboot_trigger_calls_reboot(hass):
+    """_async_do_scheduled_reboot calls async_reboot."""
+    from homeassistant.const import CONF_HOST, CONF_PORT
+    from unittest.mock import AsyncMock
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.sunriser.const import (
+        CONF_REBOOT_TIME,
+        CONF_SCHEDULED_REBOOT,
+        DEFAULT_PORT,
+        DOMAIN,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="reboot_test3b",
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
+        options={CONF_SCHEDULED_REBOOT: True, CONF_REBOOT_TIME: "04:00"},
+    )
+    coord = SunRiserCoordinator(hass, entry)
+    try:
+        reboot_mock = AsyncMock()
+        coord.async_reboot = reboot_mock
+
+        await coord._async_do_scheduled_reboot()
+
+        reboot_mock.assert_called_once()
+    finally:
+        await coord.async_close()
+
+
+async def test_scheduled_reboot_failure_is_logged(hass, caplog):
+    """If async_reboot raises, the error is logged and does not propagate."""
+    from homeassistant.const import CONF_HOST, CONF_PORT
+    from unittest.mock import AsyncMock
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.sunriser.const import (
+        CONF_REBOOT_TIME,
+        CONF_SCHEDULED_REBOOT,
+        DEFAULT_PORT,
+        DOMAIN,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="reboot_test4",
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
+        options={CONF_SCHEDULED_REBOOT: True, CONF_REBOOT_TIME: "04:00"},
+    )
+    coord = SunRiserCoordinator(hass, entry)
+    try:
+        coord.async_reboot = AsyncMock(side_effect=RuntimeError("device offline"))
+
+        with caplog.at_level(logging.ERROR, logger="custom_components.sunriser"):
+            await coord._async_do_scheduled_reboot()
+
+        assert "scheduled reboot failed" in caplog.text
+    finally:
+        await coord.async_close()
+
+
+async def test_async_close_cancels_scheduled_reboot(hass):
+    """async_close calls the cancel callable and clears _scheduled_reboot_cancel."""
+    from homeassistant.const import CONF_HOST, CONF_PORT
+    from unittest.mock import MagicMock
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.sunriser.const import (
+        CONF_REBOOT_TIME,
+        CONF_SCHEDULED_REBOOT,
+        DEFAULT_PORT,
+        DOMAIN,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="reboot_test5",
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
+        options={CONF_SCHEDULED_REBOOT: True, CONF_REBOOT_TIME: "04:00"},
+    )
+    coord = SunRiserCoordinator(hass, entry)
+    assert coord._scheduled_reboot_cancel is not None
+
+    cancel_mock = MagicMock()
+    coord._scheduled_reboot_cancel = cancel_mock
+
+    await coord.async_close()
+
+    cancel_mock.assert_called_once()
+    assert coord._scheduled_reboot_cancel is None

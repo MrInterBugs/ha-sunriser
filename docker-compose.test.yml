@@ -1,0 +1,30 @@
+x-ci-build: &ci-build
+  build:
+    context: .
+    dockerfile: Dockerfile.test
+
+services:
+  tests:
+    <<: *ci-build
+    volumes:
+      - ./custom_components:/app/custom_components
+      - ./tests:/app/tests
+
+  lint:
+    <<: *ci-build
+    command: ["black", "--check", "custom_components/"]
+    volumes:
+      - ./custom_components:/app/custom_components
+
+  mypy:
+    <<: *ci-build
+    command: ["mypy", "--strict", "--ignore-missing-imports", "custom_components/sunriser/"]
+    volumes:
+      - ./custom_components:/app/custom_components
+
+  docs:
+    <<: *ci-build
+    command: ["mkdocs", "build", "--strict"]
+    volumes:
+      - ./docs:/app/docs
+      - ./mkdocs.yml:/app/mkdocs.yml
