@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.6.4-dynamic-stale-devices-beta.2] - 2026-04-02
+
+### Added
+
+- **Scheduled daily reboot** — a user-configurable time (default 04:00) at which the coordinator automatically reboots the device, reducing the risk of the WizFi360 accumulating temp files and crashing. Enabled by default; can be disabled or rescheduled via the options flow.
+
+### Changed
+
+- **Default scan interval raised to 60 s** (was 30 s) to halve the HTTP request rate against the WizFi360 and reduce the chance of buffer-overflow crashes.
+- **PWM config refresh interval raised to 4 h** (240 ticks at 60 s) from 30 min, reducing the frequency of large config POST requests that stress the WiFi module.
+
+### Internal
+
+- Dockerised CI: all six validate.yaml stages (tests, lint, mypy, docs, HACS, hassfest) now run via `docker compose -f docker-compose.test.yml`.
+
 ## [1.6.4-dynamic-stale-devices-beta.1] - 2026-04-01
 
 ### Changed
