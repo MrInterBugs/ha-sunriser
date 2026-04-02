@@ -13,7 +13,7 @@
 
 ### Internal
 
-- Dockerised CI: all six validate.yaml stages (tests, lint, mypy, docs, HACS, hassfest) now run via `docker compose -f docker-compose.test.yml`.
+- Dockerised CI: all six validate.yaml stages (tests, lint, mypy, docs) now run via `docker compose -f docker-compose.test.yml`.
 
 ## [1.6.4-dynamic-stale-devices-beta.1] - 2026-04-01
 
