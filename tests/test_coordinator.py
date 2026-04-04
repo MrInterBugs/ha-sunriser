@@ -119,7 +119,7 @@ async def test_init_step_1_derives_pwm_count_from_state_when_config_is_none(coor
 
 
 async def test_init_step_2_fetches_pwm_and_sensor_config(coord):
-    """Tick 2 fetches PWM config and any pending sensor config in one POST."""
+    """Tick 2 fetches PWM config one chunk per tick; single chunk case advances to step 3."""
     coord._init_step = 2
     coord.config["pwm_count"] = 1
     coord._pending_sensor_roms = ["AABBCC"]
@@ -150,6 +150,68 @@ async def test_init_step_2_fetches_pwm_and_sensor_config(coord):
     assert coord.config["pwm#1#color"] == "4500k"
     assert coord.config["sensors#sensor#AABBCC#name"] == "Tank Temp"
     assert coord._init_step == 3
+
+
+async def test_init_step_2_multi_chunk_drains_one_per_tick(coord):
+    """When PWM config spans multiple chunks, each tick drains exactly one request.
+
+    This verifies the one-request-per-tick contract during init: the WizFi360
+    needs a full scan interval between TCP connections or AT+IPD corruption occurs.
+    """
+    coord._init_step = 2
+    coord.config["pwm_count"] = 2
+    coord._pending_sensor_roms = []
+    coord.data = {"pwms": {"1": 0, "2": 0}, "uptime": 5, "ok": True, "weather": []}
+
+    # Force small chunks so 2 channels produce multiple POST requests.
+    coord._MAX_CONFIG_REQUEST_BODY_BYTES = 80
+
+    keys = []
+    for i in range(1, 3):
+        keys += [
+            f"pwm#{i}#name",
+            f"pwm#{i}#onoff",
+            f"pwm#{i}#max",
+            f"pwm#{i}#color",
+            f"pwm#{i}#manager",
+            f"pwm#{i}#fixed",
+            f"dayplanner#marker#{i}",
+        ]
+    chunks = coord._chunk_config_keys(keys)
+    assert len(chunks) > 1, "test requires multiple chunks — reduce _MAX_CONFIG_REQUEST_BODY_BYTES"
+
+    all_values = {
+        "pwm#1#name": None,
+        "pwm#1#onoff": False,
+        "pwm#1#max": None,
+        "pwm#1#color": "4500k",
+        "pwm#1#manager": 0,
+        "pwm#1#fixed": None,
+        "dayplanner#marker#1": None,
+        "pwm#2#name": None,
+        "pwm#2#onoff": False,
+        "pwm#2#max": None,
+        "pwm#2#color": "",
+        "pwm#2#manager": 0,
+        "pwm#2#fixed": None,
+        "dayplanner#marker#2": None,
+    }
+
+    with aioresponses() as m:
+        for chunk in chunks:
+            m.post(f"{BASE}/", body=_pack({k: all_values[k] for k in chunk}))
+
+        # All but the last chunk: stay at step 2, one request per tick.
+        for _ in range(len(chunks) - 1):
+            await coord._async_update_data()
+            assert coord._init_step == 2
+
+        # Final chunk: advance to step 3.
+        await coord._async_update_data()
+
+    assert coord._init_step == 3
+    assert coord.config["pwm#1#color"] == "4500k"
+    assert coord.config["pwm#2#color"] == ""
 
 
 async def test_init_step_3_fetches_weather(coord):

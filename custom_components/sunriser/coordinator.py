@@ -619,30 +619,51 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return data
 
     async def _async_init_pwm_config(self) -> dict[str, Any]:
-        """Init tick 2 — fetch PWM config and any sensor config discovered in tick 1.
+        """Init tick 2 — fetch PWM config and any sensor config, one chunk per tick.
 
-        Both key sets are batched into a single POST request.
+        On the first call builds the key list and queues all chunks into
+        _pending_refresh_chunks.  Each subsequent call (still at _init_step == 2)
+        drains one chunk.  When the final chunk is applied, advances _init_step to 3.
+
+        This preserves the one-request-per-tick contract: the WizFi360 TCP stack
+        needs a full scan interval to tear down one TCP session before the next
+        connection arrives.  Sending all chunks back-to-back in a tight loop
+        triggers WizFi360 AT+IPD corruption and eventual watchdog resets.
         """
-        pwm_count = self.config.get("pwm_count") or 8
-        keys: list[str] = []
-        for i in range(1, pwm_count + 1):
-            keys += [
-                f"pwm#{i}#name",
-                f"pwm#{i}#onoff",
-                f"pwm#{i}#max",
-                f"pwm#{i}#color",
-                f"pwm#{i}#manager",
-                f"pwm#{i}#fixed",
-                f"dayplanner#marker#{i}",
-            ]
-        for rom in self._pending_sensor_roms:
-            keys += [
-                f"sensors#sensor#{rom}#name",
-                f"sensors#sensor#{rom}#unit",
-                f"sensors#sensor#{rom}#unitcomma",
-            ]
-        config = await self.async_get_config(keys)
-        self.config.update(config)
+        if not self._pending_refresh_chunks:
+            # First call — build key list and stage all chunks.
+            pwm_count = self.config.get("pwm_count") or 8
+            keys: list[str] = []
+            for i in range(1, pwm_count + 1):
+                keys += [
+                    f"pwm#{i}#name",
+                    f"pwm#{i}#onoff",
+                    f"pwm#{i}#max",
+                    f"pwm#{i}#color",
+                    f"pwm#{i}#manager",
+                    f"pwm#{i}#fixed",
+                    f"dayplanner#marker#{i}",
+                ]
+            for rom in self._pending_sensor_roms:
+                keys += [
+                    f"sensors#sensor#{rom}#name",
+                    f"sensors#sensor#{rom}#unit",
+                    f"sensors#sensor#{rom}#unitcomma",
+                ]
+            self._pending_refresh_chunks = self._chunk_config_keys(keys)
+            self._refresh_accumulator = {}
+
+        chunk = self._pending_refresh_chunks.pop(0)
+        fresh = await self._async_get_config_raw(chunk)
+        self._refresh_accumulator.update(fresh)
+
+        if self._pending_refresh_chunks:
+            # More chunks queued — stay at init_step 2 until all are done.
+            return dict(self.data) if self.data else {}
+
+        # Final chunk — apply accumulated config and advance.
+        self.config.update(self._refresh_accumulator)
+        self._refresh_accumulator = {}
         self._init_step = 3
         return dict(self.data) if self.data else {}
 
