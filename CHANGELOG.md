@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.4-dynamic-stale-devices-beta.3] - 2026-04-04
+
+### Fixed
+
+- **Drain PWM config chunks one per tick during init** — init tick 2 now queues all PWM/sensor config key chunks into `_pending_refresh_chunks` on the first call, then drains exactly one chunk per tick. This prevents back-to-back TCP connections during startup from triggering WizFi360 AT+IPD corruption and watchdog resets.
+
 ## [1.6.4-dynamic-stale-devices-beta.2] - 2026-04-02
 
 ### Added
