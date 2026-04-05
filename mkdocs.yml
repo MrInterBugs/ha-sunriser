@@ -27,6 +27,11 @@ theme:
     - search.highlight
     - content.code.copy
 
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+
 plugins:
   - search
   - mkdocstrings:
