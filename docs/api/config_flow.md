@@ -13,11 +13,15 @@ The flow tests connectivity before completing — raises an error if the device 
 
 ## Options parameters
 
-| Field | Type | Default | Range | Description |
+| Field | Type | Default | Range / Format | Description |
 |---|---|---|---|---|
-| `scan_interval` | int | `30` | 5–3600 | Poll interval in seconds |
+| `scan_interval` | int | `60` | 5–3600 | Poll interval in seconds |
+| `scheduled_reboot` | bool | `true` | — | Enable a daily automatic reboot |
+| `reboot_time` | string | `04:00` | HH:MM | Time of day to reboot the controller |
 
 Changing options triggers a full config entry reload.
+
+Validation: `reboot_time` must be a valid 24-hour `HH:MM` string (e.g. `04:00`). An `invalid_time` error is shown in the form if the value cannot be parsed.
 
 ## Reference
 

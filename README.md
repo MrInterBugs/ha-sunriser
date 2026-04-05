@@ -13,7 +13,7 @@ A community-made Home Assistant custom integration for the [SunRiser 8/10](https
 - **Button** — **Reboot** button to restart the device directly from HA
 - **Day Planner card** — built-in Lovelace card that renders all active PWM schedules as a 24-hour chart using the same LED colours as the device web UI; registered automatically, no manual setup required; schedule data is cached at startup so page loads never hit the device
 - **Services** — Backup, restore, log retrieval, dayplanner/weekplanner read/write, and factory tools (see [Services](#services) below)
-- **Options** — Configurable poll interval (5–3600 seconds, default 30s) without re-adding the integration
+- **Options** — Configurable poll interval (5–3600 seconds, default 60s) and scheduled daily reboot (default 04:00) without re-adding the integration
 - Auto-discovery of PWM channels and temperature sensors from the device
 - "Visit device" link in the device page opens the SunRiser web UI directly from HA
 
@@ -81,11 +81,13 @@ If your device's IP address changes, go to **Settings → Devices & Services →
 
 After setup, go to **Settings → Devices & Services → SunRiser → Configure** to adjust:
 
-| Option | Description | Range | Default |
-|--------|-------------|-------|---------|
-| Poll interval | How often HA fetches the device state | 5–3600 s | 30 s |
+| Option | Description | Range / Format | Default |
+|--------|-------------|----------------|---------|
+| Poll interval | How often HA fetches the device state | 5–3600 s | 60 s |
+| Scheduled daily reboot | Automatically reboot the controller once a day to prevent firmware instability | on / off | on |
+| Scheduled reboot time | Time of day to reboot (24-hour format) | HH:MM | 04:00 |
 
-Changing the poll interval reloads the integration automatically — no restart required.
+Changing any option reloads the integration automatically — no restart required.
 
 ### Automatic Discovery
 
@@ -164,7 +166,7 @@ This is expected device behaviour. A direct PWM write from HA overrides the runn
 
 ## Notes
 
-- PWM values are polled every 30 seconds by default. Change this under **Settings → Devices & Services → SunRiser → Configure**.
+- Values are polled every 60 seconds by default. Change this under **Settings → Devices & Services → SunRiser → Configure**.
 - Manually setting a PWM brightness from HA overrides the active program for approximately 1 minute, after which the device's own schedule resumes. Use the Manager select entity to switch a channel to `none` for permanent manual control.
 - New temperature sensors discovered after initial setup are added automatically on the next poll — no reload required.
 
