@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.4-dynamic-stale-devices-beta.4] - 2026-04-05
+
+### Fixed
+
+- **DST auto-track state survives reconfigure/options reload** — `_dst_auto_track` is now saved to a `hass.data` bridge on `async_unload_entry` and restored in the coordinator constructor, so the DST switch is not reset to `False` when the integration reloads within the same HA session. HA restarts continue to be handled by `RestoreEntity` via the recorder.
+
 ## [1.6.4-dynamic-stale-devices-beta.3] - 2026-04-04
 
 ### Fixed
