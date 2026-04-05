@@ -324,3 +324,34 @@ async def test_dst_does_not_restore_when_no_last_state(
             await switch.async_added_to_hass()
 
     coordinator.async_set_dst_auto_track.assert_not_awaited()
+
+
+async def test_dst_does_not_restore_when_last_state_unavailable(
+    hass, coordinator, mock_config_entry
+):
+    """async_added_to_hass must not re-enable auto-track when last state is 'unavailable'.
+
+    Same-session reload scenario: the entity transitions to 'unavailable' when
+    the platform is unloaded, so RestoreEntity captures that state.  The
+    hass.data bridge (written by async_unload_entry) handles same-session
+    persistence; RestoreEntity only covers HA restarts.
+    """
+    from homeassistant.const import STATE_UNAVAILABLE
+    from unittest.mock import MagicMock
+
+    coordinator.async_set_dst_auto_track = AsyncMock()
+    switch = _make_dst(coordinator, mock_config_entry)
+
+    last_state = MagicMock()
+    last_state.state = STATE_UNAVAILABLE
+
+    with patch.object(
+        switch, "async_get_last_state", AsyncMock(return_value=last_state)
+    ):
+        with patch(
+            "homeassistant.helpers.update_coordinator.CoordinatorEntity.async_added_to_hass",
+            AsyncMock(),
+        ):
+            await switch.async_added_to_hass()
+
+    coordinator.async_set_dst_auto_track.assert_not_awaited()

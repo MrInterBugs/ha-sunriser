@@ -96,7 +96,13 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # summertime config key to the actual HA timezone DST state.
         # _dst_sync_pending is set when a DST transition is detected; the sync
         # then replaces the next poll tick (one request, no double-request).
-        self._dst_auto_track: bool = False
+        #
+        # Restored from hass.data bridge on same-session reloads (e.g. options
+        # change).  RestoreEntity in switch.py handles HA restarts via recorder.
+        _bridge: dict[str, Any] = hass.data.get(DOMAIN, {})
+        self._dst_auto_track: bool = bool(
+            _bridge.pop(f"{entry.entry_id}_dst_auto_track", False)
+        )
         self._last_known_dst: bool | None = None
         self._dst_sync_pending: bool = False
 

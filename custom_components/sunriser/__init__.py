@@ -199,9 +199,14 @@ async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    coordinator: SunRiserCoordinator = entry.runtime_data
+    # Save in-memory state that must survive a same-session reload (options change,
+    # reconfigure).  RestoreEntity covers HA restarts via the recorder.
+    hass.data.setdefault(DOMAIN, {})[
+        f"{entry.entry_id}_dst_auto_track"
+    ] = coordinator._dst_auto_track
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        coordinator: SunRiserCoordinator = entry.runtime_data
         await coordinator.async_close()
     return unload_ok
 

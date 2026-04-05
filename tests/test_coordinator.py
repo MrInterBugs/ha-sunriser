@@ -61,6 +61,45 @@ async def coord(hass, mock_config_entry):
 
 
 # ---------------------------------------------------------------------------
+# hass.data bridge — DST auto-track survives same-session reloads
+# ---------------------------------------------------------------------------
+
+
+async def test_coordinator_init_restores_dst_auto_track_from_hass_data(
+    hass, mock_config_entry
+):
+    """Constructor reads _dst_auto_track from the hass.data bridge and pops the key."""
+    hass.data[DOMAIN] = {f"{ENTRY_ID}_dst_auto_track": True}
+    coord = SunRiserCoordinator(hass, mock_config_entry)
+    try:
+        assert coord._dst_auto_track is True
+        # Key is consumed so a second construction does not inherit the flag.
+        assert f"{ENTRY_ID}_dst_auto_track" not in hass.data.get(DOMAIN, {})
+    finally:
+        await coord.async_close()
+
+
+async def test_coordinator_init_dst_auto_track_defaults_false(hass, mock_config_entry):
+    """Constructor defaults _dst_auto_track to False when no bridge key is present."""
+    coord = SunRiserCoordinator(hass, mock_config_entry)
+    try:
+        assert coord._dst_auto_track is False
+    finally:
+        await coord.async_close()
+
+
+async def test_coordinator_init_ignores_other_hass_data_keys(hass, mock_config_entry):
+    """Bridge key for a different entry_id is not consumed."""
+    hass.data[DOMAIN] = {"other_entry_id_dst_auto_track": True}
+    coord = SunRiserCoordinator(hass, mock_config_entry)
+    try:
+        assert coord._dst_auto_track is False
+        assert hass.data[DOMAIN]["other_entry_id_dst_auto_track"] is True
+    finally:
+        await coord.async_close()
+
+
+# ---------------------------------------------------------------------------
 # Init state machine (four ticks, one request each)
 # ---------------------------------------------------------------------------
 
