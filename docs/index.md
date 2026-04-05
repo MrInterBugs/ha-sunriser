@@ -7,7 +7,7 @@ This integration was reverse-engineered from the [open-source SunRiser firmware]
 ## Features
 
 - **Light** — Dimmable control (0–100%) for each PWM channel configured as a light
-- **Switch** — On/off control for PWM channels configured as on/off, plus a **Maintenance Mode** switch
+- **Switch** — On/off control for PWM channels configured as on/off, plus a **Maintenance Mode** switch, a **Time-lapse** switch (runs the planner at accelerated speed for testing), and a **DST Auto-track** switch (keeps the device clock in sync with HA timezone DST changes)
 - **Select** — Per-channel manager selector (`none`, `dayplanner`, `weekplanner`, `fixed`) — shows and changes which planner controls each channel
 - **Number** — Per-channel fixed value slider (0–1000) used when the channel manager is set to `fixed`
 - **Sensor** — DS1820 temperature sensors; weather simulation state per channel; diagnostic sensors for Uptime, Firmware Version, and Hostname

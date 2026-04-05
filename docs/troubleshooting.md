@@ -15,7 +15,7 @@ Check that the SunRiser is on the same network as HA and is reachable. Open `htt
 
 **Symptom:** The device is found but no light, switch, number, or select entities are created.
 
-This is expected — entities can take up to two minutes to appear when first adding the device, because the integration staggers its startup requests to avoid overwhelming the SunRiser's single-connection Wi-Fi module.
+This is expected — entities can take up to four minutes to appear when first adding the device (four startup requests, one per poll interval), because the integration staggers its startup requests to avoid overwhelming the SunRiser's single-connection Wi-Fi module.
 
 If entities still don't appear after a few minutes, check that each active PWM channel has a `color` field set in the device config. An empty `color` means the channel is physically unused and the integration will not create an entity for it. Log into the SunRiser web UI, assign a colour to each active channel, and reload the integration. Channels are picked up automatically on the next coordinator poll.
 
