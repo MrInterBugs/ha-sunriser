@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.4-dynamic-stale-devices-beta.5] - 2026-04-06
+
+### Changed
+
+- **Default poll interval reverted to 30 s** (was 60 s) and PWM config refresh interval reverted to 30 min (60 ticks) — real-hardware testing showed the 60 s interval caused missed state transitions; 30 s provides a better balance between responsiveness and WizFi360 stability.
+
+### Docs
+
+- **Full MkDocs site** — README content migrated into structured pages (Installation, Configuration, Services, Troubleshooting); all values (port, poll interval, PWM max, init time, reboot time) are now pulled dynamically from `const.py` and `coordinator.py` so the docs are always in sync with the code.
+- **Accuracy audit** — all user-facing docs cross-checked against source; corrected undocumented Maintenance Mode, Time-lapse, and DST Auto-track switches; fixed disabled-by-default entity list; corrected service response shapes.
+- **Docker docs preview** — `Dockerfile.docs` added; run `docker build -f Dockerfile.docs -t sunriser-docs . && docker run -p 8000:8000 sunriser-docs` to preview locally.
+- **CI docs validation** — validate workflow now builds the MkDocs site with `--strict` on every push; deploy workflow publishes to GitHub Pages on `main`.
+
 ## [1.6.4-dynamic-stale-devices-beta.4] - 2026-04-05
 
 ### Fixed
