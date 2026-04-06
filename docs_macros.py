@@ -46,13 +46,18 @@ def define_env(env):
     ).read_text()
 
     pwm_config_interval = _parse_int("_PWM_CONFIG_INTERVAL", coord_text, 240)
-    init_steps = _parse_int("_FAILURE_GRACE", coord_text, 3)  # not what we want
+    failure_grace = _parse_int("_FAILURE_GRACE", coord_text, 3)
     # init_steps: how many ticks before entities appear (_init_step >= N)
     m = re.search(r"return self\._init_step >= (\d+)", coord_text)
     init_steps = int(m.group(1)) if m else 4
 
+    # Weather poll interval: length of _REFRESH_SEQUENCE tuple
+    m = re.search(r"_REFRESH_SEQUENCE\s*=\s*\(([^)]+)\)", coord_text)
+    weather_interval_ticks = len(m.group(1).split(",")) if m else 5
+
     scan_interval = const.DEFAULT_SCAN_INTERVAL
     init_minutes = round(init_steps * scan_interval / 60)
+    weather_interval_mins = weather_interval_ticks * scan_interval / 60
 
     services_path = _ROOT / "custom_components" / "sunriser" / "services.yaml"
     with open(services_path) as f:
@@ -69,6 +74,9 @@ def define_env(env):
         "init_minutes": init_minutes,
         "pwm_config_interval": pwm_config_interval,
         "pwm_config_duration": _format_duration(pwm_config_interval * scan_interval),
+        "failure_grace": failure_grace,
+        "weather_interval_ticks": weather_interval_ticks,
+        "weather_interval_mins": weather_interval_mins,
     }
 
     @env.macro

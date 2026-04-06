@@ -8,11 +8,15 @@ The coordinator uses a staggered round-robin to avoid overwhelming the WizFi360 
 
 ```
 tick 0: GET /state
-tick 1: GET /weather
-tick 2: GET /state  ← repeats
+tick 1: GET /state
+tick 2: GET /state
+tick 3: GET /state
+tick 4: GET /weather  ← then repeats from tick 0
 ...
-every 240 ticks (~4 h at 60 s default): one tick is replaced by POST / (re-read PWM config)
+every N ticks: one tick is replaced by POST / (re-read PWM config)
 ```
+
+`/weather` is fetched only every {{ cfg.weather_interval_ticks }}th tick (~{{ cfg.weather_interval_mins }} min at {{ cfg.default_scan_interval }} s default) because the firmware writes the response to the SD card on each request, making it more expensive than a plain `/state` read.
 
 One HTTP request per poll tick. The `force_close=True` TCP connector ensures the ESP8266 always sees a fresh single-use connection.
 
@@ -31,11 +35,11 @@ Platform setup is deferred until all init ticks complete (including all chunk ti
 
 ## Scheduled reboot
 
-If `scheduled_reboot` is enabled in options (default: on), the coordinator registers a daily `async_track_time_change` listener at the configured `reboot_time` (default `04:00`). At that time it calls `async_reboot()` silently. The listener is cancelled in `async_close()` and re-registered on options reload.
+If `scheduled_reboot` is enabled in options (default: on), the coordinator registers a daily `async_track_time_change` listener at the configured `reboot_time` (default `{{ cfg.default_reboot_time }}`). At that time it calls `async_reboot()` silently. The listener is cancelled in `async_close()` and re-registered on options reload.
 
 ## Failure handling
 
-Connectivity failures are graced for 3 consecutive misses (`_FAILURE_GRACE = 3`). On the third failure a repair issue is raised in HA. Recovery automatically deletes the issue.
+Connectivity failures are graced for {{ cfg.failure_grace }} consecutive misses (`_FAILURE_GRACE = {{ cfg.failure_grace }}`). On the {{ cfg.failure_grace }}th failure a repair issue is raised in HA. Recovery automatically deletes the issue.
 
 ## Reference
 

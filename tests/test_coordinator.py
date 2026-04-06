@@ -361,7 +361,7 @@ async def test_update_data_weather_tick(coord):
     coord._init_step = 4
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True, "weather": []}
-    coord._next_refresh_index = 1
+    coord._next_refresh_index = 4  # weather is index 4 in ("state"*4, "weather")
 
     with aioresponses() as m:
         m.get(f"{BASE}/weather", body=_pack([None, {"weather_program_id": 1}]))
