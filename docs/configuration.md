@@ -21,7 +21,7 @@ Changing any option reloads the integration automatically — no restart require
 
 ## How polling works
 
-Polling is staggered: one HTTP request per tick, cycling through `state → weather → pwm_config`. This is required because the SunRiser's WizFi360 Wi-Fi module can only handle one connection at a time. PWM config is re-read every ~{{ cfg.pwm_config_hours }} hours (every {{ cfg.pwm_config_interval }} ticks); new temperature sensors are picked up automatically on the next poll with no reload required.
+Polling is staggered: one HTTP request per tick, cycling through `state → weather → pwm_config`. This is required because the SunRiser's WizFi360 Wi-Fi module can only handle one connection at a time. PWM config is re-read every {{ cfg.pwm_config_duration }} (every {{ cfg.pwm_config_interval }} ticks); new temperature sensors are picked up automatically on the next poll with no reload required.
 
 ## Entity types
 

@@ -55,7 +55,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # read endpoint) fires too frequently.  240 ticks ≈ 4 h at the default 60 s
     # scan interval — frequent enough to detect channel changes within a session,
     # rare enough not to stress the WiFi module.
-    _PWM_CONFIG_INTERVAL = 240
+    _PWM_CONFIG_INTERVAL = 60
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
