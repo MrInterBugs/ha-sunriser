@@ -286,7 +286,9 @@ def test_weather_channel_attributes_include_program_id_and_name(coordinator):
     assert attrs["moon_active"] is True
 
 
-def test_weather_channel_active_fields_absent_when_subsystem_not_configured(coordinator):
+def test_weather_channel_active_fields_absent_when_subsystem_not_configured(
+    coordinator,
+):
     # Firmware only writes state fields for subsystems present in the program.
     # When absent, no *_active attribute should appear.
     coordinator.data = {

@@ -758,7 +758,7 @@ async def test_update_data_sensor_config_fetch_error_logs_warning(coord, caplog)
 async def test_update_data_round_robins_to_weather(coord):
     coord._init_step = 4
     coord.data = {**FAKE_STATE, "ok": True, "weather": [{"weather_program_id": 3}]}
-    coord._next_refresh_index = 1
+    coord._next_refresh_index = 4  # weather tick
 
     with aioresponses() as m:
         m.get(f"{BASE}/weather", body=_pack([None, {"weather_program_id": 5}]))
@@ -773,7 +773,7 @@ async def test_update_data_round_robins_to_weather(coord):
 async def test_update_data_weather_failure_keeps_stale_weather(coord, caplog):
     coord._init_step = 4
     coord.data = {**FAKE_STATE, "weather": [{"weather_program_id": 3}]}
-    coord._next_refresh_index = 1
+    coord._next_refresh_index = 4  # weather tick
 
     with aioresponses() as m:
         m.get(f"{BASE}/weather", exception=aiohttp.ClientConnectionError("down"))
@@ -821,7 +821,7 @@ async def test_update_data_weather_client_error_logs_debug_and_returns_empty_wea
     coord, caplog
 ):
     coord._init_step = 4
-    coord._next_refresh_index = 1  # weather tick
+    coord._next_refresh_index = 4  # weather tick
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True, "weather": []}
 
@@ -838,7 +838,7 @@ async def test_update_data_weather_unexpected_error_logs_debug_and_returns_empty
     coord, monkeypatch, caplog
 ):
     coord._init_step = 4
-    coord._next_refresh_index = 1  # weather tick
+    coord._next_refresh_index = 4  # weather tick
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True, "weather": []}
     monkeypatch.setattr(
@@ -1001,7 +1001,7 @@ async def test_update_data_fetches_new_weather_program_names(coord):
     coord._init_step = 4
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True}
-    coord._next_refresh_index = 1
+    coord._next_refresh_index = 4  # weather tick
     weather = [{"weather_program_id": 7}]
 
     # Weather tick: new program ID queued, no second POST fired
@@ -1377,7 +1377,7 @@ async def test_update_data_ok_preserved_on_weather_tick(coord):
     coord._init_step = 4
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True}
-    coord._next_refresh_index = 1
+    coord._next_refresh_index = 4  # weather tick
     with aioresponses() as m:
         m.get(f"{BASE}/weather", body=_pack([]))
         data = await coord._async_update_data()

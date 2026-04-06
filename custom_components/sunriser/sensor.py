@@ -242,9 +242,7 @@ class SunRiserWeatherChannelSensor(
         "moon_state": "moon_active",
     }
 
-    def _tick_to_attr(
-        self, tick_value: Any, uptime_ms: int, zero_label: str
-    ) -> str:
+    def _tick_to_attr(self, tick_value: Any, uptime_ms: int, zero_label: str) -> str:
         if tick_value:
             seconds = round((tick_value - uptime_ms) / 1000)
             return (dt_util.utcnow() + timedelta(seconds=seconds)).isoformat()
