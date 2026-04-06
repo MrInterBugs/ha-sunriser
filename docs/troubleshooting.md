@@ -9,13 +9,13 @@
 
 **Symptom:** Integration setup fails or the connectivity binary sensor stays `Off`.
 
-Check that the SunRiser is on the same network as HA and is reachable. Open `http://<host>/` in a browser — you should see the device web UI. Ensure no firewall or VLAN is blocking port 80 between HA and the device.
+Check that the SunRiser is on the same network as HA and is reachable. Open `http://<host>/` in a browser — you should see the device web UI. Ensure no firewall or VLAN is blocking port {{ cfg.default_port }} between HA and the device.
 
 ## No entities appear after setup
 
 **Symptom:** The device is found but no light, switch, number, or select entities are created.
 
-This is expected — entities can take up to four minutes to appear when first adding the device (four startup requests, one per poll interval), because the integration staggers its startup requests to avoid overwhelming the SunRiser's single-connection Wi-Fi module.
+This is expected — entities can take up to {{ cfg.init_minutes }} minutes to appear when first adding the device ({{ cfg.init_steps }} startup requests, one per poll interval), because the integration staggers its startup requests to avoid overwhelming the SunRiser's single-connection Wi-Fi module.
 
 If entities still don't appear after a few minutes, check that each active PWM channel has a `color` field set in the device config. An empty `color` means the channel is physically unused and the integration will not create an entity for it. Log into the SunRiser web UI, assign a colour to each active channel, and reload the integration. Channels are picked up automatically on the next coordinator poll.
 

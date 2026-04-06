@@ -34,6 +34,8 @@ markdown_extensions:
 
 plugins:
   - search
+  - macros:
+      module_name: docs_macros
   - mkdocstrings:
       handlers:
         python:

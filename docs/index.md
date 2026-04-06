@@ -9,7 +9,7 @@ This integration was reverse-engineered from the [open-source SunRiser firmware]
 - **Light** — Dimmable control (0–100%) for each PWM channel configured as a light
 - **Switch** — On/off control for PWM channels configured as on/off, plus a **Maintenance Mode** switch, a **Time-lapse** switch (runs the planner at accelerated speed for testing), and a **DST Auto-track** switch (keeps the device clock in sync with HA timezone DST changes)
 - **Select** — Per-channel manager selector (`none`, `dayplanner`, `weekplanner`, `fixed`) — shows and changes which planner controls each channel
-- **Number** — Per-channel fixed value slider (0–1000) used when the channel manager is set to `fixed`
+- **Number** — Per-channel fixed value slider (0–{{ cfg.pwm_max }}) used when the channel manager is set to `fixed`
 - **Sensor** — DS1820 temperature sensors; weather simulation state per channel; diagnostic sensors for Uptime, Firmware Version, and Hostname
 - **Binary Sensor** — Connectivity sensor that reports whether the device responded on the last poll cycle
 - **Button** — **Reboot** button to restart the device directly from HA
@@ -17,7 +17,7 @@ This integration was reverse-engineered from the [open-source SunRiser firmware]
 
 ![Example aquarium dashboard with Day Planner card](images/example_dashboard.png)
 - **Services** — Backup, restore, log retrieval, dayplanner/weekplanner read/write, and factory tools
-- **Options** — Configurable poll interval (5–3600 s, default 60 s) and scheduled daily reboot (default 04:00) without re-adding the integration
+- **Options** — Configurable poll interval ({{ cfg.scan_interval_min }}–{{ cfg.scan_interval_max }} s, default {{ cfg.default_scan_interval }} s) and scheduled daily reboot (default {{ cfg.default_reboot_time }}) without re-adding the integration
 - Auto-discovery of PWM channels and temperature sensors from the device
 - "Visit device" link in the device page opens the SunRiser web UI directly from HA
 
@@ -43,7 +43,7 @@ The light and switch entities reflect the device's live PWM values, so you can s
 
 - Protocol: MessagePack over HTTP/1.1 (no HTTP/2)
 - Config keys use `#` as separator, e.g. `pwm#1#color`
-- PWM range: 0–1000 (mapped to HA brightness 0–255)
+- PWM range: 0–{{ cfg.pwm_max }} (mapped to HA brightness 0–255)
 - Direct state writes hold for ~1 minute before the device's own program resumes
 - Polling is staggered: one HTTP request per tick — required because the WizFi360 Wi-Fi module can only handle one connection at a time
 

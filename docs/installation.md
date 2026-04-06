@@ -20,7 +20,7 @@
 1. Go to **Settings → Devices & Services → Add Integration**
 2. Search for **SunRiser**
 3. Enter your device's IP address or hostname (default hostname: `sunriser`)
-4. Enter the port if you changed it from the default (default: `80`)
+4. Enter the port if you changed it from the default (default: `{{ cfg.default_port }}`)
 5. Click **Submit**
 
 The integration will automatically detect all active PWM channels and temperature sensors on your device.
@@ -28,7 +28,7 @@ The integration will automatically detect all active PWM channels and temperatur
 ![SunRiser device page in Home Assistant](images/device_page.png)
 
 !!! note
-    Entities can take up to four minutes to appear after first adding the device (four separate HTTP requests, one per poll interval). This is intentional — the SunRiser's WizFi360 Wi-Fi module can only handle one connection at a time, and the integration staggers its startup requests to avoid crashing the controller.
+    Entities can take up to {{ cfg.init_minutes }} minutes to appear after first adding the device ({{ cfg.init_steps }} separate HTTP requests, one per poll interval). This is intentional — the SunRiser's WizFi360 Wi-Fi module can only handle one connection at a time, and the integration staggers its startup requests to avoid crashing the controller.
 
 ## Automatic discovery
 
