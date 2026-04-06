@@ -9,7 +9,6 @@
 ### Docs
 
 - **Full MkDocs site** — README content migrated into structured pages (Installation, Configuration, Services, Troubleshooting); all values (port, poll interval, PWM max, init time, reboot time) are now pulled dynamically from `const.py` and `coordinator.py` so the docs are always in sync with the code.
-- **Accuracy audit** — all user-facing docs cross-checked against source; corrected undocumented Maintenance Mode, Time-lapse, and DST Auto-track switches; fixed disabled-by-default entity list; corrected service response shapes.
 - **Docker docs preview** — `Dockerfile.docs` added; run `docker build -f Dockerfile.docs -t sunriser-docs . && docker run -p 8000:8000 sunriser-docs` to preview locally.
 - **CI docs validation** — validate workflow now builds the MkDocs site with `--strict` on every push; deploy workflow publishes to GitHub Pages on `main`.
 
