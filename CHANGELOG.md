@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.4-dynamic-stale-devices-beta.6] - 2026-04-06
+
+### Changed
+
+- **Weather polled every 5th tick** — `/weather` is now fetched once every 5 ticks (~2.5 min at 30 s default) instead of every other tick. `/state` fills the remaining 4 ticks. This reduces SD card writes on the device (the firmware serialises the weather response to a temp file per request) while keeping state updates responsive.
+- **Weather sensor zero-tick labels** — when `*_next_state_tick` is 0 (no event scheduled for today), attributes now show a human-readable string (`no clouds today`, `no rain today`, `no thunder today`, `no moon tonight`) instead of `Unknown`.
+- **Weather `*_active` attributes are now conditional** — `clouds_active`, `thunder_active`, `moon_active`, and `rain_active` are only included in entity attributes when the firmware reports that subsystem as configured in the weather program. Previously all four were always emitted, showing `false` for subsystems not present in the program.
+
 ## [1.6.4-dynamic-stale-devices-beta.5] - 2026-04-06
 
 ### Changed
