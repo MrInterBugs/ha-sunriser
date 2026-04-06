@@ -217,7 +217,9 @@ async def test_init_step_2_multi_chunk_drains_one_per_tick(coord):
             f"dayplanner#marker#{i}",
         ]
     chunks = coord._chunk_config_keys(keys)
-    assert len(chunks) > 1, "test requires multiple chunks — reduce _MAX_CONFIG_REQUEST_BODY_BYTES"
+    assert (
+        len(chunks) > 1
+    ), "test requires multiple chunks — reduce _MAX_CONFIG_REQUEST_BODY_BYTES"
 
     all_values = {
         "pwm#1#name": None,
@@ -416,9 +418,7 @@ async def test_async_get_config_chunks_large_requests(coord):
     keys = [f"key#{i}" for i in range(30)]
     limit = 70
     expected = {k: f"val_{k}" for k in keys}
-    chunks, responses = _chunked_responses(
-        coord, keys, expected, max_body_bytes=limit
-    )
+    chunks, responses = _chunked_responses(coord, keys, expected, max_body_bytes=limit)
     coord._MAX_CONFIG_REQUEST_BODY_BYTES = limit
 
     with aioresponses() as m:
@@ -474,7 +474,9 @@ async def test_pwm_config_refresh_drains_one_chunk_per_tick(coord):
         for i in range(1, 11)
         for k in ("onoff", "name", "manager", "fixed")
     ]
-    chunks, responses = _chunked_responses(coord, keys, coord.config, max_body_bytes=limit)
+    chunks, responses = _chunked_responses(
+        coord, keys, coord.config, max_body_bytes=limit
+    )
 
     assert len(chunks) > 1
 
