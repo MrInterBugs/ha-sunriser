@@ -25,6 +25,8 @@
 
 The integration will automatically detect all active PWM channels and temperature sensors on your device.
 
+![SunRiser device page in Home Assistant](images/device_page.png)
+
 !!! note
     Entities can take up to four minutes to appear after first adding the device (four separate HTTP requests, one per poll interval). This is intentional — the SunRiser's WizFi360 Wi-Fi module can only handle one connection at a time, and the integration staggers its startup requests to avoid crashing the controller.
 

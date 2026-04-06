@@ -6,7 +6,7 @@ Connects HA to the controller over HTTP using the [MessagePack](https://msgpack.
 
 **Full documentation:** [mrinterbugs.github.io/ha-sunriser](https://mrinterbugs.github.io/ha-sunriser/)
 
-![SunRiser device page in Home Assistant](images/device_page.png)
+![SunRiser device page in Home Assistant](docs/images/device_page.png)
 
 ## Quick install
 

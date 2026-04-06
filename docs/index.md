@@ -14,6 +14,8 @@ This integration was reverse-engineered from the [open-source SunRiser firmware]
 - **Binary Sensor** — Connectivity sensor that reports whether the device responded on the last poll cycle
 - **Button** — **Reboot** button to restart the device directly from HA
 - **Day Planner card** — built-in Lovelace card that renders all active PWM schedules as a 24-hour chart using the same LED colours as the device web UI; registered automatically, no manual setup required; schedule data is cached at startup so page loads never hit the device
+
+![Example aquarium dashboard with Day Planner card](images/example_dashboard.png)
 - **Services** — Backup, restore, log retrieval, dayplanner/weekplanner read/write, and factory tools
 - **Options** — Configurable poll interval (5–3600 s, default 60 s) and scheduled daily reboot (default 04:00) without re-adding the integration
 - Auto-discovery of PWM channels and temperature sensors from the device
