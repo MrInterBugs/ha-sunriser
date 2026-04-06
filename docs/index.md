@@ -27,17 +27,21 @@ This integration was reverse-engineered from the [open-source SunRiser firmware]
 
 Include the temperature on your aquarium dashboard alongside other tank sensors. Set an HA alert if the temperature drifts outside your safe range — useful as a backup check independent of any device-side alarms.
 
-### Connectivity monitoring
+### Voice control via Alexa
 
-The binary sensor tracks whether the SunRiser responded on the last poll. Add it to a dashboard or use it in an HA notification automation so you know immediately if the controller has crashed or lost network — before your lighting program silently stops running.
+Expose the **Maintenance Mode** switch to [Home Assistant Cloud](https://www.nabucasa.com/) (Nabu Casa), and Alexa will discover it as a smart home device. You can then say *"Alexa, turn on tank maintenance mode"* to pause the lighting program while you're working in the tank, and *"Alexa, turn off tank maintenance mode"* when you're done — no phone needed. Rename the entity in HA to something natural like "Tank Maintenance" so the voice command feels intuitive.
+
+### Current light state at a glance
+
+The light and switch entities reflect the device's live PWM values, so you can see exactly what each channel is doing right now from your HA dashboard — whether the device is running a dayplanner, a weekplanner, or a manual override.
 
 ### Config backup before changes
 
 Before making changes to the device's schedule, call `sunriser.backup` from a HA script to snapshot the current config to your HA config directory. If something goes wrong, `sunriser.restore` sends the saved file back to the device.
 
-### Current light state at a glance
+### Connectivity monitoring
 
-The light and switch entities reflect the device's live PWM values, so you can see exactly what each channel is doing right now from your HA dashboard — whether the device is running a dayplanner, a weekplanner, or a manual override.
+The binary sensor tracks whether the SunRiser responded on the last poll. Add it to a dashboard or use it in an HA notification automation so you know immediately if the controller has crashed or lost network — before your lighting program silently stops running.
 
 ## Key facts
 
