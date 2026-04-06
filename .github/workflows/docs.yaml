@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.14"
       - uses: actions/configure-pages@v5
-      - run: pip install mkdocs mkdocs-material "mkdocstrings[python]"
+      - run: pip install -r requirements.txt
       - run: mkdocs build --strict
       - uses: actions/upload-pages-artifact@v3
         with:
