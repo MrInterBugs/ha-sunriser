@@ -156,9 +156,15 @@ class SunRiserDSTAutoSwitch(
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        last_state = await self.async_get_last_state()
-        if last_state is not None and last_state.state == STATE_ON:
-            await self.coordinator.async_set_dst_auto_track(True)
+        # The hass.data bridge in coordinator.__init__ already restores
+        # _dst_auto_track on same-session reloads (options change, reconfigure).
+        # Only fall back to the recorder when the bridge didn't supply the value
+        # (i.e. a true HA restart), to avoid a redundant PUT / that fires
+        # immediately after init and causes rapid back-to-back TCP connections.
+        if not self.coordinator._dst_auto_track:
+            last_state = await self.async_get_last_state()
+            if last_state is not None and last_state.state == STATE_ON:
+                await self.coordinator.async_set_dst_auto_track(True)
 
     @property
     def is_on(self) -> bool:
