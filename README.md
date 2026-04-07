@@ -23,6 +23,6 @@ See the [installation docs](https://mrinterbugs.github.io/ha-sunriser/installati
 
 ## Attribution
 
-Built using the [SunRiser source code](https://github.com/LEDaquaristik/sunriser) by [LEDaquaristik](https://www.ledaquaristik.de/) as reference material (GPL v3). Other assets licensed under [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/).
+This integration was built using the [SunRiser source code](https://github.com/LEDaquaristik/sunriser) by [LEDaquaristik](https://www.ledaquaristik.de/) as reference material. The source code and configuration files from that project are licensed under the [GNU GPL v3](http://www.gnu.org/licenses/gpl-3.0). Other assets (graphics etc.) are licensed under [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/).
 
 Integration icon derived from the [Feather Icons sun SVG](https://github.com/feathericons/feather/blob/main/icons/sun.svg) (MIT).
