@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.4-dynamic-stale-devices-beta.7] - 2026-04-07
+
+### Fixed
+
+- **DST Auto-Track no longer goes unavailable after options change** — changing the scan interval (e.g. 60 s → 30 s) triggered a redundant `PUT /` in `async_added_to_hass` even though the `hass.data` bridge had already restored `_dst_auto_track`. The extra request fired immediately after init, causing rapid back-to-back TCP connections that reset the WizFi360 and made the entity go unavailable. The recorder path is now skipped when the bridge has already restored the value.
+
 ## [1.6.4-dynamic-stale-devices-beta.6] - 2026-04-06
 
 ### Changed
