@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.7.0] - 2026-04-07
+
+### Added
+
+- **Dynamic entity add/remove** — PWM light, switch, number, and select entities are added and removed at runtime when channels are activated or deactivated on the device, without requiring a full integration reload; DS1820 temperature sensors are also added dynamically as new probes appear
+- **Scheduled daily reboot** — a configurable time (default 04:00) at which the coordinator automatically reboots the device, reducing WizFi360 temp-file accumulation crashes; can be disabled or rescheduled via the options flow
+- **Time-lapse switch** — enables/disables the device's timewarp mode (~1800× planner speed); weather simulation is suspended while active
+- **DST Auto-Track switch** — keeps the device's `summertime` config in sync with the HA timezone automatically; fires immediately on enable and replaces one poll tick on DST transitions so every tick still makes exactly one HTTP request
+
+### Fixed
+
+- **No watchdog resets during startup** — init PWM config chunks are now drained one per tick (one HTTP request per scan interval), preventing AT+IPD buffer overflow and WizFi360 watchdog crashes on first load
+- **No double requests per tick** — new DS1820 sensor ROMs and weather program names discovered during state/weather ticks are queued and fetched on the next PWM config tick; no tick ever makes two back-to-back HTTP requests
+- **Reset PWM config refresh counter on recovery** — prevents the large batch refresh from firing on the first tick immediately after a device reboot
+- **Timelapse switch stuck ON** — the device omits `timewarp` from `/state` when inactive; the coordinator now resets it to `0` before merging each fresh state response
+- **Device name falls back to model** — when `name` config key is `None` (factory default), the HA device name now uses the model string (e.g. "SunRiser 10") instead of the IP address
+
+### Changed
+
+- **Weather polled every 5th tick** — `/weather` is fetched once every 5 ticks (~2.5 min) instead of every other tick, reducing SD card writes without impacting state responsiveness
+- **Chunk config POST bodies by msgpack size** — config read requests are split at a 450-byte cap (aligned with WizFi360 AT+IPD buffer limits) rather than a fixed key count
+- **Weather sensor zero-tick labels** — when `*_next_state_tick` is 0, attributes now show a human-readable string (`no clouds today`, `no rain today`, etc.) instead of `Unknown`
+- **Weather `*_active` attributes are now conditional** — only emitted when the firmware reports that subsystem as configured in the weather program
+- **Listener notification deferred until final config chunk** — entity listeners are not fired mid-refresh while chunks are still being drained
+
 ## [1.6.4-dynamic-stale-devices-beta.7] - 2026-04-07
 
 ### Fixed
