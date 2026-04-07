@@ -1,5 +1,64 @@
 # Changelog
 
+## [1.6.4-dynamic-stale-devices-beta.7] - 2026-04-07
+
+### Fixed
+
+- **DST Auto-Track no longer goes unavailable after options change** — changing the scan interval (e.g. 60 s → 30 s) triggered a redundant `PUT /` in `async_added_to_hass` even though the `hass.data` bridge had already restored `_dst_auto_track`. The extra request fired immediately after init, causing rapid back-to-back TCP connections that reset the WizFi360 and made the entity go unavailable. The recorder path is now skipped when the bridge has already restored the value.
+
+## [1.6.4-dynamic-stale-devices-beta.6] - 2026-04-06
+
+### Changed
+
+- **Weather polled every 5th tick** — `/weather` is now fetched once every 5 ticks (~2.5 min at 30 s default) instead of every other tick. `/state` fills the remaining 4 ticks. This reduces SD card writes on the device (the firmware serialises the weather response to a temp file per request) while keeping state updates responsive.
+- **Weather sensor zero-tick labels** — when `*_next_state_tick` is 0 (no event scheduled for today), attributes now show a human-readable string (`no clouds today`, `no rain today`, `no thunder today`, `no moon tonight`) instead of `Unknown`.
+- **Weather `*_active` attributes are now conditional** — `clouds_active`, `thunder_active`, `moon_active`, and `rain_active` are only included in entity attributes when the firmware reports that subsystem as configured in the weather program. Previously all four were always emitted, showing `false` for subsystems not present in the program.
+
+## [1.6.4-dynamic-stale-devices-beta.5] - 2026-04-06
+
+### Changed
+
+- **Default poll interval reverted to 30 s** (was 60 s) and PWM config refresh interval reverted to 30 min (60 ticks) — real-hardware testing showed the 60 s interval caused missed state transitions; 30 s provides a better balance between responsiveness and WizFi360 stability.
+
+### Docs
+
+- **Full MkDocs site** — README content migrated into structured pages (Installation, Configuration, Services, Troubleshooting); all values (port, poll interval, PWM max, init time, reboot time) are now pulled dynamically from `const.py` and `coordinator.py` so the docs are always in sync with the code.
+- **Docker docs preview** — `Dockerfile.docs` added; run `docker build -f Dockerfile.docs -t sunriser-docs . && docker run -p 8000:8000 sunriser-docs` to preview locally.
+- **CI docs validation** — validate workflow now builds the MkDocs site with `--strict` on every push; deploy workflow publishes to GitHub Pages on `main`.
+
+## [1.6.4-dynamic-stale-devices-beta.4] - 2026-04-05
+
+### Fixed
+
+- **DST auto-track state survives reconfigure/options reload** — `_dst_auto_track` is now saved to a `hass.data` bridge on `async_unload_entry` and restored in the coordinator constructor, so the DST switch is not reset to `False` when the integration reloads within the same HA session. HA restarts continue to be handled by `RestoreEntity` via the recorder.
+
+## [1.6.4-dynamic-stale-devices-beta.3] - 2026-04-04
+
+### Fixed
+
+- **Drain PWM config chunks one per tick during init** — init tick 2 now queues all PWM/sensor config key chunks into `_pending_refresh_chunks` on the first call, then drains exactly one chunk per tick. This prevents back-to-back TCP connections during startup from triggering WizFi360 AT+IPD corruption and watchdog resets.
+
+## [1.6.4-dynamic-stale-devices-beta.2] - 2026-04-02
+
+### Added
+
+- **Scheduled daily reboot** — a user-configurable time (default 04:00) at which the coordinator automatically reboots the device, reducing the risk of the WizFi360 accumulating temp files and crashing. Enabled by default; can be disabled or rescheduled via the options flow.
+
+### Changed
+
+- **Default scan interval raised to 60 s** (was 30 s) to halve the HTTP request rate against the WizFi360 and reduce the chance of buffer-overflow crashes.
+- **PWM config refresh interval raised to 4 h** (240 ticks at 60 s) from 30 min, reducing the frequency of large config POST requests that stress the WiFi module.
+
+### Internal
+
+- Dockerised CI: all six validate.yaml stages (tests, lint, mypy, docs) now run via `docker compose -f docker-compose.test.yml`.
+
+## [1.6.4-dynamic-stale-devices-beta.1] - 2026-04-01
+
+### Changed
+
+- **Chunk config POST bodies by size instead of key count** — config read requests are now split by msgpack body size with a 450-byte cap, keeping batching tunable and better aligned with the WizFi360 buffer limits than the previous fixed 25-key chunks.
+
 ## [1.6.3] - 2026-03-31
 
 ### Changed

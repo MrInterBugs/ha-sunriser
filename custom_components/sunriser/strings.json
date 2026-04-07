@@ -47,12 +47,19 @@
       "init": {
         "title": "SunRiser Options",
         "data": {
-          "scan_interval": "Polling interval (seconds)"
+          "scan_interval": "Polling interval (seconds)",
+          "scheduled_reboot": "Enable scheduled daily reboot",
+          "reboot_time": "Scheduled reboot time (HH:MM)"
         },
         "data_description": {
-          "scan_interval": "How often (in seconds) to poll the device for updated PWM and sensor values. Lower values give faster updates but increase load on the controller."
+          "scan_interval": "How often (in seconds) to poll the device for updated PWM and sensor values. Lower values give faster updates but increase load on the controller.",
+          "scheduled_reboot": "Automatically reboot the controller once a day to prevent firmware instability.",
+          "reboot_time": "Time of day to reboot the controller (24-hour format, e.g. 04:00). The reboot happens silently — lights resume their program after the controller restarts."
         }
       }
+    },
+    "error": {
+      "invalid_time": "Time must be in HH:MM format (e.g. 04:00)."
     }
   },
   "entity": {

@@ -27,8 +27,15 @@ theme:
     - search.highlight
     - content.code.copy
 
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+
 plugins:
   - search
+  - macros:
+      module_name: docs_macros
   - mkdocstrings:
       handlers:
         python:
@@ -46,6 +53,10 @@ plugins:
 
 nav:
   - Home: index.md
+  - Installation: installation.md
+  - Configuration: configuration.md
+  - Services: services.md
+  - Troubleshooting: troubleshooting.md
   - API Reference:
     - Overview: api/index.md
     - Coordinator: api/coordinator.md

@@ -7,9 +7,9 @@ Shared constants used across all platform modules.
 | Name | Value | Description |
 |---|---|---|
 | `DOMAIN` | `"sunriser"` | Integration domain |
-| `PWM_MAX` | `1000` | Maximum PWM value on the device |
-| `DEFAULT_PORT` | `80` | Default HTTP port |
-| `DEFAULT_SCAN_INTERVAL` | `30` | Default poll interval (seconds) |
+| `PWM_MAX` | `{{ cfg.pwm_max }}` | Maximum PWM value on the device |
+| `DEFAULT_PORT` | `{{ cfg.default_port }}` | Default HTTP port |
+| `DEFAULT_SCAN_INTERVAL` | `{{ cfg.default_scan_interval }}` | Default poll interval (seconds) |
 
 ## `COLOR_NAMES`
 

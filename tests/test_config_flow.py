@@ -12,7 +12,9 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.sunriser.config_flow import _test_connection
 from custom_components.sunriser.const import (
+    CONF_REBOOT_TIME,
     CONF_SCAN_INTERVAL,
+    CONF_SCHEDULED_REBOOT,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
@@ -393,3 +395,26 @@ async def test_options_flow_uses_existing_interval(hass):
     scan_keys = [k for k in schema.schema if str(k) == CONF_SCAN_INTERVAL]
     assert len(scan_keys) == 1
     assert scan_keys[0].default() == 120
+
+
+async def test_options_flow_invalid_reboot_time(hass):
+    """Submitting a bad reboot time returns a form with the invalid_time error."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
+        options={},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_SCAN_INTERVAL: 60,
+            CONF_SCHEDULED_REBOOT: True,
+            CONF_REBOOT_TIME: "25:00",
+        },
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"].get(CONF_REBOOT_TIME) == "invalid_time"

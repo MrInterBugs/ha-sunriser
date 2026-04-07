@@ -286,6 +286,23 @@ def test_weather_channel_attributes_include_program_id_and_name(coordinator):
     assert attrs["moon_active"] is True
 
 
+def test_weather_channel_active_fields_absent_when_subsystem_not_configured(
+    coordinator,
+):
+    # Firmware only writes state fields for subsystems present in the program.
+    # When absent, no *_active attribute should appear.
+    coordinator.data = {
+        **FAKE_STATE,
+        "weather": [{"weather_program_id": 1, "clouds_state": 0, "cloudticks": 5}],
+    }
+    sensor = _make_weather_channel_sensor(coordinator, channel=1)
+    attrs = sensor.extra_state_attributes
+    assert "clouds_active" in attrs
+    assert "thunder_active" not in attrs
+    assert "moon_active" not in attrs
+    assert "rain_active" not in attrs
+
+
 def test_weather_channel_tick_nonzero_produces_datetime(coordinator):
     # uptime = 12345 s = 12_345_000 ms; tick at 13_345_000 ms = 1000 s in the future
     coordinator.data = {
@@ -303,13 +320,24 @@ def test_weather_channel_tick_nonzero_produces_datetime(coordinator):
     assert dt.tzinfo is not None
 
 
-def test_weather_channel_tick_zero_produces_none(coordinator):
+def test_weather_channel_tick_zero_produces_label(coordinator):
     coordinator.data = {
         **FAKE_STATE,
         "weather": [{"weather_program_id": 1, "moon_next_state_tick": 0}],
     }
     sensor = _make_weather_channel_sensor(coordinator, channel=1)
-    assert sensor.extra_state_attributes["moon_next_change_at"] is None
+    assert sensor.extra_state_attributes["moon_next_change_at"] == "no moon tonight"
+
+
+def test_weather_channel_tick_zero_clouds_label(coordinator):
+    coordinator.data = {
+        **FAKE_STATE,
+        "weather": [
+            {"weather_program_id": 1, "cloudticks": 0, "clouds_next_state_tick": 0}
+        ],
+    }
+    sensor = _make_weather_channel_sensor(coordinator, channel=1)
+    assert sensor.extra_state_attributes["clouds_next_change_at"] == "no clouds today"
 
 
 def test_weather_channel_unique_id(coordinator):

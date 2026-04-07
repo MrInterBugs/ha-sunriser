@@ -21,6 +21,31 @@ def _pack(data):
     return msgpack.packb(data, use_bin_type=True)
 
 
+def _chunked_responses(
+    coord: SunRiserCoordinator,
+    keys: list[str],
+    values: dict[str, object],
+    max_body_bytes: int | None = None,
+) -> tuple[list[list[str]], list[dict[str, object]]]:
+    chunks = coord._chunk_config_keys(keys, max_body_bytes=max_body_bytes)
+    return chunks, [{k: values.get(k) for k in chunk} for chunk in chunks]
+
+
+def _pwm_refresh_keys(coord: SunRiserCoordinator) -> list[str]:
+    keys = [f"pwm#{i}#color" for i in range(1, coord.pwm_count + 1)]
+    for i in range(1, coord.pwm_count + 1):
+        if not coord.pwm_is_unused(i):
+            keys.extend(
+                [
+                    f"pwm#{i}#onoff",
+                    f"pwm#{i}#name",
+                    f"pwm#{i}#manager",
+                    f"pwm#{i}#fixed",
+                ]
+            )
+    return keys
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -33,6 +58,45 @@ async def coord(hass, mock_config_entry):
         yield coordinator
     finally:
         await coordinator.async_close()
+
+
+# ---------------------------------------------------------------------------
+# hass.data bridge — DST auto-track survives same-session reloads
+# ---------------------------------------------------------------------------
+
+
+async def test_coordinator_init_restores_dst_auto_track_from_hass_data(
+    hass, mock_config_entry
+):
+    """Constructor reads _dst_auto_track from the hass.data bridge and pops the key."""
+    hass.data[DOMAIN] = {f"{ENTRY_ID}_dst_auto_track": True}
+    coord = SunRiserCoordinator(hass, mock_config_entry)
+    try:
+        assert coord._dst_auto_track is True
+        # Key is consumed so a second construction does not inherit the flag.
+        assert f"{ENTRY_ID}_dst_auto_track" not in hass.data.get(DOMAIN, {})
+    finally:
+        await coord.async_close()
+
+
+async def test_coordinator_init_dst_auto_track_defaults_false(hass, mock_config_entry):
+    """Constructor defaults _dst_auto_track to False when no bridge key is present."""
+    coord = SunRiserCoordinator(hass, mock_config_entry)
+    try:
+        assert coord._dst_auto_track is False
+    finally:
+        await coord.async_close()
+
+
+async def test_coordinator_init_ignores_other_hass_data_keys(hass, mock_config_entry):
+    """Bridge key for a different entry_id is not consumed."""
+    hass.data[DOMAIN] = {"other_entry_id_dst_auto_track": True}
+    coord = SunRiserCoordinator(hass, mock_config_entry)
+    try:
+        assert coord._dst_auto_track is False
+        assert hass.data[DOMAIN]["other_entry_id_dst_auto_track"] is True
+    finally:
+        await coord.async_close()
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +158,7 @@ async def test_init_step_1_derives_pwm_count_from_state_when_config_is_none(coor
 
 
 async def test_init_step_2_fetches_pwm_and_sensor_config(coord):
-    """Tick 2 fetches PWM config and any pending sensor config in one POST."""
+    """Tick 2 fetches PWM config one chunk per tick; single chunk case advances to step 3."""
     coord._init_step = 2
     coord.config["pwm_count"] = 1
     coord._pending_sensor_roms = ["AABBCC"]
@@ -125,6 +189,70 @@ async def test_init_step_2_fetches_pwm_and_sensor_config(coord):
     assert coord.config["pwm#1#color"] == "4500k"
     assert coord.config["sensors#sensor#AABBCC#name"] == "Tank Temp"
     assert coord._init_step == 3
+
+
+async def test_init_step_2_multi_chunk_drains_one_per_tick(coord):
+    """When PWM config spans multiple chunks, each tick drains exactly one request.
+
+    This verifies the one-request-per-tick contract during init: the WizFi360
+    needs a full scan interval between TCP connections or AT+IPD corruption occurs.
+    """
+    coord._init_step = 2
+    coord.config["pwm_count"] = 2
+    coord._pending_sensor_roms = []
+    coord.data = {"pwms": {"1": 0, "2": 0}, "uptime": 5, "ok": True, "weather": []}
+
+    # Force small chunks so 2 channels produce multiple POST requests.
+    coord._MAX_CONFIG_REQUEST_BODY_BYTES = 80
+
+    keys = []
+    for i in range(1, 3):
+        keys += [
+            f"pwm#{i}#name",
+            f"pwm#{i}#onoff",
+            f"pwm#{i}#max",
+            f"pwm#{i}#color",
+            f"pwm#{i}#manager",
+            f"pwm#{i}#fixed",
+            f"dayplanner#marker#{i}",
+        ]
+    chunks = coord._chunk_config_keys(keys)
+    assert (
+        len(chunks) > 1
+    ), "test requires multiple chunks — reduce _MAX_CONFIG_REQUEST_BODY_BYTES"
+
+    all_values = {
+        "pwm#1#name": None,
+        "pwm#1#onoff": False,
+        "pwm#1#max": None,
+        "pwm#1#color": "4500k",
+        "pwm#1#manager": 0,
+        "pwm#1#fixed": None,
+        "dayplanner#marker#1": None,
+        "pwm#2#name": None,
+        "pwm#2#onoff": False,
+        "pwm#2#max": None,
+        "pwm#2#color": "",
+        "pwm#2#manager": 0,
+        "pwm#2#fixed": None,
+        "dayplanner#marker#2": None,
+    }
+
+    with aioresponses() as m:
+        for chunk in chunks:
+            m.post(f"{BASE}/", body=_pack({k: all_values[k] for k in chunk}))
+
+        # All but the last chunk: stay at step 2, one request per tick.
+        for _ in range(len(chunks) - 1):
+            await coord._async_update_data()
+            assert coord._init_step == 2
+
+        # Final chunk: advance to step 3.
+        await coord._async_update_data()
+
+    assert coord._init_step == 3
+    assert coord.config["pwm#1#color"] == "4500k"
+    assert coord.config["pwm#2#color"] == ""
 
 
 async def test_init_step_3_fetches_weather(coord):
@@ -233,7 +361,7 @@ async def test_update_data_weather_tick(coord):
     coord._init_step = 4
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True, "weather": []}
-    coord._next_refresh_index = 1
+    coord._next_refresh_index = 4  # weather is index 4 in ("state"*4, "weather")
 
     with aioresponses() as m:
         m.get(f"{BASE}/weather", body=_pack([None, {"weather_program_id": 1}]))
@@ -244,25 +372,167 @@ async def test_update_data_weather_tick(coord):
     assert coord._next_refresh_index == 0
 
 
+async def test_update_data_pwm_config_tick(coord):
+    """PWM config tick fetches color for all channels, extra keys only for active ones."""
+    coord._init_step = 4
+    coord.config = dict(FAKE_CONFIG)
+    coord.data = {**FAKE_STATE, "ok": True, "weather": []}
+    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
+
+    # pwm_count=4; channels 1,2,4 active (non-empty color), channel 3 unused.
+    # Expect: color for 1-4, plus onoff/name/manager/fixed for 1,2,4 only.
+    active = [i for i in range(1, 5) if FAKE_CONFIG.get(f"pwm#{i}#color")]
+    color_keys = [f"pwm#{i}#color" for i in range(1, 5)]
+    extra_keys = [
+        f"pwm#{i}#{k}" for i in active for k in ("onoff", "name", "manager", "fixed")
+    ]
+    fresh = {k: coord.config.get(k) for k in color_keys + extra_keys}
+
+    with aioresponses() as m:
+        m.post(f"{BASE}/", body=_pack(fresh))
+        data = await coord._async_update_data()
+
+    assert data["uptime"] == FAKE_STATE["uptime"]
+    assert coord._next_refresh_index == 0
+
+
+def test_chunk_config_keys_respects_body_limit(coord):
+    """Config key chunks stay within the configured msgpack body size limit."""
+    keys = [f"key#{i}" for i in range(30)]
+    limit = 70
+
+    chunks = coord._chunk_config_keys(keys, max_body_bytes=limit)
+
+    assert len(chunks) > 1
+    assert [key for chunk in chunks for key in chunk] == keys
+    assert all(len(_pack(chunk)) <= limit for chunk in chunks)
+
+
+def test_chunk_config_keys_empty_returns_no_chunks(coord):
+    """Empty key lists should not produce any request chunks."""
+    assert coord._chunk_config_keys([]) == []
+
+
+async def test_async_get_config_chunks_large_requests(coord):
+    """async_get_config splits requests when the msgpack body exceeds the limit."""
+    keys = [f"key#{i}" for i in range(30)]
+    limit = 70
+    expected = {k: f"val_{k}" for k in keys}
+    chunks, responses = _chunked_responses(coord, keys, expected, max_body_bytes=limit)
+    coord._MAX_CONFIG_REQUEST_BODY_BYTES = limit
+
+    with aioresponses() as m:
+        for response in responses:
+            m.post(f"{BASE}/", body=_pack(response))
+        result = await coord.async_get_config(keys)
+
+    assert result == expected
+    assert len(m.requests[("POST", URL(f"{BASE}/"))]) == len(chunks)
+    assert all(
+        len(req.kwargs["data"]) <= limit
+        for req in m.requests[("POST", URL(f"{BASE}/"))]
+    )
+
+
+async def test_update_data_pwm_config_tick_failure_returns_stale(coord, caplog):
+    """PWM config fetch failure logs a debug message and returns stale data."""
+    coord._init_step = 4
+    coord.config = dict(FAKE_CONFIG)
+    coord.data = {**FAKE_STATE, "ok": True, "weather": []}
+    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
+
+    with aioresponses() as m:
+        m.post(f"{BASE}/", exception=aiohttp.ClientConnectionError("down"))
+        with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
+            data = await coord._async_update_data()
+
+    assert data["uptime"] == FAKE_STATE["uptime"]
+    assert "Could not refresh PWM config" in caplog.text
+    assert coord._next_refresh_index == 0
+
+
+async def test_pwm_config_refresh_drains_one_chunk_per_tick(coord):
+    """When the key list exceeds the byte limit, each tick sends exactly one chunk."""
+    coord._init_step = 4
+    coord.data = {**FAKE_STATE, "ok": True, "weather": []}
+    limit = 250
+    coord._MAX_CONFIG_REQUEST_BODY_BYTES = limit
+    coord.config = {
+        **FAKE_CONFIG,
+        "pwm_count": 10,
+        **{f"pwm#{i}#color": "4500k" for i in range(1, 11)},
+        **{f"pwm#{i}#onoff": False for i in range(1, 11)},
+        **{f"pwm#{i}#name": None for i in range(1, 11)},
+        **{f"pwm#{i}#manager": 0 for i in range(1, 11)},
+        **{f"pwm#{i}#fixed": 0 for i in range(1, 11)},
+    }
+    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
+
+    keys = [f"pwm#{i}#color" for i in range(1, 11)]
+    keys += [
+        f"pwm#{i}#{k}"
+        for i in range(1, 11)
+        for k in ("onoff", "name", "manager", "fixed")
+    ]
+    chunks, responses = _chunked_responses(
+        coord, keys, coord.config, max_body_bytes=limit
+    )
+
+    assert len(chunks) > 1
+
+    for idx, response in enumerate(responses, start=1):
+        with aioresponses() as m:
+            m.post(f"{BASE}/", body=_pack(response))
+            data = await coord._async_update_data()
+
+        remaining = len(chunks) - idx
+        assert len(coord._pending_refresh_chunks) == remaining
+        if remaining:
+            assert data is coord.data  # no listener notification until final chunk
+
+    assert len(coord._pending_refresh_chunks) == 0
+    assert coord._next_refresh_index == 0  # state/weather not advanced during drain
+
+
 async def test_update_data_fetches_new_sensor_config(coord):
-    """New DS1820 ROMs appearing in state trigger a config fetch."""
+    """New DS1820 ROMs are queued on the state tick and fetched on the next pwm_config tick."""
     coord._init_step = 4
     coord._next_refresh_index = 0
     coord.config = dict(FAKE_CONFIG)
-    # Remove sensor config so it looks new
     del coord.config["sensors#sensor#AABBCCDDEEFF#name"]
 
-    sensor_cfg = {
-        "sensors#sensor#AABBCCDDEEFF#name": "Water Temp",
-        "sensors#sensor#AABBCCDDEEFF#unit": 1,
-        "sensors#sensor#AABBCCDDEEFF#unitcomma": 1,
-    }
+    # State tick: new ROM queued, no second POST fired
     with aioresponses() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
-        m.post(f"{BASE}/", body=_pack(sensor_cfg))
-        data = await coord._async_update_data()
+        coord.data = await coord._async_update_data()
+
+    assert "sensors#sensor#AABBCCDDEEFF#name" in coord._pending_config_keys
+    assert "sensors#sensor#AABBCCDDEEFF#name" not in coord.config
+
+    # pwm_config tick(s): queued sensor keys are drained via PWM config POST chunks
+    pwm_keys = _pwm_refresh_keys(coord)
+    fresh = {k: coord.config.get(k) for k in pwm_keys}
+    fresh.update(
+        {
+            "sensors#sensor#AABBCCDDEEFF#name": "Water Temp",
+            "sensors#sensor#AABBCCDDEEFF#unit": 1,
+            "sensors#sensor#AABBCCDDEEFF#unitcomma": 1,
+        }
+    )
+    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
+    keys = pwm_keys + [
+        "sensors#sensor#AABBCCDDEEFF#name",
+        "sensors#sensor#AABBCCDDEEFF#unit",
+        "sensors#sensor#AABBCCDDEEFF#unitcomma",
+    ]
+    _, responses = _chunked_responses(coord, keys, fresh)
+    for response in responses:
+        with aioresponses() as m:
+            m.post(f"{BASE}/", body=_pack(response))
+            coord.data = await coord._async_update_data()
 
     assert coord.config["sensors#sensor#AABBCCDDEEFF#name"] == "Water Temp"
+    assert "sensors#sensor#AABBCCDDEEFF#name" not in coord._pending_config_keys
 
 
 async def test_update_data_client_error_raises_update_failed(coord):
@@ -452,26 +722,43 @@ async def test_repair_issue_not_deleted_on_normal_recovery(coord):
 
 
 async def test_update_data_sensor_config_fetch_error_logs_warning(coord, caplog):
-    """If the sensor config POST fails, log a warning but don't crash."""
+    """If the pwm_config POST fails, stale data is returned and debug is logged.
+
+    Keys are drained from _pending_config_keys at enqueue time (not after the
+    fetch), so they are not in the set after a failed refresh.  The next state
+    tick will re-queue them because the sensor name is still absent from config.
+    """
     coord._init_step = 4
     coord._next_refresh_index = 0
     coord.config = dict(FAKE_CONFIG)
     del coord.config["sensors#sensor#AABBCCDDEEFF#name"]
 
+    # State tick: queues the pending sensor keys, no POST
     with aioresponses() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        data = await coord._async_update_data()
+
+    assert data["uptime"] == 12345
+    assert "sensors#sensor#AABBCCDDEEFF#name" in coord._pending_config_keys
+    coord.data = data  # simulate coordinator storing the result
+
+    # pwm_config tick: enqueue drains pending keys, then POST fails.
+    # Keys are no longer in _pending_config_keys (drained at enqueue).
+    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
+    with aioresponses() as m:
         m.post(f"{BASE}/", exception=aiohttp.ClientConnectionError("down"))
-        with caplog.at_level(logging.WARNING, logger="custom_components.sunriser"):
+        with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
             data = await coord._async_update_data()
 
-    assert data["uptime"] == 12345  # main data still returned despite the fetch failure
-    assert "Could not fetch sensor config" in caplog.text
+    assert data["uptime"] == 12345
+    assert "Could not refresh PWM config" in caplog.text
+    assert "sensors#sensor#AABBCCDDEEFF#name" not in coord._pending_config_keys
 
 
 async def test_update_data_round_robins_to_weather(coord):
     coord._init_step = 4
     coord.data = {**FAKE_STATE, "ok": True, "weather": [{"weather_program_id": 3}]}
-    coord._next_refresh_index = 1
+    coord._next_refresh_index = 4  # weather tick
 
     with aioresponses() as m:
         m.get(f"{BASE}/weather", body=_pack([None, {"weather_program_id": 5}]))
@@ -486,7 +773,7 @@ async def test_update_data_round_robins_to_weather(coord):
 async def test_update_data_weather_failure_keeps_stale_weather(coord, caplog):
     coord._init_step = 4
     coord.data = {**FAKE_STATE, "weather": [{"weather_program_id": 3}]}
-    coord._next_refresh_index = 1
+    coord._next_refresh_index = 4  # weather tick
 
     with aioresponses() as m:
         m.get(f"{BASE}/weather", exception=aiohttp.ClientConnectionError("down"))
@@ -534,7 +821,7 @@ async def test_update_data_weather_client_error_logs_debug_and_returns_empty_wea
     coord, caplog
 ):
     coord._init_step = 4
-    coord._next_refresh_index = 1  # weather tick
+    coord._next_refresh_index = 4  # weather tick
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True, "weather": []}
 
@@ -551,7 +838,7 @@ async def test_update_data_weather_unexpected_error_logs_debug_and_returns_empty
     coord, monkeypatch, caplog
 ):
     coord._init_step = 4
-    coord._next_refresh_index = 1  # weather tick
+    coord._next_refresh_index = 4  # weather tick
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True, "weather": []}
     monkeypatch.setattr(
@@ -710,20 +997,35 @@ def test_weather_program_name_returns_name_when_loaded(coordinator):
 
 
 async def test_update_data_fetches_new_weather_program_names(coord):
-    """First time a weather program ID is seen its name is fetched from config."""
+    """New weather program IDs are queued on the weather tick and fetched on the next pwm_config tick."""
     coord._init_step = 4
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True}
-    coord._next_refresh_index = 1
+    coord._next_refresh_index = 4  # weather tick
     weather = [{"weather_program_id": 7}]
-    program_cfg = {"weather#setup#7#name": "Storm Program"}
 
+    # Weather tick: new program ID queued, no second POST fired
     with aioresponses() as m:
         m.get(f"{BASE}/weather", body=_pack(weather))
-        m.post(f"{BASE}/", body=_pack(program_cfg))
         await coord._async_update_data()
 
+    assert "weather#setup#7#name" in coord._pending_config_keys
+    assert "weather#setup#7#name" not in coord.config
+
+    # pwm_config tick(s): queued key is drained via PWM config POST chunks
+    pwm_keys = _pwm_refresh_keys(coord)
+    fresh = {k: coord.config.get(k) for k in pwm_keys}
+    fresh["weather#setup#7#name"] = "Storm Program"
+    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
+    keys = pwm_keys + ["weather#setup#7#name"]
+    _, responses = _chunked_responses(coord, keys, fresh)
+    for response in responses:
+        with aioresponses() as m:
+            m.post(f"{BASE}/", body=_pack(response))
+            await coord._async_update_data()
+
     assert coord.config["weather#setup#7#name"] == "Storm Program"
+    assert "weather#setup#7#name" not in coord._pending_config_keys
 
 
 def test_sensor_value_raw_unit(coordinator):
@@ -1075,7 +1377,7 @@ async def test_update_data_ok_preserved_on_weather_tick(coord):
     coord._init_step = 4
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True}
-    coord._next_refresh_index = 1
+    coord._next_refresh_index = 4  # weather tick
     with aioresponses() as m:
         m.get(f"{BASE}/weather", body=_pack([]))
         data = await coord._async_update_data()
@@ -1209,3 +1511,194 @@ async def test_async_set_weekplanner_missing_days_default_to_zero(coord):
         m.requests[("PUT", URL(f"{BASE}/"))][0].kwargs["data"], raw=False
     )
     assert sent["weekplanner#programs#1"] == [0, 3, 0, 0, 0, 0, 0, 0]
+
+
+# ---------------------------------------------------------------------------
+# Scheduled reboot
+# ---------------------------------------------------------------------------
+
+
+async def test_scheduled_reboot_disabled_skips_setup(hass):
+    """When CONF_SCHEDULED_REBOOT=False, no time-change listener is registered."""
+    from homeassistant.const import CONF_HOST, CONF_PORT
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.sunriser.const import (
+        CONF_SCHEDULED_REBOOT,
+        DEFAULT_PORT,
+        DOMAIN,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="reboot_test",
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
+        options={CONF_SCHEDULED_REBOOT: False},
+    )
+    coord = SunRiserCoordinator(hass, entry)
+    try:
+        assert coord._scheduled_reboot_cancel is None
+    finally:
+        await coord.async_close()
+
+
+async def test_scheduled_reboot_invalid_time_logs_warning(hass, caplog):
+    """An unparseable reboot time logs a warning and leaves cancel as None."""
+    from homeassistant.const import CONF_HOST, CONF_PORT
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.sunriser.const import (
+        CONF_REBOOT_TIME,
+        CONF_SCHEDULED_REBOOT,
+        DEFAULT_PORT,
+        DOMAIN,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="reboot_test2",
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
+        options={CONF_SCHEDULED_REBOOT: True, CONF_REBOOT_TIME: "not-a-time"},
+    )
+    with caplog.at_level(logging.WARNING, logger="custom_components.sunriser"):
+        coord = SunRiserCoordinator(hass, entry)
+    try:
+        assert coord._scheduled_reboot_cancel is None
+        assert "invalid scheduled reboot time" in caplog.text
+    finally:
+        await coord.async_close()
+
+
+async def test_scheduled_reboot_trigger_fires_on_time_event(hass):
+    """The _trigger callback creates a task that eventually calls async_reboot."""
+    from homeassistant.const import CONF_HOST, CONF_PORT
+    from unittest.mock import AsyncMock, patch
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.sunriser.const import (
+        CONF_REBOOT_TIME,
+        CONF_SCHEDULED_REBOOT,
+        DEFAULT_PORT,
+        DOMAIN,
+    )
+    from datetime import datetime
+    from homeassistant.helpers.event import async_track_time_change
+
+    captured_trigger = None
+
+    def mock_track(hass_arg, action, **kwargs):
+        nonlocal captured_trigger
+        captured_trigger = action
+        return lambda: None  # return a no-op cancel
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="reboot_test3",
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
+        options={CONF_SCHEDULED_REBOOT: True, CONF_REBOOT_TIME: "04:00"},
+    )
+    with patch(
+        "custom_components.sunriser.coordinator.async_track_time_change", mock_track
+    ):
+        coord = SunRiserCoordinator(hass, entry)
+
+    try:
+        assert captured_trigger is not None
+
+        reboot_mock = AsyncMock()
+        coord.async_reboot = reboot_mock
+
+        # Invoke the trigger callback directly (as HA would at 04:00:00)
+        captured_trigger(datetime(2026, 1, 1, 4, 0, 0))
+        await hass.async_block_till_done()
+
+        reboot_mock.assert_called_once()
+    finally:
+        await coord.async_close()
+
+
+async def test_scheduled_reboot_trigger_calls_reboot(hass):
+    """_async_do_scheduled_reboot calls async_reboot."""
+    from homeassistant.const import CONF_HOST, CONF_PORT
+    from unittest.mock import AsyncMock
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.sunriser.const import (
+        CONF_REBOOT_TIME,
+        CONF_SCHEDULED_REBOOT,
+        DEFAULT_PORT,
+        DOMAIN,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="reboot_test3b",
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
+        options={CONF_SCHEDULED_REBOOT: True, CONF_REBOOT_TIME: "04:00"},
+    )
+    coord = SunRiserCoordinator(hass, entry)
+    try:
+        reboot_mock = AsyncMock()
+        coord.async_reboot = reboot_mock
+
+        await coord._async_do_scheduled_reboot()
+
+        reboot_mock.assert_called_once()
+    finally:
+        await coord.async_close()
+
+
+async def test_scheduled_reboot_failure_is_logged(hass, caplog):
+    """If async_reboot raises, the error is logged and does not propagate."""
+    from homeassistant.const import CONF_HOST, CONF_PORT
+    from unittest.mock import AsyncMock
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.sunriser.const import (
+        CONF_REBOOT_TIME,
+        CONF_SCHEDULED_REBOOT,
+        DEFAULT_PORT,
+        DOMAIN,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="reboot_test4",
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
+        options={CONF_SCHEDULED_REBOOT: True, CONF_REBOOT_TIME: "04:00"},
+    )
+    coord = SunRiserCoordinator(hass, entry)
+    try:
+        coord.async_reboot = AsyncMock(side_effect=RuntimeError("device offline"))
+
+        with caplog.at_level(logging.ERROR, logger="custom_components.sunriser"):
+            await coord._async_do_scheduled_reboot()
+
+        assert "scheduled reboot failed" in caplog.text
+    finally:
+        await coord.async_close()
+
+
+async def test_async_close_cancels_scheduled_reboot(hass):
+    """async_close calls the cancel callable and clears _scheduled_reboot_cancel."""
+    from homeassistant.const import CONF_HOST, CONF_PORT
+    from unittest.mock import MagicMock
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.sunriser.const import (
+        CONF_REBOOT_TIME,
+        CONF_SCHEDULED_REBOOT,
+        DEFAULT_PORT,
+        DOMAIN,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="reboot_test5",
+        data={CONF_HOST: HOST, CONF_PORT: DEFAULT_PORT},
+        options={CONF_SCHEDULED_REBOOT: True, CONF_REBOOT_TIME: "04:00"},
+    )
+    coord = SunRiserCoordinator(hass, entry)
+    assert coord._scheduled_reboot_cancel is not None
+
+    cancel_mock = MagicMock()
+    coord._scheduled_reboot_cancel = cancel_mock
+
+    await coord.async_close()
+
+    cancel_mock.assert_called_once()
+    assert coord._scheduled_reboot_cancel is None

@@ -18,6 +18,9 @@ DEFAULT_PORT = 80
 DEFAULT_SCAN_INTERVAL = 30
 
 CONF_SCAN_INTERVAL = "scan_interval"
+CONF_SCHEDULED_REBOOT = "scheduled_reboot"
+CONF_REBOOT_TIME = "reboot_time"
+DEFAULT_REBOOT_TIME = "04:00"
 
 # PWM values on device are 0–1000
 PWM_MAX = 1000

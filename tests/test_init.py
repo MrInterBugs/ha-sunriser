@@ -96,6 +96,68 @@ async def test_unload_entry_closes_open_session(hass, mock_config_entry):
     mock_session.close.assert_awaited_once()
 
 
+async def test_unload_entry_saves_dst_auto_track_true_to_hass_data(
+    hass, mock_config_entry
+):
+    """async_unload_entry saves _dst_auto_track=True to hass.data for same-session reload."""
+    mock_config_entry.add_to_hass(hass)
+
+    with (
+        patch(
+            "custom_components.sunriser.coordinator.SunRiserCoordinator.async_load_device_config",
+            new=AsyncMock(),
+        ),
+        patch(
+            "custom_components.sunriser.coordinator.SunRiserCoordinator._async_update_data",
+            new=AsyncMock(return_value=FAKE_STATE),
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data
+    coordinator._dst_auto_track = True
+
+    result = await hass.config_entries.async_unload(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert result is True
+    from custom_components.sunriser.const import DOMAIN
+
+    assert hass.data[DOMAIN][f"{ENTRY_ID}_dst_auto_track"] is True
+
+
+async def test_unload_entry_saves_dst_auto_track_false_to_hass_data(
+    hass, mock_config_entry
+):
+    """async_unload_entry saves _dst_auto_track=False to hass.data (default state)."""
+    mock_config_entry.add_to_hass(hass)
+
+    with (
+        patch(
+            "custom_components.sunriser.coordinator.SunRiserCoordinator.async_load_device_config",
+            new=AsyncMock(),
+        ),
+        patch(
+            "custom_components.sunriser.coordinator.SunRiserCoordinator._async_update_data",
+            new=AsyncMock(return_value=FAKE_STATE),
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data
+    assert coordinator._dst_auto_track is False  # default
+
+    result = await hass.config_entries.async_unload(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert result is True
+    from custom_components.sunriser.const import DOMAIN
+
+    assert hass.data[DOMAIN][f"{ENTRY_ID}_dst_auto_track"] is False
+
+
 async def test_reload_entry_on_options_change(hass, mock_config_entry):
     """_async_reload_entry triggers an entry reload."""
     mock_config_entry.add_to_hass(hass)

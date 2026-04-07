@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.const import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -34,25 +34,47 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunRiserCoordinator = entry.runtime_data
-    entities: list[SensorEntity] = [
-        SunRiserUptimeSensor(coordinator),
-        SunRiserFirmwareSensor(coordinator),
-        SunRiserHostnameSensor(coordinator),
-    ]
 
-    # Add temperature sensors discovered in the initial state poll.
-    if coordinator.data and coordinator.data.get("sensors"):
-        for rom, reading in coordinator.data["sensors"].items():
+    # Static diagnostic sensors — always present.
+    async_add_entities(
+        [
+            SunRiserUptimeSensor(coordinator),
+            SunRiserFirmwareSensor(coordinator),
+            SunRiserHostnameSensor(coordinator),
+        ]
+    )
+
+    # Weather channel sensors are fixed at setup time (weather list length
+    # is determined by pwm_count and doesn't change without a reload).
+    weather = coordinator.data.get("weather") or [] if coordinator.data else []
+    weather_entities: list[SunRiserWeatherChannelSensor] = [
+        SunRiserWeatherChannelSensor(coordinator, i + 1)
+        for i, ch in enumerate(weather)
+        if ch is not None
+    ]
+    if weather_entities:
+        async_add_entities(weather_entities)
+
+    # DS1820 temperature sensors: add at setup and dynamically as new ROMs appear.
+    _added_roms: set[str] = set()
+
+    @callback
+    def _check_ds1820_sensors() -> None:
+        if coordinator.data is None:
+            return
+        new_entities: list[SunRiserTemperatureSensor] = []
+        for rom, reading in (coordinator.data.get("sensors") or {}).items():
+            if rom in _added_roms:
+                continue
             device_type = reading[0]
             if device_type == _DS1820:
-                entities.append(SunRiserTemperatureSensor(coordinator, entry, rom))
+                _added_roms.add(rom)
+                new_entities.append(SunRiserTemperatureSensor(coordinator, entry, rom))
+        if new_entities:
+            async_add_entities(new_entities)
 
-    weather = coordinator.data.get("weather") or [] if coordinator.data else []
-    for i, ch in enumerate(weather):
-        if ch is not None:
-            entities.append(SunRiserWeatherChannelSensor(coordinator, i + 1))
-
-    async_add_entities(entities)
+    _check_ds1820_sensors()
+    entry.async_on_unload(coordinator.async_add_listener(_check_ds1820_sensors))
 
 
 class SunRiserUptimeSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity):
@@ -194,6 +216,38 @@ class SunRiserWeatherChannelSensor(
             return "moon"
         return "clear"
 
+    # Maps raw tick field → (output attribute name, zero-value label)
+    _TICK_FIELDS: dict[str, tuple[str, str]] = {
+        "clouds_next_state_tick": ("clouds_next_change_at", "no clouds today"),
+        "rain_next_tick": ("rain_next_at", "no rain today"),
+        "thunder_next_state_tick": ("thunder_next_change_at", "no thunder today"),
+        "moon_next_state_tick": ("moon_next_change_at", "no moon tonight"),
+    }
+    _RENAME_FIELDS: dict[str, str] = {
+        "cloudticks": "cloud_ticks",
+        "rainmins": "rain_duration_mins",
+        "rainfront_start": "rainfront_start_tick",
+        "rainfront_length": "rainfront_length_ticks",
+        "stormfront_start": "stormfront_start_tick",
+        "stormfront_length": "stormfront_length_ticks",
+        "daycount": "day_count",
+    }
+    _EXCLUDE_FIELDS: frozenset[str] = frozenset(
+        {"weather_program_id", "clouds_state", "thunder_state", "moon_state"}
+    )
+    # State fields whose presence indicates the subsystem is configured.
+    _ACTIVE_STATE_FIELDS: dict[str, str] = {
+        "clouds_state": "clouds_active",
+        "thunder_state": "thunder_active",
+        "moon_state": "moon_active",
+    }
+
+    def _tick_to_attr(self, tick_value: Any, uptime_ms: int, zero_label: str) -> str:
+        if tick_value:
+            seconds = round((tick_value - uptime_ms) / 1000)
+            return (dt_util.utcnow() + timedelta(seconds=seconds)).isoformat()
+        return zero_label
+
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         ch = self._channel_data()
@@ -201,56 +255,31 @@ class SunRiserWeatherChannelSensor(
             return {}
 
         uptime_ms = ((self.coordinator.data or {}).get("uptime") or 0) * 1000
-
-        # *_next_state_tick / *_next_tick fields are milliseconds from device
-        # boot; convert to an ISO timestamp of the next state transition.
-        _tick_to_seconds = {
-            "clouds_next_state_tick": "clouds_next_change_at",
-            "rain_next_tick": "rain_next_at",
-            "thunder_next_state_tick": "thunder_next_change_at",
-            "moon_next_state_tick": "moon_next_change_at",
-        }
-        _rename = {
-            "cloudticks": "cloud_ticks",
-            "rainmins": "rain_duration_mins",
-            "rainfront_start": "rainfront_start_tick",
-            "rainfront_length": "rainfront_length_ticks",
-            "stormfront_start": "stormfront_start_tick",
-            "stormfront_length": "stormfront_length_ticks",
-            "daycount": "day_count",
-        }
-        exclude = {"weather_program_id", "clouds_state", "thunder_state", "moon_state"}
-
-        now = dt_util.utcnow()
         result: dict[str, Any] = {}
-        for k, v in ch.items():
-            if k in exclude:
-                continue
-            if k in _tick_to_seconds:
-                if v:
-                    seconds = round((v - uptime_ms) / 1000)
-                    result[_tick_to_seconds[k]] = (
-                        now + timedelta(seconds=seconds)
-                    ).isoformat()
-                else:
-                    result[_tick_to_seconds[k]] = None
-            else:
-                result[_rename.get(k, k)] = v
 
-        # Human-readable program name (resolved from config).
+        for k, v in ch.items():
+            if k in self._EXCLUDE_FIELDS:
+                continue
+            if k in self._TICK_FIELDS:
+                attr_name, zero_label = self._TICK_FIELDS[k]
+                result[attr_name] = self._tick_to_attr(v, uptime_ms, zero_label)
+            else:
+                result[self._RENAME_FIELDS.get(k, k)] = v
+
         program_id = ch.get("weather_program_id")
         result["weather_program_id"] = program_id
         result["weather_program_name"] = self.coordinator.weather_program_name(
             program_id
         )
 
-        # Convenience booleans derived from the state-machine integers.
-        # A non-zero state means that subsystem is currently active.
-        result["thunder_active"] = bool(ch.get("thunder_state"))
-        result["moon_active"] = bool(ch.get("moon_state"))
-        result["clouds_active"] = bool(ch.get("clouds_state"))
+        # Convenience booleans: only included when the firmware reports that
+        # subsystem as configured (absent fields → not in this program).
+        for state_key, attr_name in self._ACTIVE_STATE_FIELDS.items():
+            if state_key in ch:
+                result[attr_name] = bool(ch[state_key])
         # rain_active: rain is running when rainmins > 0 (device counts down
         # the remaining minutes of the current rain event).
-        result["rain_active"] = (ch.get("rainmins") or 0) > 0
+        if "rainmins" in ch:
+            result["rain_active"] = (ch.get("rainmins") or 0) > 0
 
         return result

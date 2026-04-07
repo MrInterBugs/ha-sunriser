@@ -324,3 +324,69 @@ async def test_dst_does_not_restore_when_no_last_state(
             await switch.async_added_to_hass()
 
     coordinator.async_set_dst_auto_track.assert_not_awaited()
+
+
+async def test_dst_does_not_restore_when_last_state_unavailable(
+    hass, coordinator, mock_config_entry
+):
+    """async_added_to_hass must not re-enable auto-track when last state is 'unavailable'.
+
+    Same-session reload scenario: the entity transitions to 'unavailable' when
+    the platform is unloaded, so RestoreEntity captures that state.  The
+    hass.data bridge (written by async_unload_entry) handles same-session
+    persistence; RestoreEntity only covers HA restarts.
+    """
+    from homeassistant.const import STATE_UNAVAILABLE
+    from unittest.mock import MagicMock
+
+    coordinator.async_set_dst_auto_track = AsyncMock()
+    switch = _make_dst(coordinator, mock_config_entry)
+
+    last_state = MagicMock()
+    last_state.state = STATE_UNAVAILABLE
+
+    with patch.object(
+        switch, "async_get_last_state", AsyncMock(return_value=last_state)
+    ):
+        with patch(
+            "homeassistant.helpers.update_coordinator.CoordinatorEntity.async_added_to_hass",
+            AsyncMock(),
+        ):
+            await switch.async_added_to_hass()
+
+    coordinator.async_set_dst_auto_track.assert_not_awaited()
+
+
+async def test_dst_skips_put_when_bridge_already_restored(
+    hass, coordinator, mock_config_entry
+):
+    """No PUT / when _dst_auto_track was already True from the hass.data bridge.
+
+    Regression test for options-change reload (e.g. 60 s → 30 s scan interval).
+    async_unload_entry saves _dst_auto_track to hass.data; the new coordinator
+    restores it in __init__ before async_added_to_hass runs.  Without this guard
+    the recorder path would fire a redundant PUT / immediately after init,
+    causing a rapid back-to-back TCP connection that triggers a WizFi360 reset
+    and makes the entity go unavailable.
+    """
+    from homeassistant.const import STATE_ON
+    from unittest.mock import MagicMock
+
+    coordinator._dst_auto_track = True  # simulates bridge restore
+    coordinator.async_set_dst_auto_track = AsyncMock()
+    switch = _make_dst(coordinator, mock_config_entry)
+
+    last_state = MagicMock()
+    last_state.state = STATE_ON  # recorder would also say ON
+
+    with patch.object(
+        switch, "async_get_last_state", AsyncMock(return_value=last_state)
+    ):
+        with patch(
+            "homeassistant.helpers.update_coordinator.CoordinatorEntity.async_added_to_hass",
+            AsyncMock(),
+        ):
+            await switch.async_added_to_hass()
+
+    # Bridge already restored the value — no HTTP PUT should be made.
+    coordinator.async_set_dst_auto_track.assert_not_awaited()

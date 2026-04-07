@@ -6,7 +6,8 @@ from typing import Any, cast
 from homeassistant.components.light import ATTR_BRIGHTNESS, LightEntity
 from homeassistant.components.light.const import ColorMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -38,13 +39,30 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunRiserCoordinator = entry.runtime_data
+    _added: set[int] = set()
+    er = entity_registry.async_get(hass)
 
-    async_add_entities(
-        SunRiserLight(coordinator, entry, pwm_num)
-        for pwm_num in range(1, coordinator.pwm_count + 1)
-        if not coordinator.pwm_is_onoff(pwm_num)
-        and not coordinator.pwm_is_unused(pwm_num)
-    )
+    @callback
+    def _check_entities() -> None:
+        new_entities: list[SunRiserLight] = []
+        for pwm_num in range(1, coordinator.pwm_count + 1):
+            is_light = not coordinator.pwm_is_unused(
+                pwm_num
+            ) and not coordinator.pwm_is_onoff(pwm_num)
+            if is_light and pwm_num not in _added:
+                _added.add(pwm_num)
+                new_entities.append(SunRiserLight(coordinator, entry, pwm_num))
+            elif not is_light and pwm_num in _added:
+                _added.discard(pwm_num)
+                uid = f"{entry.entry_id}_pwm_{pwm_num}"
+                eid = er.async_get_entity_id("light", DOMAIN, uid)
+                if eid:
+                    er.async_remove(eid)
+        if new_entities:
+            async_add_entities(new_entities)
+
+    _check_entities()
+    entry.async_on_unload(coordinator.async_add_listener(_check_entities))
 
 
 class SunRiserLight(CoordinatorEntity[SunRiserCoordinator], LightEntity):

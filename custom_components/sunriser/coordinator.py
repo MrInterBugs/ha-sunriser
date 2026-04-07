@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import timedelta
+from collections.abc import Callable
+from datetime import datetime, timedelta
 
 import aiohttp
 import msgpack
@@ -12,9 +13,10 @@ from typing import Any, TypedDict, cast
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.issue_registry import (
     IssueSeverity,
     async_create_issue,
@@ -24,8 +26,11 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .const import (
     COLOR_NAMES,
+    CONF_REBOOT_TIME,
     CONF_SCAN_INTERVAL,
+    CONF_SCHEDULED_REBOOT,
     DEFAULT_PORT,
+    DEFAULT_REBOOT_TIME,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MANAGER_OPTIONS,
@@ -43,7 +48,14 @@ class DayplannerMarker(TypedDict):
 class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator that polls /state and holds device config."""
 
-    _REFRESH_SEQUENCE = ("state", "weather")
+    _REFRESH_SEQUENCE = ("state", "state", "state", "state", "weather")
+    _MAX_CONFIG_REQUEST_BODY_BYTES = 450
+    # How many normal ticks between PWM config refreshes.  Each tick is one HTTP
+    # request; the WizFi360 TCP stack becomes unresponsive if POST / (the config
+    # read endpoint) fires too frequently.  240 ticks ≈ 4 h at the default 60 s
+    # scan interval — frequent enough to detect channel changes within a session,
+    # rare enough not to stress the WiFi module.
+    _PWM_CONFIG_INTERVAL = 60
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
@@ -70,14 +82,32 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_state_refresh_succeeded = False
         self._init_step: int = 0
         self._pending_sensor_roms: list[str] = []
+        self._ticks_since_pwm_refresh: int = 0
+        # Config keys discovered during state/weather ticks that need fetching.
+        # Drained on the next pwm_config tick so no tick ever makes two requests.
+        self._pending_config_keys: set[str] = set()
+        # PWM config refresh chunks queued by _enqueue_pwm_refresh; drained one
+        # per tick by _async_drain_one_refresh_chunk to preserve the one-request-
+        # per-tick contract even when the full key list spans multiple chunks.
+        self._pending_refresh_chunks: list[list[str]] = []
+        self._refresh_accumulator: dict[str, Any] = {}
 
         # DST auto-tracking — when enabled the coordinator syncs the device's
         # summertime config key to the actual HA timezone DST state.
         # _dst_sync_pending is set when a DST transition is detected; the sync
         # then replaces the next poll tick (one request, no double-request).
-        self._dst_auto_track: bool = False
+        #
+        # Restored from hass.data bridge on same-session reloads (e.g. options
+        # change).  RestoreEntity in switch.py handles HA restarts via recorder.
+        _bridge: dict[str, Any] = hass.data.get(DOMAIN, {})
+        self._dst_auto_track: bool = bool(
+            _bridge.pop(f"{entry.entry_id}_dst_auto_track", False)
+        )
         self._last_known_dst: bool | None = None
         self._dst_sync_pending: bool = False
+
+        self._scheduled_reboot_cancel: Callable[[], None] | None = None
+        self._setup_scheduled_reboot(entry)
 
     @property
     def base_url(self) -> str:
@@ -111,8 +141,39 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def async_close(self) -> None:
         """Close the dedicated HTTP session, if one was created."""
+        if self._scheduled_reboot_cancel is not None:
+            self._scheduled_reboot_cancel()
+            self._scheduled_reboot_cancel = None
         if self._session and not self._session.closed:
             await self._session.close()
+
+    def _setup_scheduled_reboot(self, entry: ConfigEntry) -> None:
+        """Register a daily time-based reboot if enabled in options."""
+        if not entry.options.get(CONF_SCHEDULED_REBOOT, True):
+            return
+        time_str = entry.options.get(CONF_REBOOT_TIME, DEFAULT_REBOOT_TIME)
+        try:
+            hour, minute = (int(p) for p in time_str.split(":"))
+        except (ValueError, AttributeError):
+            _LOGGER.warning(
+                "SunRiser: invalid scheduled reboot time %r — skipping", time_str
+            )
+            return
+
+        @callback
+        def _trigger(_now: datetime) -> None:
+            _LOGGER.info("SunRiser: scheduled reboot at %s", time_str)
+            self.hass.async_create_task(self._async_do_scheduled_reboot())
+
+        self._scheduled_reboot_cancel = async_track_time_change(
+            self.hass, _trigger, hour=hour, minute=minute, second=0
+        )
+
+    async def _async_do_scheduled_reboot(self) -> None:
+        try:
+            await self.async_reboot()
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("SunRiser: scheduled reboot failed: %s", err)
 
     @property
     def init_complete(self) -> bool:
@@ -123,8 +184,8 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # Low-level API helpers
     # ------------------------------------------------------------------
 
-    async def async_get_config(self, keys: list[str]) -> dict[str, Any]:
-        """POST / — read config values for the given keys."""
+    async def _async_get_config_raw(self, keys: list[str]) -> dict[str, Any]:
+        """POST / — read config values for a single batch of keys."""
         session = self._get_session()
         body = msgpack.packb(keys, use_bin_type=True)
         async with self._request_lock:
@@ -138,6 +199,51 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return cast(
                     dict[str, Any], msgpack.unpackb(await resp.read(), raw=False)
                 )
+
+    def _chunk_config_keys(
+        self, keys: list[str], max_body_bytes: int | None = None
+    ) -> list[list[str]]:
+        """Split config key reads into msgpack bodies no larger than max_body_bytes.
+
+        The limit applies to the msgpack request body only, not HTTP headers.
+        If a single key exceeds the limit by itself, it is sent alone so the
+        caller can still attempt the request instead of failing locally.
+        """
+        if not keys:
+            return []
+
+        limit = max_body_bytes or self._MAX_CONFIG_REQUEST_BODY_BYTES
+        chunks: list[list[str]] = []
+        current: list[str] = []
+
+        for key in keys:
+            trial = current + [key]
+            if current and len(msgpack.packb(trial, use_bin_type=True)) > limit:
+                chunks.append(current)
+                current = [key]
+            else:
+                current = trial
+
+        if current:
+            chunks.append(current)
+
+        return chunks
+
+    async def async_get_config(self, keys: list[str]) -> dict[str, Any]:
+        """POST / — read config values, chunking by msgpack body size.
+
+        The WizFi360 delivers incoming TCP data via AT+IPD events.  When the
+        request body exceeds the module's buffer (~500–600 bytes this is a best
+        guess) the payload is split across two AT+IPD events and the MCU
+        firmware misparses the second chunk as additional msgpack array
+        elements, causing '!!! element N is not msgpack str' errors and
+        eventual watchdog resets. Keeping each msgpack body at or below
+        _MAX_CONFIG_REQUEST_BODY_BYTES stays safely inside one AT+IPD delivery.
+        """
+        result: dict[str, Any] = {}
+        for chunk in self._chunk_config_keys(keys):
+            result.update(await self._async_get_config_raw(chunk))
+        return result
 
     async def async_set_config(self, params: dict[str, Any]) -> None:
         """PUT / — write config key/value pairs.
@@ -519,30 +625,51 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return data
 
     async def _async_init_pwm_config(self) -> dict[str, Any]:
-        """Init tick 2 — fetch PWM config and any sensor config discovered in tick 1.
+        """Init tick 2 — fetch PWM config and any sensor config, one chunk per tick.
 
-        Both key sets are batched into a single POST request.
+        On the first call builds the key list and queues all chunks into
+        _pending_refresh_chunks.  Each subsequent call (still at _init_step == 2)
+        drains one chunk.  When the final chunk is applied, advances _init_step to 3.
+
+        This preserves the one-request-per-tick contract: the WizFi360 TCP stack
+        needs a full scan interval to tear down one TCP session before the next
+        connection arrives.  Sending all chunks back-to-back in a tight loop
+        triggers WizFi360 AT+IPD corruption and eventual watchdog resets.
         """
-        pwm_count = self.config.get("pwm_count") or 8
-        keys: list[str] = []
-        for i in range(1, pwm_count + 1):
-            keys += [
-                f"pwm#{i}#name",
-                f"pwm#{i}#onoff",
-                f"pwm#{i}#max",
-                f"pwm#{i}#color",
-                f"pwm#{i}#manager",
-                f"pwm#{i}#fixed",
-                f"dayplanner#marker#{i}",
-            ]
-        for rom in self._pending_sensor_roms:
-            keys += [
-                f"sensors#sensor#{rom}#name",
-                f"sensors#sensor#{rom}#unit",
-                f"sensors#sensor#{rom}#unitcomma",
-            ]
-        config = await self.async_get_config(keys)
-        self.config.update(config)
+        if not self._pending_refresh_chunks:
+            # First call — build key list and stage all chunks.
+            pwm_count = self.config.get("pwm_count") or 8
+            keys: list[str] = []
+            for i in range(1, pwm_count + 1):
+                keys += [
+                    f"pwm#{i}#name",
+                    f"pwm#{i}#onoff",
+                    f"pwm#{i}#max",
+                    f"pwm#{i}#color",
+                    f"pwm#{i}#manager",
+                    f"pwm#{i}#fixed",
+                    f"dayplanner#marker#{i}",
+                ]
+            for rom in self._pending_sensor_roms:
+                keys += [
+                    f"sensors#sensor#{rom}#name",
+                    f"sensors#sensor#{rom}#unit",
+                    f"sensors#sensor#{rom}#unitcomma",
+                ]
+            self._pending_refresh_chunks = self._chunk_config_keys(keys)
+            self._refresh_accumulator = {}
+
+        chunk = self._pending_refresh_chunks.pop(0)
+        fresh = await self._async_get_config_raw(chunk)
+        self._refresh_accumulator.update(fresh)
+
+        if self._pending_refresh_chunks:
+            # More chunks queued — stay at init_step 2 until all are done.
+            return dict(self.data) if self.data else {}
+
+        # Final chunk — apply accumulated config and advance.
+        self.config.update(self._refresh_accumulator)
+        self._refresh_accumulator = {}
         self._init_step = 3
         return dict(self.data) if self.data else {}
 
@@ -567,6 +694,66 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # ------------------------------------------------------------------
 
     _FAILURE_GRACE = 3
+
+    def _enqueue_pwm_refresh(self) -> None:
+        """Build the PWM config key list and queue it as per-tick chunks.
+
+        Fetches pwm#X#color for every channel (activation detection) plus the
+        four detail keys only for currently-active channels.  Also drains
+        _pending_config_keys (new sensor ROMs, weather program names).
+
+        The full list is split into msgpack bodies no larger than
+        _MAX_CONFIG_REQUEST_BODY_BYTES; _async_update_data drains one chunk per
+        tick so the one-request-per-tick contract is preserved even when the
+        key list is too large for a single AT+IPD delivery.
+        """
+        pwm_count = self.config.get("pwm_count") or 8
+        keys: list[str] = []
+        for i in range(1, pwm_count + 1):
+            keys.append(f"pwm#{i}#color")
+        for i in range(1, pwm_count + 1):
+            if not self.pwm_is_unused(i):
+                keys += [
+                    f"pwm#{i}#onoff",
+                    f"pwm#{i}#name",
+                    f"pwm#{i}#manager",
+                    f"pwm#{i}#fixed",
+                ]
+        pending = list(self._pending_config_keys)
+        self._pending_config_keys.difference_update(pending)
+        keys += pending
+        self._pending_refresh_chunks = self._chunk_config_keys(keys)
+        self._refresh_accumulator = {}
+
+    async def _async_drain_one_refresh_chunk(self) -> dict[str, Any]:
+        """Send the next queued PWM config chunk — one HTTP request, one tick.
+
+        Returns the unchanged data object (suppressing listener notification)
+        while chunks remain.  On the final chunk applies the accumulated config
+        and returns new data so listeners are notified only if something changed.
+        """
+        chunk = self._pending_refresh_chunks.pop(0)
+        try:
+            fresh = await self._async_get_config_raw(chunk)
+            self._refresh_accumulator.update(fresh)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Could not refresh PWM config: %s", err)
+            self._pending_refresh_chunks.clear()
+            self._refresh_accumulator.clear()
+            return self.data or {}
+
+        if self._pending_refresh_chunks:
+            # More chunks still queued — hold off notifying listeners.
+            return self.data or {}
+
+        # Final chunk — apply accumulated results and signal if anything changed.
+        fresh = self._refresh_accumulator
+        self._refresh_accumulator = {}
+        changed = any(self.config.get(k) != v for k, v in fresh.items())
+        self.config.update(fresh)
+        data = dict(self.data or {})
+        data["ok"] = self._last_state_refresh_succeeded
+        return data if changed else (self.data or data)
 
     async def _async_refresh_state(self) -> dict[str, Any]:
         try:
@@ -610,32 +797,29 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._consecutive_failures >= self._FAILURE_GRACE:
             _LOGGER.info("SunRiser at %s is available again", self.host)
             async_delete_issue(self.hass, DOMAIN, "device_unreachable")
+            # Reset the PWM config refresh counter so it doesn't fire
+            # immediately on the first tick back — a freshly booted device
+            # needs time to stabilise before it can handle a large batch.
+            self._ticks_since_pwm_refresh = 0
         self._consecutive_failures = 0
         self._last_state_refresh_succeeded = True
         data = dict(self.data or {})
         data["timewarp"] = 0  # reset before merge; device omits the key when inactive
         data.update(state)
 
-        # Fetch config for any sensors that have appeared since last update.
+        # Queue config keys for any sensors that have appeared since last update.
+        # Fetching here would make a second request in the same tick; instead we
+        # drain the queue on the next pwm_config tick alongside the PWM keys.
         if state.get("sensors"):
-            new_roms = [
-                rom
-                for rom in state["sensors"]
-                if f"sensors#sensor#{rom}#name" not in self.config
-            ]
-            if new_roms:
-                sensor_keys: list[str] = []
-                for rom in new_roms:
-                    sensor_keys += [
-                        f"sensors#sensor#{rom}#name",
-                        f"sensors#sensor#{rom}#unit",
-                        f"sensors#sensor#{rom}#unitcomma",
-                    ]
-                try:
-                    sensor_config = await self.async_get_config(sensor_keys)
-                    self.config.update(sensor_config)
-                except aiohttp.ClientError as err:
-                    _LOGGER.warning("Could not fetch sensor config: %s", err)
+            for rom in state["sensors"]:
+                if f"sensors#sensor#{rom}#name" not in self.config:
+                    self._pending_config_keys.update(
+                        [
+                            f"sensors#sensor#{rom}#name",
+                            f"sensors#sensor#{rom}#unit",
+                            f"sensors#sensor#{rom}#unitcomma",
+                        ]
+                    )
 
         return data
 
@@ -644,21 +828,14 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             weather = await self.async_get_weather()
             data["weather"] = weather
 
-            # Lazy-load names for any weather program IDs we haven't seen before.
-            new_ids = [
-                ch["weather_program_id"]
-                for ch in weather
-                if ch is not None
-                and ch.get("weather_program_id") is not None
-                and f"weather#setup#{ch['weather_program_id']}#name" not in self.config
-            ]
-            if new_ids:
-                name_keys = [f"weather#setup#{pid}#name" for pid in new_ids]
-                try:
-                    program_config = await self.async_get_config(name_keys)
-                    self.config.update(program_config)
-                except aiohttp.ClientError as err:
-                    _LOGGER.debug("Could not fetch weather program names: %s", err)
+            # Queue names for any weather program IDs we haven't seen before.
+            # Fetching here would make a second request in the same tick; drained
+            # on the next pwm_config tick instead.
+            for ch in weather:
+                if ch is not None and ch.get("weather_program_id") is not None:
+                    pid = ch["weather_program_id"]
+                    if f"weather#setup#{pid}#name" not in self.config:
+                        self._pending_config_keys.add(f"weather#setup#{pid}#name")
         except aiohttp.ClientError as err:
             _LOGGER.debug("Could not fetch weather data: %s", err)
             data.setdefault("weather", [])
@@ -691,6 +868,18 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return await self._async_do_dst_sync()
 
         # ── Normal round-robin ──────────────────────────────────────────────────
+        # Every _PWM_CONFIG_INTERVAL ticks enqueue a PWM config refresh.
+        # _enqueue_pwm_refresh splits the key list into byte-sized chunks;
+        # _async_drain_one_refresh_chunk sends exactly one chunk per tick so the
+        # one-request-per-tick contract is never broken.
+        self._ticks_since_pwm_refresh += 1
+        if self._ticks_since_pwm_refresh >= self._PWM_CONFIG_INTERVAL:
+            self._ticks_since_pwm_refresh = 0
+            self._enqueue_pwm_refresh()
+
+        if self._pending_refresh_chunks:
+            return await self._async_drain_one_refresh_chunk()
+
         refresh_kind = self._REFRESH_SEQUENCE[self._next_refresh_index]
 
         if refresh_kind == "state":
