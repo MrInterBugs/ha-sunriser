@@ -809,6 +809,28 @@ async def test_service_factory_backup_device_error(hass, setup_entry):
         )
 
 
+async def test_service_factory_backup_not_available(hass, setup_entry):
+    coordinator = setup_entry
+    err = aiohttp.ClientResponseError(None, None, status=500)
+    coordinator.async_get_factory_backup = AsyncMock(side_effect=err)
+
+    with pytest.raises(HomeAssistantError, match="CFGBACK1"):
+        await hass.services.async_call(
+            DOMAIN, "download_factory_backup", {}, blocking=True, return_response=True
+        )
+
+
+async def test_service_factory_backup_other_http_error(hass, setup_entry):
+    coordinator = setup_entry
+    err = aiohttp.ClientResponseError(None, None, status=503)
+    coordinator.async_get_factory_backup = AsyncMock(side_effect=err)
+
+    with pytest.raises(HomeAssistantError, match="Failed to retrieve factory backup"):
+        await hass.services.async_call(
+            DOMAIN, "download_factory_backup", {}, blocking=True, return_response=True
+        )
+
+
 async def test_service_factory_backup_write_error(hass, setup_entry):
     coordinator = setup_entry
     coordinator.async_get_factory_backup = AsyncMock(return_value=b"\x80")

@@ -453,6 +453,17 @@ def _register_services(hass: HomeAssistant) -> None:
         coordinator = _get_coordinator(hass)
         try:
             data = await coordinator.async_get_factory_backup()
+        except aiohttp.ClientResponseError as err:
+            if err.status == 500:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="factory_backup_not_available",
+                ) from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="factory_backup_retrieve_failed",
+                translation_placeholders={"error": f"HTTP {err.status}"},
+            ) from err
         except aiohttp.ClientError as err:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,

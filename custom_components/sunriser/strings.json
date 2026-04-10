@@ -149,6 +149,9 @@
     "set_weekplanner_failed": {
       "message": "Failed to update week planner: {error}"
     },
+    "factory_backup_not_available": {
+      "message": "Factory backup is not available on this device. The CFGBACK1 directory only exists after a firmware-from-SD-card installation, which has not been performed on this unit."
+    },
     "factory_backup_retrieve_failed": {
       "message": "Failed to retrieve factory backup from SunRiser: {error}"
     },
