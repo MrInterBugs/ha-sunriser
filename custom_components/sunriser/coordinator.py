@@ -49,7 +49,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator that polls /state and holds device config."""
 
     _REFRESH_SEQUENCE = ("state", "state", "state", "state", "weather")
-    _MAX_CONFIG_REQUEST_BODY_BYTES = 450
+    _MAX_CONFIG_REQUEST_BODY_BYTES = 250
     # How many normal ticks between PWM config refreshes.  Each tick is one HTTP
     # request; the WizFi360 TCP stack becomes unresponsive if POST / (the config
     # read endpoint) fires too frequently.  240 ticks ≈ 4 h at the default 60 s
