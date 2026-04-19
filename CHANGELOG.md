@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.7.1] - 2026-04-19
+
+### Fixed
+
+- **Reduced config chunk limit to 250 bytes** — the previous 450-byte cap did not account for HTTP request-line and header overhead; device logs showed `element N is not msgpack str` errors and watchdog resets with chunks above ~300 bytes, so the limit is lowered to keep the full TCP payload well within the WizFi360's AT+IPD single-event capacity
+
 ## [1.7.0] - 2026-04-07
 
 ### Added
