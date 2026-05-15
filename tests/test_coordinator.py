@@ -721,6 +721,77 @@ async def test_repair_issue_not_deleted_on_normal_recovery(coord):
     mock_delete.assert_not_called()
 
 
+async def test_reboot_detected_via_uptime_drop(coord, caplog):
+    """Uptime drop triggers reboot detection: counter resets and hold is set."""
+    coord.config = dict(FAKE_CONFIG)
+    coord._last_uptime = 60000  # previously high
+    coord._ticks_since_pwm_refresh = 55  # near but below threshold
+
+    rebooted_state = dict(FAKE_STATE)
+    rebooted_state["uptime"] = 30  # reset to near-zero
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", body=_pack(rebooted_state))
+        with caplog.at_level(logging.INFO, logger="custom_components.sunriser"):
+            await coord._async_refresh_state()
+
+    assert "reboot detected" in caplog.text
+    assert coord._ticks_since_pwm_refresh == 0
+    assert coord._post_reboot_hold_ticks == 4
+
+
+async def test_reboot_detection_clears_pending_chunks(coord):
+    """Reboot detection aborts any in-progress config refresh chunks."""
+    coord.config = dict(FAKE_CONFIG)
+    coord._last_uptime = 60000
+    coord._pending_refresh_chunks = [["pwm#1#color"], ["pwm#2#color"]]
+    coord._refresh_accumulator = {"pwm#1#color": "4500k"}
+
+    rebooted_state = dict(FAKE_STATE)
+    rebooted_state["uptime"] = 20
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", body=_pack(rebooted_state))
+        await coord._async_refresh_state()
+
+    assert coord._pending_refresh_chunks == []
+    assert coord._refresh_accumulator == {}
+
+
+async def test_post_reboot_hold_blocks_pwm_refresh(coord):
+    """When _post_reboot_hold_ticks > 0 the PWM config refresh is suppressed."""
+    coord._init_step = 4
+    coord._next_refresh_index = 0
+    coord.config = dict(FAKE_CONFIG)
+    coord.data = dict(FAKE_STATE)
+    # Saturate the refresh counter so it would fire immediately.
+    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
+    coord._post_reboot_hold_ticks = 4
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        await coord._async_update_data()
+
+    # Hold consumed one tick but config refresh must NOT have run.
+    assert coord._post_reboot_hold_ticks == 3
+    assert coord._pending_refresh_chunks == []
+    # Counter was NOT reset (no refresh triggered).
+    assert coord._ticks_since_pwm_refresh == coord._PWM_CONFIG_INTERVAL + 1
+
+
+async def test_post_reboot_hold_set_on_long_outage_recovery(coord, caplog):
+    """Recovery from a >= FAILURE_GRACE outage also sets the post-reboot hold."""
+    coord.config = dict(FAKE_CONFIG)
+    coord._consecutive_failures = coord._FAILURE_GRACE
+
+    with aioresponses() as m:
+        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        await coord._async_refresh_state()
+
+    assert coord._post_reboot_hold_ticks >= 4
+    assert coord._ticks_since_pwm_refresh == 0
+
+
 async def test_update_data_sensor_config_fetch_error_logs_warning(coord, caplog):
     """If the pwm_config POST fails, stale data is returned and debug is logged.
 

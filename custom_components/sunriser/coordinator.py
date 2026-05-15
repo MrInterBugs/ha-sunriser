@@ -83,6 +83,15 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._init_step: int = 0
         self._pending_sensor_roms: list[str] = []
         self._ticks_since_pwm_refresh: int = 0
+        # Uptime-based reboot detection: track the last known device uptime so
+        # that a sudden drop (uptime resets to near-zero after a watchdog/reboot)
+        # can be detected and used to delay the next config-read burst.
+        # _post_reboot_hold_ticks counts how many remaining ticks must pass before
+        # a PWM config refresh is allowed; each tick is one scan interval.
+        # 4 ticks × 30 s default = 2 min, which exceeds the ~99 s stabilisation
+        # time observed in production (history.csv analysis).
+        self._last_uptime: int | None = None
+        self._post_reboot_hold_ticks: int = 0
         # Config keys discovered during state/weather ticks that need fetching.
         # Drained on the next pwm_config tick so no tick ever makes two requests.
         self._pending_config_keys: set[str] = set()
@@ -797,15 +806,36 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._consecutive_failures >= self._FAILURE_GRACE:
             _LOGGER.info("SunRiser at %s is available again", self.host)
             async_delete_issue(self.hass, DOMAIN, "device_unreachable")
-            # Reset the PWM config refresh counter so it doesn't fire
-            # immediately on the first tick back — a freshly booted device
-            # needs time to stabilise before it can handle a large batch.
+            # Reset the PWM config refresh counter and set a post-reboot hold so
+            # the config-read burst doesn't fire immediately on the first tick back.
+            # A freshly booted device needs time to stabilise its WiFi stack before
+            # handling a rapid sequence of POST / requests.
             self._ticks_since_pwm_refresh = 0
+            self._post_reboot_hold_ticks = max(4, self._post_reboot_hold_ticks)
         self._consecutive_failures = 0
         self._last_state_refresh_succeeded = True
         data = dict(self.data or {})
         data["timewarp"] = 0  # reset before merge; device omits the key when inactive
         data.update(state)
+
+        # Detect reboot via uptime drop.  When the device reboots its uptime resets
+        # to near-zero; a drop from any non-trivial value signals a watchdog reset or
+        # power cycle.  We reset _ticks_since_pwm_refresh here too so that a short
+        # reboot (< _FAILURE_GRACE missed polls, so the block above never runs) also
+        # gets a cooldown — the common crash-cascade scenario.
+        current_uptime = state.get("uptime") or 0
+        if self._last_uptime is not None and 0 < current_uptime < self._last_uptime:
+            _LOGGER.info(
+                "SunRiser: reboot detected (uptime %d s → %d s) — holding config refresh for %d ticks",
+                self._last_uptime,
+                current_uptime,
+                max(4, self._post_reboot_hold_ticks),
+            )
+            self._ticks_since_pwm_refresh = 0
+            self._post_reboot_hold_ticks = max(4, self._post_reboot_hold_ticks)
+            self._pending_refresh_chunks.clear()
+            self._refresh_accumulator.clear()
+        self._last_uptime = current_uptime
 
         # Queue config keys for any sensors that have appeared since last update.
         # Fetching here would make a second request in the same tick; instead we
@@ -872,8 +902,19 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # _enqueue_pwm_refresh splits the key list into byte-sized chunks;
         # _async_drain_one_refresh_chunk sends exactly one chunk per tick so the
         # one-request-per-tick contract is never broken.
+        #
+        # _post_reboot_hold_ticks suppresses config reads for N ticks after a
+        # detected reboot.  This prevents the POST / burst from hitting a freshly
+        # booted device whose WiFi stack is still stabilising, which was the root
+        # cause of the crash-cascade seen in production.
         self._ticks_since_pwm_refresh += 1
-        if self._ticks_since_pwm_refresh >= self._PWM_CONFIG_INTERVAL:
+        if self._post_reboot_hold_ticks > 0:
+            self._post_reboot_hold_ticks -= 1
+            _LOGGER.debug(
+                "SunRiser: post-reboot config hold, %d ticks remaining",
+                self._post_reboot_hold_ticks,
+            )
+        elif self._ticks_since_pwm_refresh >= self._PWM_CONFIG_INTERVAL:
             self._ticks_since_pwm_refresh = 0
             self._enqueue_pwm_refresh()
 
