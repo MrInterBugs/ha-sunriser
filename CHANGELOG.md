@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.7.2-reboot-backoff-beta.1] - 2026-05-15
+
+### Fixed
+
+- **Hold config refreshes after device reboot detection** — the coordinator now detects uptime drops and long-outage recovery, resets the PWM refresh counter, clears in-progress config refresh chunks, and suppresses config reads for four ticks so a freshly rebooted WizFi360 is not hit with a large POST burst while its WiFi stack is still stabilising
+
 ## [1.7.1] - 2026-04-19
 
 ### Fixed
