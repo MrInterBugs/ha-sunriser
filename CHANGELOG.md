@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.2.0] - 2026-10-08
+
+### Added
+
+- Display selected daily and weekly curves together in the compact, read-only
+  Day Planner card. Resolve weekly programs using the controller timezone and
+  fallback assignment; show planner and program details in legend hover labels.
+- Optional per-channel Weather Profile selectors assign existing profiles or
+  None, using stable profile IDs and checking availability before writes.
+- Read-only planning snapshot action and offline browser checks for the graph
+  and narrow dashboard layout.
+
+### Upgrade and validation
+
+- Download through HACS, restart Home Assistant, and refresh the dashboard.
+  Enable Weather Profile selectors in the device entity settings if wanted.
+- Edit schedules and weather effects in the controller interface. Existing
+  day/week automation actions retain their behavior.
+- No functional changes since the compact-graph build; this release adds the
+  final documentation updates and stable version number.
+- 536 mocked Python tests pass with 100% statement coverage, plus eight frontend
+  unit tests and two Chromium browser tests. Automated validation does not
+  establish long-duration controller stability.
+
 ## [2.2.0-feature-weather-schedule-editor-beta.2] - 2026-10-08
 
 ### Changed
