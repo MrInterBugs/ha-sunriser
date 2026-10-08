@@ -4,16 +4,30 @@ A community-made Home Assistant custom integration for the [SunRiser 8/10](https
 
 Connects HA to the controller over HTTP using the [MessagePack](https://msgpack.org/) binary protocol. Each active PWM channel gets one or more entities (light, switch, select, number), and there are service actions for backup, restore, scheduling, and diagnostics.
 
+The current release targets **controller firmware 1.006**; compatibility with older firmware is unverified. Home Assistant must be able to reach the controller over your local network.
+
+- Control channel outputs and day/week planners, and monitor temperature, weather simulation, and connectivity.
+- Use Maintenance Mode and Blackout, with optional timeout, per-channel level, and exclusion settings. Turning Maintenance Mode off ends either session.
+- View the operating mode and optionally enable Maintenance Ends At. Maintenance configuration entities and the end-time sensor are disabled by default; enable them from the device's entity settings.
+
+See the [maintenance guide](https://mrinterbugs.github.io/ha-sunriser/configuration/#maintenance-and-blackout-firmware-1006) for details. Channels excluded from maintenance/blackout continue normal operation.
+
 **Full documentation:** [mrinterbugs.github.io/ha-sunriser](https://mrinterbugs.github.io/ha-sunriser/)
 
-![SunRiser device page in Home Assistant](docs/images/device_page.png)
+![Earlier SunRiser device page on firmware 1.005](docs/images/device_page.png)
+
+*Earlier firmware 1.005 example; current releases include additional controls and firmware 1.006 handles DST itself.*
 
 ## Quick install
 
-1. Add `https://github.com/MrInterBugs/ha-sunriser` as a custom repository in HACS (category: Integration)
-2. Search for **SunRiser** in HACS and click **Download**
+SunRiser is included in the HACS default catalogue.
+
+1. Open **HACS** in Home Assistant
+2. Search for **SunRiser**, open its page, and click **Download**
 3. Restart Home Assistant
 4. Go to **Settings → Devices & Services → Add Integration** and search for **SunRiser**
+
+For an existing installation, download the [latest stable release](https://github.com/MrInterBugs/ha-sunriser/releases/latest) through HACS and restart Home Assistant. Beta versions do not need to be enabled. See the [changelog](CHANGELOG.md) for upgrade notes.
 
 See the [installation docs](https://mrinterbugs.github.io/ha-sunriser/installation/) for the full walkthrough.
 

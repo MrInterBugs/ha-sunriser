@@ -4,18 +4,18 @@
 
 - Home Assistant with HACS installed. Automated integration tests target Home Assistant 2026.2.3; an older minimum version has not been verified.
 - SunRiser 8 or 10 reachable from Home Assistant on your local network
-- Controller firmware 1.006 for the 2.0 release; compatibility with older firmware is unverified.
+- Controller firmware 1.006 for the current release; compatibility with older firmware is unverified.
 
 Install [HACS](https://hacs.xyz/) first if it is not already available.
 
 ## Install via HACS
 
-1. Open HACS in your Home Assistant sidebar
-2. Click the **three-dot menu** (top right) and select **Custom repositories**
-3. Paste `https://github.com/MrInterBugs/ha-sunriser` into the URL field
-4. Set category to **Integration** and click **Add**
-5. Search for **SunRiser** in HACS and click **Download**
-6. Restart Home Assistant
+SunRiser is included in the HACS default catalogue.
+
+1. Open **HACS** in your Home Assistant sidebar
+2. Search for **SunRiser** and open its page
+3. Click **Download** and select the latest stable release
+4. Restart Home Assistant
 
 To test a beta, enable **Show beta versions** in the repository download dialog and select the desired prerelease.
 
@@ -29,7 +29,9 @@ To test a beta, enable **Show beta versions** in the repository download dialog 
 
 The integration will automatically detect all active PWM channels and temperature sensors on your device.
 
-![SunRiser device page in Home Assistant](images/device_page.png)
+![Earlier SunRiser device page on firmware 1.005](images/device_page.png)
+
+*Earlier firmware 1.005 example; current releases include additional controls and firmware 1.006 handles DST itself.*
 
 !!! note
     Entities are created during setup after state and configuration have loaded. Home Assistant retries setup if required reads fail.
