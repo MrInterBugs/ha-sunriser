@@ -78,7 +78,7 @@ assume that blackout switches every output off.
 
 | Entity | Purpose |
 |---|---|
-| Blackout switch | Start/end blackout |
+| Blackout Mode switch | Start/end blackout |
 | Existing Maintenance Mode switch | Start/end a maintenance session; remains **on during blackout** for compatibility |
 | Operating Mode sensor | Distinguishes normal, maintenance, blackout and time-lapse; missing state is unknown |
 | Maintenance Ends At sensor | Disabled by default; estimated expiry from the latest firmware countdown; unknown when inactive, indefinite, or not reported |

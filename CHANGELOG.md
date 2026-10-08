@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Rename the default Blackout control label to Blackout Mode to match Maintenance
+  Mode. Preserve the entity unique ID and control behaviour.
+
 ## [2.1.0] - 2026-10-08
 
 ### Added

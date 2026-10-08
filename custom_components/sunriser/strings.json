@@ -126,7 +126,7 @@
         "name": "DST Auto-Track"
       },
       "blackout": {
-        "name": "Blackout"
+        "name": "Blackout Mode"
       },
       "maintenance_excluded": {
         "name": "{channel} Maintenance Excluded"

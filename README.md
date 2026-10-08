@@ -7,7 +7,7 @@ Connects HA to the controller over HTTP using the [MessagePack](https://msgpack.
 The current release targets **controller firmware 1.006**; compatibility with older firmware is unverified. Home Assistant must be able to reach the controller over your local network.
 
 - Control channel outputs and day/week planners, and monitor temperature, weather simulation, and connectivity.
-- Use Maintenance Mode and Blackout, with optional timeout, per-channel level, and exclusion settings. Turning Maintenance Mode off ends either session.
+- Use Maintenance Mode and Blackout Mode, with optional timeout, per-channel level, and exclusion settings. Turning Maintenance Mode off ends either session.
 - View the operating mode and optionally enable Maintenance Ends At. Maintenance configuration entities and the end-time sensor are disabled by default; enable them from the device's entity settings.
 
 See the [maintenance guide](https://mrinterbugs.github.io/ha-sunriser/configuration/#maintenance-and-blackout-firmware-1006) for details. Channels excluded from maintenance/blackout continue normal operation.
