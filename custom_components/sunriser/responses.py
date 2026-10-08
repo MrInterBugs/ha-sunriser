@@ -99,7 +99,15 @@ def decode_config(body: bytes) -> dict[str, Any]:
     for key, value in config.items():
         if value is None:
             continue  # Unset configuration values are normal.
-        if key == "pwm_count":
+        if key in ("weather#web", "programs#web"):
+            from .planning import profiles
+
+            profiles(value)
+        elif key.startswith("programs#setup#") and key.endswith("#marker"):
+            from .planning import markers
+
+            markers(value)
+        elif key == "pwm_count":
             _number(value, key, integer=True)
             if not 1 <= value <= 10:
                 raise InvalidResponse("pwm_count must be between 1 and 10")
@@ -118,11 +126,13 @@ def decode_config(body: bytes) -> dict[str, Any]:
         elif (
             key.startswith(("pwm#", "sensors#sensor#"))
             and key.rsplit("#", 1)[-1]
-            in ("max", "manager", "fixed", "unit", "unitcomma", "service")
+            in ("max", "manager", "fixed", "unit", "unitcomma", "service", "weather")
             or key in ("service_timeout", "service_value")
         ):
             _number(value, key, integer=True)
-        elif key.startswith("pwm#") and key.rsplit("#", 1)[-1] in ("onoff", "nomaint"):
+        elif (
+            key.startswith("pwm#") and key.rsplit("#", 1)[-1] in ("onoff", "nomaint")
+        ) or (key.startswith("programs#setup#") and key.endswith("#deleted")):
             if type(value) not in (bool, int) or value not in (0, 1):
                 raise InvalidResponse(f"{key} must be a boolean or 0/1")
         elif key.startswith(("dayplanner#marker#", "weekplanner#programs#")):

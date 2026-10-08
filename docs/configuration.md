@@ -68,7 +68,10 @@ channels:
 
 To find the device ID, select the controller in **Developer Tools → Actions** for a SunRiser action and switch to YAML to copy `data.device_id`.
 
-The card shows channels with stored day-planner markers. It does not show live PWM output, weather effects, or which week-planner program is currently active. Use the light and weather entities for live values. A schedule changed in the device web UI appears after a successful controller poll and the next card refresh.
+The card displays the selected daily/weekly schedule and provides explicit Save
+and Discard editing. Fixed and unassigned channels are labelled. See
+[Schedule editing](#schedule-editing-firmware-1006) below for details. Its refresh
+reads program details on demand without increasing the coordinator polling rate.
 
 ## Maintenance and blackout (firmware 1.006+)
 
@@ -105,3 +108,45 @@ If a command times out, its outcome can be uncertain: check state before retryin
 The estimated end time is anchored to a successful state read and is not moved
 forward by failed polls. Exact timing and timeout changes during a session need
 hardware beta validation.
+
+## Weather profile assignment (firmware 1.006+)
+
+Enable the optional **Weather Profile** select for each channel in the device's
+entity settings. Select an existing profile or **None**. Names include the profile
+ID so identically named profiles remain distinguishable. Renaming a profile does
+not change the entity identity. Changes in the vendor interface appear after a
+successful poll. A missing assigned profile is shown explicitly until reassigned.
+
+This changes only the channel assignment. Create profiles and edit their shared
+cloud/rain/thunder/moon settings in the vendor interface; no storm commands are
+sent when selecting a profile.
+
+## Schedule editing (firmware 1.006+)
+
+The existing Day Planner card now displays the daily or weekly curve selected by
+each channel's planner. Fixed and unassigned channels are labelled separately.
+Weekly selection uses the controller's timezone (`tz`, or its legacy UTC offset
+and summertime flag), not the browser timezone. If that information is missing,
+no weekly curve is guessed. Curves describe scheduled output before weather,
+maintenance, manual changes, and other overrides.
+
+- **Edit daily curve** opens a time/percentage table with a local preview. Times
+  must be unique, from `00:00` through `24:00`; percentages are whole numbers from
+  0 to 100. Save does not switch the channel to daily planning.
+- **Edit week** assigns existing named programs to each weekday and a fallback.
+  An unassigned day uses the fallback; no fallback means no program.
+- **Named programs → Edit program** edits an existing shared program. The editor
+  lists channels using it; saving affects every channel referencing that program.
+- **Save** persists the draft; **Discard** makes no controller changes. Background
+  refreshes do not replace drafts, and failed saves retain edits.
+
+Before saving, the integration re-reads the target and rejects a changed revision.
+Discard and reopen to load current values after a conflict. This detects changes
+observed before the write; the firmware offers no atomic compare-and-swap against
+simultaneous vendor-interface writes. If a request times out, reload the values
+before retrying because the controller may have accepted it.
+
+Program creation/deletion/renaming, graph dragging, and bulk copying are not part
+of this editor. Existing day/week service actions keep their previous semantics.
+The card fetches program details on demand; normal polling does not fetch the
+program library. No controller writes occur until Save is pressed.

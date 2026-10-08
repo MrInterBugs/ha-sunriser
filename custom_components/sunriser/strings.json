@@ -87,6 +87,9 @@
     "select": {
       "pwm_manager": {
         "name": "{channel} Manager"
+      },
+      "weather_profile": {
+        "name": "{channel} Weather Profile"
       }
     },
     "sensor": {

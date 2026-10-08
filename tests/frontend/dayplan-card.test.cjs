@@ -27,7 +27,7 @@ function loadCard() {
   vm.runInNewContext(source, context);
   return { card: new Card(), timers };
 }
-const response = name => ({ response: { name, markers: [{ time: '12:00', percent: 50 }] } });
+const response = name => ({ response: { channels: Array.from({ length: 4 }, (_, i) => ({ pwm: i + 1, name, manager: 1, daily: [{ time: '12:00', percent: 50 }], markers: [{ time: '12:00', percent: 50 }], daily_revision: 'original' })), programs: [], weekday: 4 } });
 const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
 
 test('changing controller discards pending old responses and never mixes devices', async () => {
@@ -44,7 +44,7 @@ test('changing controller discards pending old responses and never mixes devices
   await flush();
   release(response('old'));
   await flush();
-  assert.equal(card._schedules.length, 10);
+  assert.equal(card._schedules.length, 4);
   assert.ok(card._schedules.every(schedule => schedule.name === 'new'));
   assert.equal(calls.filter(device => device === 'old').length, 1);
 });
@@ -108,11 +108,11 @@ test('reconnecting refreshes immediately', async () => {
     return Promise.resolve(response('current'));
   } } };
   await flush();
-  assert.equal(count, 10);
+  assert.equal(count, 1);
   card.disconnectedCallback();
   card.connectedCallback();
   await flush();
-  assert.equal(count, 20);
+  assert.equal(count, 2);
 });
 
 test('a rejected response from the previous controller cannot replace the new result', async () => {
@@ -141,5 +141,64 @@ test('request failures are displayed and a later refresh can recover', async () 
   card._hass.connection.sendMessagePromise = () => Promise.resolve(response('recovered'));
   await card._fetch();
   assert.equal(card._error, null);
-  assert.equal(card._schedules.length, 10);
+  assert.equal(card._schedules.length, 4);
+});
+
+
+test('polling preserves unsaved drafts and failed saves remain editable', async () => {
+  const { card } = loadCard();
+  let fail = true;
+  const writes = [];
+  card.hass = { connection: { async sendMessagePromise(req) {
+    if (req.service === 'save_planning') {
+      writes.push(req.service_data);
+      if (fail) throw new Error('Schedule changed on controller');
+      return {};
+    }
+    return response('Tank');
+  } } };
+  await flush();
+  card._edit('daily', card._schedules[0]);
+  card._marker(0, 'percent', 75);
+  await card._fetch();
+  assert.equal(card._draft.markers[0].percent, 75);
+  await card._save();
+  assert.equal(card._draft.markers[0].percent, 75);
+  assert.match(card._editError, /changed/);
+  fail = false;
+  await card._save();
+  assert.equal(card._draft, null);
+  assert.equal(writes[0].revision, 'original');
+});
+
+test('invalid and duplicate markers cannot be saved', async () => {
+  const { card } = loadCard();
+  card.hass = { connection: { sendMessagePromise: async () => response('Tank') } };
+  await flush();
+  card._edit('daily', card._schedules[0]);
+  card._draft.markers.push({ time: '12:00', percent: 20 });
+  assert.match(card._draftProblem(), /different time/);
+  card._draft.markers = [{ time: '24:01', percent: 20 }];
+  assert.match(card._draftProblem(), /00:00/);
+  card._draft.markers = [{ time: '24:00', percent: 100 }];
+  assert.equal(card._draftProblem(), null);
+});
+
+test('a delayed save cannot clear a draft for another controller', async () => {
+  const { card } = loadCard();
+  let release;
+  card.setConfig({ device_id: 'old' });
+  card.hass = { connection: { sendMessagePromise(req) {
+    return req.service === 'save_planning' ? new Promise(resolve => { release = resolve; }) : Promise.resolve(response('Tank'));
+  } } };
+  await flush();
+  card._edit('daily', card._schedules[0]);
+  const pending = card._save();
+  card.setConfig({ device_id: 'new' });
+  await flush();
+  card._edit('daily', card._schedules[0]);
+  const draft = card._draft;
+  release({});
+  await pending;
+  assert.equal(card._draft, draft);
 });

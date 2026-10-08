@@ -26,6 +26,7 @@ from homeassistant.helpers.issue_registry import (
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
+from . import planning
 from .responses import InvalidResponse, decode_config, decode_state, decode_weather
 
 from .const import (
@@ -164,11 +165,11 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         self._require_maintenance_support()
         await self.async_set_config({key: value})
 
-    def _require_maintenance_support(self) -> None:
+    def _require_maintenance_support(
+        self, feature: str = "Maintenance configuration"
+    ) -> None:
         if not self.supports_maintenance_config:
-            raise HomeAssistantError(
-                "Maintenance configuration requires firmware 1.006 or later"
-            )
+            raise HomeAssistantError(f"{feature} requires firmware 1.006 or later")
 
     async def async_set_blackout(self, enabled: bool) -> None:
         """Use the firmware's blackout command; it owns fades, exclusions and expiry."""
@@ -260,21 +261,166 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         so it can track the config lineage. See sunriser_network.js line 120.
         """
         async with self._config_lock:
-            payload = dict(params)
-            factory_version = self.config.get("factory_version")
-            if factory_version:
-                payload["save_version"] = factory_version
-            session = self._get_session()
-            body = msgpack.packb(payload, use_bin_type=True)
-            async with session.put(
-                f"{self.base_url}/",
-                data=body,
-                headers={"Content-Type": "application/x-msgpack"},
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as resp:
-                resp.raise_for_status()
+            await self._async_write_config(params)
 
-            self.update_config_cache(payload)
+    async def _async_write_config(self, params: dict[str, Any]) -> None:
+        """Write and publish while the caller holds the configuration lock."""
+        payload = dict(params)
+        factory_version = self.config.get("factory_version")
+        if factory_version:
+            payload["save_version"] = factory_version
+        session = self._get_session()
+        body = msgpack.packb(payload, use_bin_type=True)
+        async with session.put(
+            f"{self.base_url}/",
+            data=body,
+            headers={"Content-Type": "application/x-msgpack"},
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as resp:
+            resp.raise_for_status()
+
+        self.update_config_cache(payload)
+
+    async def async_set_weather_profile(self, channel: int, profile_id: int) -> None:
+        self._require_maintenance_support("Weather profile assignment")
+        async with self._config_lock:
+            fresh = await self.async_get_config(
+                ["weather#web", "pwm_count", f"pwm#{channel}#color"]
+            )
+            if not 1 <= channel <= (
+                fresh.get("pwm_count") or self.pwm_count
+            ) or not fresh.get(f"pwm#{channel}#color"):
+                raise HomeAssistantError("Channel is no longer configured")
+            if profile_id and profile_id not in {
+                p["id"] for p in planning.profiles(fresh.get("weather#web"))
+            }:
+                raise HomeAssistantError(
+                    "Weather profile no longer exists; refresh and try again"
+                )
+            await self._async_write_config({f"pwm#{channel}#weather": profile_id})
+            self.update_config_cache({"weather#web": fresh.get("weather#web")})
+
+    async def _async_planning_snapshot(self) -> dict[str, Any]:
+        """Read the program library only when the card/editor needs it."""
+        keys = ["pwm_count", "programs#web", "tz", "gmtoff", "summertime"]
+        for channel in range(1, self.pwm_count + 1):
+            keys.extend(
+                [
+                    f"pwm#{channel}#{field}"
+                    for field in ("name", "color", "manager", "fixed")
+                ]
+            )
+            keys.extend(
+                [f"dayplanner#marker#{channel}", f"weekplanner#programs#{channel}"]
+            )
+        config = await self.async_get_config(keys)
+        library = planning.profiles(config.get("programs#web"))
+        program_keys = [
+            f"programs#setup#{p['id']}#{field}"
+            for p in library
+            for field in ("marker", "deleted")
+        ]
+        details = await self.async_get_config(program_keys) if program_keys else {}
+        programs: list[dict[str, Any]] = []
+        for profile in library:
+            pid = profile["id"]
+            if details.get(f"programs#setup#{pid}#deleted"):
+                continue
+            curve = planning.markers(details.get(f"programs#setup#{pid}#marker"))
+            programs.append(
+                {
+                    **profile,
+                    "markers": curve,
+                    "channels": [],
+                }
+            )
+        by_id = {p["id"]: p for p in programs}
+        day = planning.weekday(config, dt_util.utcnow())
+        channels: list[dict[str, Any]] = []
+        for channel in range(
+            1, min(config.get("pwm_count") or self.pwm_count, self.pwm_count) + 1
+        ):
+            if not config.get(f"pwm#{channel}#color"):
+                continue
+            manager = config.get(f"pwm#{channel}#manager") or 0
+            daily = planning.markers(config.get(f"dayplanner#marker#{channel}"))
+            week = planning.assignments(config.get(f"weekplanner#programs#{channel}"))
+            active_id = (week[day] or week[7]) if day is not None else None
+            active = by_id.get(active_id)
+            name = config.get(f"pwm#{channel}#name") or self.pwm_name(channel)
+            for program in programs:
+                if manager == 2 and program["id"] in week:
+                    program["channels"].append(name)
+            channels.append(
+                {
+                    "pwm": channel,
+                    "name": name,
+                    "color_id": config[f"pwm#{channel}#color"],
+                    "manager": manager,
+                    "markers": (
+                        daily
+                        if manager == 1
+                        else (active["markers"] if manager == 2 and active else [])
+                    ),
+                    "daily": daily,
+                    "week": week,
+                    "program_id": active_id if manager == 2 else None,
+                    "program_name": active["name"] if manager == 2 and active else None,
+                    "daily_revision": planning.revision([channel, manager, daily]),
+                    "week_revision": planning.revision([channel, manager, week]),
+                    "fixed": config.get(f"pwm#{channel}#fixed") or 0,
+                }
+            )
+        for program in programs:
+            program["revision"] = planning.revision(
+                [
+                    program["id"],
+                    program["name"],
+                    program["markers"],
+                    program["channels"],
+                ]
+            )
+        return {"channels": channels, "programs": programs, "weekday": day}
+
+    async def async_get_planning(self) -> dict[str, Any]:
+        async with self._config_lock:
+            return await self._async_planning_snapshot()
+
+    async def async_save_planning(
+        self, kind: str, target: int, revision: str, value: Any
+    ) -> None:
+        """Compare fresh data before writing; vendor-side writes cannot be locked by HA."""
+        self._require_maintenance_support("Schedule editing")
+        async with self._config_lock:
+            snapshot = await self._async_planning_snapshot()
+            items = snapshot["programs"] if kind == "program" else snapshot["channels"]
+            item = next(
+                (
+                    item
+                    for item in items
+                    if item["id" if kind == "program" else "pwm"] == target
+                ),
+                None,
+            )
+            revision_key = "revision" if kind == "program" else f"{kind}_revision"
+            if item is None or item[revision_key] != revision:
+                raise HomeAssistantError(
+                    "Schedule changed on the controller. Reload the editor before saving."
+                )
+            if kind == "week":
+                week = planning.assignments(value)
+                available = {p["id"] for p in snapshot["programs"]} | {0}
+                if any(pid not in available for pid in week):
+                    raise HomeAssistantError("A selected program no longer exists")
+                params = {f"weekplanner#programs#{target}": week}
+            else:
+                key = (
+                    f"programs#setup#{target}#marker"
+                    if kind == "program"
+                    else f"dayplanner#marker#{target}"
+                )
+                params = {key: planning.flatten(value)}
+            await self._async_write_config(params)
 
     @callback
     def update_config_cache(self, params: dict[str, Any]) -> None:
@@ -597,7 +743,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         pwm_count = self.config.get("pwm_count") or len(data.get("pwms", {})) or 8
         keys = list(self._BASE_CONFIG_KEYS)
         if self.supports_maintenance_config:
-            keys.extend(("service_timeout", "service_value"))
+            keys.extend(("service_timeout", "service_value", "weather#web"))
         for channel in range(1, pwm_count + 1):
             keys.extend(
                 f"pwm#{channel}#{key}"
@@ -605,7 +751,13 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             )
             keys.append(f"dayplanner#marker#{channel}")
             if self.supports_maintenance_config:
-                keys.extend((f"pwm#{channel}#service", f"pwm#{channel}#nomaint"))
+                keys.extend(
+                    (
+                        f"pwm#{channel}#service",
+                        f"pwm#{channel}#nomaint",
+                        f"pwm#{channel}#weather",
+                    )
+                )
         for rom in data.get("sensors", {}):
             keys.extend(
                 f"sensors#sensor#{rom}#{key}" for key in ("name", "unit", "unitcomma")

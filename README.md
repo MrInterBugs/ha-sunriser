@@ -8,6 +8,7 @@ The current release targets **controller firmware 1.006**; compatibility with ol
 
 - Control channel outputs and day/week planners, and monitor temperature, weather simulation, and connectivity.
 - Use Maintenance Mode and Blackout Mode, with optional timeout, per-channel level, and exclusion settings. Turning Maintenance Mode off ends either session.
+- Assign existing weather profiles through optional per-channel selectors, and edit daily curves, shared program curves, and weekly assignments in the Day Planner card.
 - View the operating mode and optionally enable Maintenance Ends At. Maintenance configuration entities and the end-time sensor are disabled by default; enable them from the device's entity settings.
 
 See the [maintenance guide](https://mrinterbugs.github.io/ha-sunriser/configuration/#maintenance-and-blackout-firmware-1006) for details. Channels excluded from maintenance/blackout continue normal operation.

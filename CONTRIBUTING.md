@@ -72,3 +72,10 @@ public documentation.
 
 Preview locally with `.venv/bin/mkdocs serve`. Changes should pass the strict build above. The Pages workflow publishes only pushes
 to `main`; pushing a feature branch does not update the published site.
+
+### Schedule card browser tests
+
+Run `npm ci`, `npx playwright install chromium`, then `npm run test:browser`.
+The tests serve a local card harness with mocked HA service calls; they never
+contact a controller or live Home Assistant. `npm test` runs the faster card
+logic tests. CI runs both, installing Chromium with its required system packages.

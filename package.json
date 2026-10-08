@@ -1,0 +1,12 @@
+{
+  "name": "ha-sunriser-card-tests",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/frontend/*.test.cjs",
+    "test:browser": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "lit": "3.3.1"
+  }
+}

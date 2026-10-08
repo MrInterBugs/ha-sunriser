@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Optional weather-profile assignment selectors using stable profile IDs.
+- Named program curves and weekly assignments in the existing Day Planner card,
+  with controller-timezone resolution and explicit planner labels.
+- Table-based curve editing with preview, Save/Discard, retained drafts on errors,
+  shared-program warnings, and stale-edit checks before writes.
+- Offline browser tests for editor interaction and mobile layout in CI.
+
 ## [2.1.2] - 2026-10-08
 
 ### Fixed

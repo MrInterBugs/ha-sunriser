@@ -28,3 +28,8 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+
+# Frontend test dependencies and browser artifacts
+node_modules/
+playwright-report/
+test-results/
