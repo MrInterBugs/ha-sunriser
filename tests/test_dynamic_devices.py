@@ -395,3 +395,33 @@ async def test_sensor_no_duplicate_ds1820_on_repeated_updates(
     captured[0]()
 
     assert sum(isinstance(e, SunRiserTemperatureSensor) for e in added) == initial_count
+
+
+async def test_disconnected_probe_at_setup_is_discovered_on_recovery(
+    hass: HomeAssistant,
+    coordinator: SunRiserCoordinator,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """A null probe reading must not abort sensor setup or later discovery."""
+    from custom_components.sunriser.sensor import SunRiserTemperatureSensor
+
+    mock_config_entry.runtime_data = coordinator
+    rom = "AABBCCDDEEFF"
+    coordinator.data = {**FAKE_STATE, "sensors": {rom: None}}
+    captured = _capture_listener(coordinator)
+    added: list[Entity] = []
+    await sensor_setup(hass, mock_config_entry, collect_entities(added))
+    assert not any(isinstance(e, SunRiserTemperatureSensor) for e in added)
+    assert captured[0] is not None
+    coordinator.data = {**FAKE_STATE, "sensors": {rom: [1, 211]}}
+    captured[0]()
+    probes = [e for e in added if isinstance(e, SunRiserTemperatureSensor)]
+    assert len(probes) == 1
+    assert probes[0].native_value == 21.1
+    coordinator.data = {**FAKE_STATE, "sensors": {rom: None}}
+    captured[0]()
+    assert probes[0].native_value is None
+    coordinator.data = {**FAKE_STATE, "sensors": {rom: [1, 220]}}
+    captured[0]()
+    assert sum(isinstance(e, SunRiserTemperatureSensor) for e in added) == 1
+    assert probes[0].native_value == 22.0
