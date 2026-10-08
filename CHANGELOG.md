@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Remove obsolete PWM lights, switches, fixed-value numbers, and manager selects
+  when the controller reports fewer channels, including after integration reloads.
+  Preserve surviving entities and skip reconciliation after a failed refresh.
+- Allow sensor setup when a temperature probe has a null reading, then discover
+  it when readings return without creating duplicate entities.
+
 ## [2.1.1] - 2026-10-08
 
 ### Changed
