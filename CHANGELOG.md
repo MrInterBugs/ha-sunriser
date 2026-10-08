@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2.2.0-feature-weather-schedule-editor-beta.2] - 2026-10-08
 
 ### Changed
 
@@ -9,6 +9,18 @@
 - Remove the beta schedule editor and its save action; edit schedules in the
   controller interface. Retain weather-profile selectors and existing day/week
   service actions.
+
+### Install and validation
+
+- Select this beta in HACS, restart Home Assistant, and refresh the dashboard to
+  load the compact card. The graph still includes the active weekly program.
+- Includes the latest changes from PR #15. Stable v2.1.2 remains available.
+- 536 mocked Python tests pass with 100% statement coverage, plus eight frontend
+  unit tests and two Chromium browser tests. Strict types, formatting, and the
+  documentation build pass locally.
+- Validation was offline; no real controller or Home Assistant was changed.
+  Check that the graph retains the expected daily/weekly curves and the editing
+  controls are gone. Weather-profile selectors remain optional.
 
 ## [2.2.0-feature-weather-schedule-editor-beta.1] - 2026-10-08
 
