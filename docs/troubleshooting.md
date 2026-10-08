@@ -46,7 +46,7 @@ If the card type is missing after installation or an update, reload the dashboar
 
 An empty chart can mean that no configured channel has an active daily or weekly curve. Check the selected planner and its markers in the controller interface. Fixed and unassigned channels have no schedule curve. Weekly channels need a program for today or a fallback, plus valid controller timezone settings. Hover over the legend for planner/program details. If multiple controllers are loaded, set the card's `device_id`; see [card configuration](configuration.md#day-planner-card).
 
-The card is read-only. If editing controls from beta.1 remain visible after installing beta.2 or later, restart Home Assistant and hard-refresh the dashboard.
+The card is read-only. If it still shows an older layout after an update, restart Home Assistant and hard-refresh the dashboard.
 
 ## Missing manager, fixed-value, or weather-profile controls
 

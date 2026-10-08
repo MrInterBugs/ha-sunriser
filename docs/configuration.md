@@ -106,7 +106,7 @@ changes from the physical button. It never replays mode commands after restart.
 If a command times out, its outcome can be uncertain: check state before retrying.
 The estimated end time is anchored to a successful state read and is not moved
 forward by failed polls. Exact timing and timeout changes during a session need
-hardware beta validation.
+hardware validation.
 
 ## Weather profile assignment (firmware 1.006+)
 

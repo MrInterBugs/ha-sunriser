@@ -17,7 +17,7 @@ SunRiser is included in the HACS default catalogue.
 3. Click **Download** and select the latest stable release
 4. Restart Home Assistant
 
-To test a beta, enable **Show beta versions** in the repository download dialog and select the desired prerelease.
+After an update, restart Home Assistant and refresh the dashboard to load the current Day Planner card.
 
 ## Set up the integration
 

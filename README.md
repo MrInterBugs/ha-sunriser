@@ -11,7 +11,7 @@ The current release targets **controller firmware 1.006**; compatibility with ol
 - Assign existing weather profiles through optional per-channel selectors, and view daily and weekly curves together in the compact, read-only Day Planner card.
 - View the operating mode and optionally enable Maintenance Ends At. Maintenance configuration entities and the end-time sensor are disabled by default; enable them from the device's entity settings.
 
-The weather-profile selectors and weekly graph are available in the **2.2.0 beta**. To test them, enable beta versions in HACS and select `v2.2.0-feature-weather-schedule-editor-beta.2`, then restart HA and refresh the dashboard. See the [branch configuration guide](docs/configuration.md); the published documentation site follows stable `main`.
+See the [configuration guide](docs/configuration.md) for weather-profile selectors and the read-only daily/weekly schedule graph.
 
 See the [maintenance guide](https://mrinterbugs.github.io/ha-sunriser/configuration/#maintenance-and-blackout-firmware-1006) for details. Channels excluded from maintenance/blackout continue normal operation.
 
@@ -30,7 +30,7 @@ SunRiser is included in the HACS default catalogue.
 3. Restart Home Assistant
 4. Go to **Settings → Devices & Services → Add Integration** and search for **SunRiser**
 
-For an existing installation, download the [latest stable release](https://github.com/MrInterBugs/ha-sunriser/releases/latest) through HACS and restart Home Assistant. Beta versions do not need to be enabled. See the [changelog](CHANGELOG.md) for upgrade notes.
+For an existing installation, download the [latest stable release](https://github.com/MrInterBugs/ha-sunriser/releases/latest) through HACS, restart Home Assistant, and refresh the dashboard. See the [changelog](CHANGELOG.md) for upgrade notes.
 
 See the [installation docs](https://mrinterbugs.github.io/ha-sunriser/installation/) for the full walkthrough.
 
