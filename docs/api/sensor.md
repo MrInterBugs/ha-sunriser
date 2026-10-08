@@ -14,7 +14,7 @@ These use `EntityCategory.DIAGNOSTIC`.
 
 ## DS1820 temperature sensors (dynamic)
 
-One sensor per ROM address found in `GET /state → sensors`. New probes appearing after startup are added dynamically without a reload.
+One sensor per ROM address found in `GET /state → sensors`. New probes are added without a reload once their names, units, and decimal scaling have been loaded.
 
 - Name comes from `sensors#sensor#{rom}#name`
 - Unit: `sensors#sensor#{rom}#unit` (0 = raw, 1 = °C). Raw readings have no HA unit or temperature device class; Celsius readings use both.
@@ -22,7 +22,7 @@ One sensor per ROM address found in `GET /state → sensors`. New probes appeari
 
 ## Weather simulation sensors (dynamic)
 
-One sensor per channel that has a weather program assigned. Reports the current `clouds_state` or similar weather simulation parameter.
+One sensor per channel present in the weather response. Its state is `thunder`, `rain`, `cloudy`, `moon`, or `clear`, in that precedence order. Attributes include the weather program name, activity flags, and timing details; future event ticks are converted to timestamps.
 
 ## Reference
 

@@ -1,14 +1,10 @@
 # Troubleshooting
 
-## Known limitations
-
-This experimental branch removes the request splitting, spacing, and forced connection closure previously used to work around controller instability. The assumption that firmware 1.006 resolves these limitations still needs hardware testing, including concurrent web UI use. If the controller resets or becomes unreachable, compare with the parent `fix/ha-firmware-1006` branch and record the firmware version and device logs.
-
 ## Cannot connect to the device
 
 **Symptom:** Integration setup fails or the connectivity binary sensor stays `Off`.
 
-Check that the SunRiser is on the same network as HA and is reachable. Open `http://<host>/` in a browser — you should see the device web UI. Ensure no firewall or VLAN is blocking port {{ cfg.default_port }} between HA and the device.
+Check that the SunRiser is on the same network as HA and is reachable from HA. Open `http://<host>:<port>/` in a browser — you should see the device web UI. Ensure no firewall or VLAN is blocking the configured HTTP port (default {{ cfg.default_port }}) between HA and the device.
 
 ## No entities appear after setup
 
@@ -20,16 +16,28 @@ Entities are created as part of successful setup. Check the HA logs for failed s
 
 **Symptom:** Entity states are stale or show as unavailable.
 
-Check the poll interval under **Settings → Devices & Services → SunRiser → Configure** — a very long interval means infrequent updates. Confirm nothing is blocking HTTP between HA and the device. See [Known limitations](#known-limitations) if the controller resets.
+Check the poll interval under **Settings → Devices & Services → SunRiser → Configure** — a very long interval means infrequent updates. Confirm nothing is blocking HTTP between HA and the device. The connectivity sensor turns off after the first failed state poll. Other entities retain their last values until {{ cfg.failure_grace }} consecutive state failures make the controller unavailable. A successful state poll restores availability and clears the repair notification.
+
+If resets persist, include the integration version, controller firmware version, poll interval, and relevant HA/controller logs in an issue.
 
 ## Light brightness reverts after ~60 seconds
 
 **Symptom:** Setting a light to a specific brightness from HA works, but then it changes back on its own.
 
-This is expected device behaviour. A direct PWM write from HA overrides the running program for approximately one minute, after which the device's own dayplanner or weekplanner schedule resumes. To keep manual control permanently, use the **Manager** select entity for that channel and set it to `none`.
+This is expected device behaviour. A direct PWM write from HA overrides the running program for approximately one minute, after which the device's own dayplanner or weekplanner schedule resumes. For persistent output, enable the channel's **Manager** select and **Fixed Value** number in its entity settings. Set Manager to `fixed` and choose a Fixed Value between 0 and {{ cfg.pwm_max }}. Switch back to `dayplanner` or `weekplanner` to resume a schedule.
 
 ## Icon missing only in HACS
 
-SunRiser includes `custom_components/sunriser/brand/icon.png`, which Home Assistant can use for installed integrations. Some HACS versions fetch listing icons from an external brand service instead of Home Assistant's local brands API, so HACS can show “icon not available” while HA displays the icon correctly.
+Home Assistant 2026.3 and later can load the bundled SunRiser icon from the integration's `brand/` directory. HACS versions affected by [issue #5171](https://github.com/hacs/integration/issues/5171) use an external image service, so the HACS listing can show “icon not available” even when the icon appears correctly in HA. Check that issue for the HACS fix; this does not affect controller operation.
 
-This matches the upstream [HACS local-brand issue #5171](https://github.com/hacs/integration/issues/5171). The bundled icon already follows [Home Assistant's brand-image convention](https://developers.home-assistant.io/docs/core/integration/brand_images/); adding another icon copy or changing the integration domain does not fix the HACS lookup. Check the upstream issue for availability of a HACS fix.
+See Home Assistant's [local brand-image documentation](https://developers.home-assistant.io/docs/core/integration/brand_images/) for version support.
+
+## Day Planner card is missing or empty
+
+If the card type is missing after installation or an update, reload the dashboard page. The browser must be able to reach `unpkg.com`, which supplies the card's Lit dependency. Check the browser console for a failed module load if it still does not appear.
+
+An empty chart means no day-planner markers were returned. Check that the controller has a day-planner schedule. If multiple controllers are loaded, set the card's `device_id`; see [card configuration](configuration.md#day-planner-card).
+
+## Missing manager or fixed-value controls
+
+Manager selects and Fixed Value sliders are disabled by default. Open the controller's entity list, choose the relevant entity, and enable it in the entity settings.

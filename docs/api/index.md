@@ -23,12 +23,12 @@ This section documents the public Python API of the `custom_components.sunriser`
 
 ```
 POST /          msgpack([key, ...])       → msgpack({key: value, ...})   # read config
-PUT  /          msgpack({key: value, ...}) → 204                          # write config
+PUT  /          msgpack({key: value, ...}) → success                     # write config
 GET  /state     →  msgpack({pwms, sensors, uptime, ...})                  # live state
-PUT  /state     msgpack({pwms: {...}})    → 204                          # set PWM values
+PUT  /state     msgpack({pwms: {...}})    → success                     # set PWM values
 GET  /weather   →  msgpack stream, first object is list per channel
 GET  /reboot    →  reboots device
 DELETE /        →  factory reset
 ```
 
-MessagePack request bodies use `Content-Type: application/x-msgpack`. This experimental branch uses normal HTTP connection reuse rather than forcing `Connection: close`; controller compatibility remains subject to firmware 1.006 hardware validation.
+MessagePack request bodies use `Content-Type: application/x-msgpack`. Write methods accept successful HTTP status codes and raise on HTTP errors. The HTTP session uses normal connection reuse.

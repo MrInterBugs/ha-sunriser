@@ -11,6 +11,8 @@ One `SelectEntity` per active PWM channel, exposing `pwm#X#manager` — the sche
 | `weekplanner` | `2` | Uses the week-planner schedule |
 | `fixed` | `3` | Holds the value set in `pwm#X#fixed` |
 
+Entities are disabled by default. Enable them in HA entity settings. An acknowledged write updates the displayed value immediately; a failed write preserves the old value.
+
 ## Reference
 
 ::: custom_components.sunriser.select

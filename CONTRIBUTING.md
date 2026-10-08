@@ -62,3 +62,13 @@ The normal unit suite mocks controller traffic. `tests/test_device.py` is a
 separate hardware/simulator suite with write and reboot operations; it is
 included in type checking but excluded from the normal test command and CI.
 See its module docstring for explicit device-test instructions.
+
+## Documentation
+
+Edit user guides in `docs/`. API pages are generated from the integration modules;
+service descriptions come from `custom_components/sunriser/services.yaml`, and
+shared defaults come from `docs_macros.py`. Keep investigation notes out of the
+public documentation.
+
+Preview locally with `.venv/bin/mkdocs serve`. Changes should pass the strict build above. The Pages workflow publishes only pushes
+to `main`; pushing a feature branch does not update the published site.

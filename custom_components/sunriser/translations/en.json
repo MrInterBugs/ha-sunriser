@@ -13,6 +13,18 @@
           "port": "The HTTP port the SunRiser web server listens on. Leave as 80 unless you have changed it."
         }
       },
+      "reconfigure": {
+        "title": "Update SunRiser connection",
+        "description": "Update the host or port for your SunRiser device.",
+        "data": {
+          "host": "Host or IP address",
+          "port": "Port"
+        },
+        "data_description": {
+          "host": "The new IP address or hostname of your SunRiser controller.",
+          "port": "The HTTP port the SunRiser web server listens on."
+        }
+      },
       "dhcp_confirm": {
         "title": "SunRiser discovered",
         "description": "A SunRiser device was found at {host}. Do you want to add it?"
@@ -35,12 +47,19 @@
       "init": {
         "title": "SunRiser Options",
         "data": {
-          "scan_interval": "Polling interval (seconds)"
+          "scan_interval": "Polling interval (seconds)",
+          "scheduled_reboot": "Enable scheduled daily reboot",
+          "reboot_time": "Scheduled reboot time (HH:MM)"
         },
         "data_description": {
-          "scan_interval": "How often (in seconds) to poll the device for updated PWM and sensor values. Lower values give faster updates but increase load on the controller."
+          "scan_interval": "How often (in seconds) to poll the device for updated PWM and sensor values. Lower values give faster updates but increase load on the controller.",
+          "scheduled_reboot": "Optionally reboot the controller once a day. Disabled by default.",
+          "reboot_time": "Time of day to reboot the controller (24-hour format, e.g. 04:00). The reboot happens silently — lights resume their program after the controller restarts."
         }
       }
+    },
+    "error": {
+      "invalid_time": "Time must be in HH:MM format (e.g. 04:00)."
     }
   },
   "entity": {
@@ -88,6 +107,12 @@
       "dst_auto_track": {
         "name": "DST Auto-Track"
       }
+    }
+  },
+  "issues": {
+    "device_unreachable": {
+      "title": "SunRiser device unreachable",
+      "description": "The SunRiser controller at **{host}** has been unreachable for multiple consecutive poll cycles.\n\nCheck that the device is powered on and reachable from Home Assistant. If the IP address has changed, use **Settings → Devices & Services → SunRiser → Reconfigure** to update it. The notification clears after a successful state poll."
     }
   },
   "exceptions": {

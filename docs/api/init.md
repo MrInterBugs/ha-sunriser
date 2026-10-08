@@ -7,8 +7,9 @@
 | Function | Purpose |
 |---|---|
 | `async_setup` | Registers the Day Planner Lovelace card JS and all service actions |
-| `async_setup_entry` | Creates the coordinator, runs first refresh, defers platform setup until init completes |
-| `async_unload_entry` | Unloads all platforms and closes the HTTP session |
+| `async_setup_entry` | Creates the coordinator, loads configuration, performs the first refresh, and sets up all platforms before returning |
+| `async_unload_entry` | Unloads platforms, closes the HTTP session, and cancels the reboot listener |
+| `async_remove_entry` | Clears the controller's repair notification and saved DST helper state |
 
 ## Service actions
 
@@ -27,6 +28,8 @@
 | `sunriser.download_bootload` | — | `{path}` | Downloads bootloader info |
 | `sunriser.factory_reset` | `confirm: true` | — | Resets all device config to factory defaults |
 
+All actions accept an optional `device_id` in their data; it is required when multiple controllers are loaded. See [Services](../services.md) for fields and examples.
+
 ## Reference
 
 ::: custom_components.sunriser
@@ -35,3 +38,4 @@
         - async_setup
         - async_setup_entry
         - async_unload_entry
+        - async_remove_entry

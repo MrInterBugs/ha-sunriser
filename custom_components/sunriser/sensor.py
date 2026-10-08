@@ -179,9 +179,8 @@ class SunRiserWeatherChannelSensor(
 ):
     """Weather simulation state for a single PWM channel.
 
-    State = weather_program_id (which program is running on this channel).
-    All other fields (clouds_state, rain ticks, moon state, etc.) are
-    exposed as extra state attributes.
+    State describes the active effect: thunder, rain, cloudy, moon, or clear.
+    Extra attributes include the program name, activity flags, and event times.
     """
 
     _attr_has_entity_name = True

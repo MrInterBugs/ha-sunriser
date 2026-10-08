@@ -29,9 +29,9 @@ restore:
       name: File path
       description: >
         Absolute path to the .msgpack backup file
-        (e.g. /config/sunriser_backup_20260323_120000.msgpack).
+        Use the path returned by the backup action.
       required: true
-      example: /config/sunriser_backup_20260323_120000.msgpack
+      example: /config/REPLACE_WITH_BACKUP_FILENAME.msgpack
       selector:
         text: {}
 
@@ -64,8 +64,8 @@ get_log:
 get_dayplanner_schedule:
   name: Get Day Planner Schedule
   description: >
-    Read the current day planner schedule for a PWM channel. Returns a dict
-    with "pwm" and "markers" keys. Each marker has "time" (HH:MM) and
+    Read the cached day planner schedule for a PWM channel. Returns "pwm",
+    "name", "color_id", and "markers". Each marker has "time" (HH:MM) and
     "percent" (0–100).
   fields:
     device_id:
@@ -110,8 +110,8 @@ set_dayplanner_schedule:
     markers:
       name: Markers
       description: >
-        List of schedule markers. Each marker needs "time" (HH:MM, 24-hour)
-        and "percent" (0–100). The device interpolates linearly between markers.
+        List of schedule markers. Each marker needs "time" (HH:MM; 24:00 is
+        accepted for end of day) and "percent" (integer, 0–100). The device interpolates linearly between markers.
       required: true
       example:
         - time: "06:00"
@@ -130,8 +130,8 @@ get_weekplanner_schedule:
   description: >
     Read the current week planner program assignment for a PWM channel. Returns
     a dict with "pwm", "name", "color_id", and "schedule" keys. The schedule maps
-    day names (sunday, monday, …, saturday, default) to program IDs (integers).
-    "default" is the fallback program used on days with no explicit assignment.
+    day names (sunday, monday, …, saturday, default) to program IDs (integers),
+    or null for unset assignments. "default" is the fallback program used on days with no explicit assignment.
   fields:
     device_id:
       name: Controller

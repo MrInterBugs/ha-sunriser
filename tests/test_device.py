@@ -1,9 +1,11 @@
 """
 Standalone integration tests against a real SunRiser device.
 
-Run with:
-    pip install aiohttp msgpack pytest pytest-asyncio
-    pytest tests/test_device.py -v
+After installing requirements.txt into .venv, run explicitly with:
+    SUNRISER_HOST=<controller-ip> .venv/bin/pytest tests/test_device.py -v
+
+This suite includes configuration writes, output changes, and simulator reboots.
+It is excluded from normal unit-test runs.
 """
 
 import asyncio
