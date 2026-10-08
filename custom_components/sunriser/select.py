@@ -7,13 +7,13 @@ from __future__ import annotations
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import entity_registry
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MANAGER_OPTIONS
+from .const import MANAGER_OPTIONS
 from .coordinator import SunRiserCoordinator
+from .discovery import pwm_entity_reconciler
 
 PARALLEL_UPDATES = 1
 
@@ -26,27 +26,15 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunRiserCoordinator = entry.runtime_data
-    _added: set[int] = set()
-    er = entity_registry.async_get(hass)
-
-    @callback
-    def _check_entities() -> None:
-        new_entities: list[SunRiserPWMManagerSelect] = []
-        for pwm_num in range(1, coordinator.pwm_count + 1):
-            active = not coordinator.pwm_is_unused(pwm_num)
-            if active and pwm_num not in _added:
-                _added.add(pwm_num)
-                new_entities.append(
-                    SunRiserPWMManagerSelect(coordinator, entry, pwm_num)
-                )
-            elif not active:
-                _added.discard(pwm_num)
-                uid = f"{entry.entry_id}_pwm_{pwm_num}_manager"
-                eid = er.async_get_entity_id("select", DOMAIN, uid)
-                if eid:
-                    er.async_remove(eid)
-        if new_entities:
-            async_add_entities(new_entities)
+    _check_entities = pwm_entity_reconciler(
+        hass,
+        entry,
+        async_add_entities,
+        "select",
+        "_manager",
+        lambda channel: not coordinator.pwm_is_unused(channel),
+        lambda channel: SunRiserPWMManagerSelect(coordinator, entry, channel),
+    )
 
     _check_entities()
     entry.async_on_unload(coordinator.async_add_listener(_check_entities))
