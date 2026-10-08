@@ -17,7 +17,7 @@ These use `EntityCategory.DIAGNOSTIC`.
 One sensor per ROM address found in `GET /state → sensors`. New probes appearing after startup are added dynamically without a reload.
 
 - Name comes from `sensors#sensor#{rom}#name`
-- Unit: `sensors#sensor#{rom}#unit` (0 = raw, 1 = °C)
+- Unit: `sensors#sensor#{rom}#unit` (0 = raw, 1 = °C). Raw readings have no HA unit or temperature device class; Celsius readings use both.
 - Decimal places: `sensors#sensor#{rom}#unitcomma`
 
 ## Weather simulation sensors (dynamic)

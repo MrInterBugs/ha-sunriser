@@ -207,6 +207,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def update_config_cache(self, params: dict[str, Any]) -> None:
         """Apply a configuration write only after the controller acknowledges it."""
         self.config.update(params)
+        self.async_update_listeners()
 
     async def async_get_state(self) -> dict[str, Any]:
         """GET /state — returns PWM values, sensor readings, uptime, etc."""
@@ -457,7 +458,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         result = await self.async_get_config([f"weekplanner#programs#{pwm}"])
         flat = result.get(f"weekplanner#programs#{pwm}") or []
         return {
-            day: (int(flat[i]) if i < len(flat) else None)
+            day: (int(flat[i]) if i < len(flat) and flat[i] is not None else None)
             for i, day in enumerate(self._WEEK_DAYS)
         }
 
@@ -590,9 +591,8 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if self._consecutive_failures >= self._FAILURE_GRACE:
             _LOGGER.info("SunRiser at %s is available again", self.host)
-            async_delete_issue(
-                self.hass, DOMAIN, f"device_unreachable_{self._entry_id}"
-            )
+        # Repairs persist across coordinator reloads; the counter does not.
+        async_delete_issue(self.hass, DOMAIN, f"device_unreachable_{self._entry_id}")
         self._consecutive_failures = 0
         self._last_state_refresh_succeeded = True
         data = dict(self.data or {})

@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Publish acknowledged configuration changes to HA immediately so fixed-value sliders and manager selects do not display the old value until the next poll. Failed writes retain the previous value.
+- Report raw sensor readings without a temperature device class or invented temperature unit.
+- Clear controller-specific offline repairs after a successful reload and when removing the integration entry.
+- Preserve unassigned (`null`) week-planner days instead of raising an error while decoding them.
+- Keep Day Planner card responses tied to the selected controller, discard obsolete responses after reconfiguration/disconnection, and prevent overlapping refreshes. Refresh immediately on reconnect and apply changed refresh intervals safely.
+- Document the upstream HACS issue affecting bundled brand icons.
+
+### Validation
+
+- Regression tests reproduce the failures against the previous code and pass with these fixes.
+- 390 mocked Python tests pass with 100% statement coverage; eight card lifecycle tests pass in Node.
+- Black, strict mypy, and the strict documentation build pass.
+- These follow-up fixes have not been tested on a live controller.
+
 ## [1.7.2-simplify-firmware-1006-requests-beta.1] - 2026-10-08
 
 ### Changed

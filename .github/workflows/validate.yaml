@@ -64,3 +64,13 @@ jobs:
           python-version: "3.14"
       - run: pip install -r requirements.txt
       - run: mypy --strict --ignore-missing-imports custom_components/sunriser/
+
+  frontend-tests:
+    name: Day Planner card tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --test tests/frontend/*.test.cjs

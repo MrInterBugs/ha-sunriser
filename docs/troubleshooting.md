@@ -27,3 +27,9 @@ Check the poll interval under **Settings → Devices & Services → SunRiser →
 **Symptom:** Setting a light to a specific brightness from HA works, but then it changes back on its own.
 
 This is expected device behaviour. A direct PWM write from HA overrides the running program for approximately one minute, after which the device's own dayplanner or weekplanner schedule resumes. To keep manual control permanently, use the **Manager** select entity for that channel and set it to `none`.
+
+## Icon missing only in HACS
+
+SunRiser includes `custom_components/sunriser/brand/icon.png`, which Home Assistant can use for installed integrations. Some HACS versions fetch listing icons from an external brand service instead of Home Assistant's local brands API, so HACS can show “icon not available” while HA displays the icon correctly.
+
+This matches the upstream [HACS local-brand issue #5171](https://github.com/hacs/integration/issues/5171). The bundled icon already follows [Home Assistant's brand-image convention](https://developers.home-assistant.io/docs/core/integration/brand_images/); adding another icon copy or changing the integration domain does not fix the HACS lookup. Check the upstream issue for availability of a HACS fix.

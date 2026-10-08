@@ -185,7 +185,8 @@ def test_temperature_unit_celsius(coordinator, mock_config_entry):
 def test_temperature_unit_raw_when_unit_not_celsius(coordinator, mock_config_entry):
     coordinator.config["sensors#sensor#AABBCCDDEEFF#unit"] = 0
     sensor = _make_temp_sensor(coordinator, mock_config_entry)
-    assert sensor.native_unit_of_measurement == "raw"
+    assert sensor.native_unit_of_measurement is None
+    assert sensor.device_class is None
 
 
 def test_temperature_none_when_no_data(coordinator, mock_config_entry):

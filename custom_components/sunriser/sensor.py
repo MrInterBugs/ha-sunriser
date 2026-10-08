@@ -135,9 +135,7 @@ class SunRiserTemperatureSensor(CoordinatorEntity[SunRiserCoordinator], SensorEn
     """DS1820 temperature sensor reported in /state."""
 
     _attr_has_entity_name = True
-    _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
 
     def __init__(
         self,
@@ -156,11 +154,17 @@ class SunRiserTemperatureSensor(CoordinatorEntity[SunRiserCoordinator], SensorEn
         return self.coordinator.sensor_value(self._rom)
 
     @property
-    def native_unit_of_measurement(self) -> str:
+    def device_class(self) -> SensorDeviceClass | None:
+        if self.coordinator.sensor_unit(self._rom) == _UNIT_CELSIUS:
+            return SensorDeviceClass.TEMPERATURE
+        return None
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
         # Sensors configured as raw (unit=0) have no meaningful HA unit.
         if self.coordinator.sensor_unit(self._rom) == _UNIT_CELSIUS:
             return UnitOfTemperature.CELSIUS
-        return "raw"
+        return None
 
 
 # ---------------------------------------------------------------------------

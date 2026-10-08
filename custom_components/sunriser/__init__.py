@@ -38,7 +38,7 @@ from .coordinator import DayplannerMarker, SunRiserCoordinator
 
 _CARD_URL = "/sunriser/sunriser-dayplan-card.js"
 _CARD_PATH = pathlib.Path(__file__).parent / "www" / "sunriser-dayplan-card.js"
-_CARD_VERSION = "1.4.9"
+_CARD_VERSION = "1.4.10"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -207,6 +207,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         await coordinator.async_close()
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove persistent repairs and restored helper state for a deleted controller."""
+    async_delete_issue(hass, DOMAIN, f"device_unreachable_{entry.entry_id}")
+    hass.data.get(DOMAIN, {}).pop(f"{entry.entry_id}_dst_auto_track", None)
 
 
 class _FilePathResponse(TypedDict):

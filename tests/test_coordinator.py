@@ -256,8 +256,8 @@ async def test_repair_issue_deleted_on_recovery(coord):
     assert mock_delete.call_args.args[2] == f"device_unreachable_{ENTRY_ID}"
 
 
-async def test_repair_issue_not_deleted_on_normal_recovery(coord):
-    """async_delete_issue is not called when failures never reached the grace threshold."""
+async def test_successful_poll_also_clears_repairs_from_previous_coordinator(coord):
+    """A successful read also clears an issue persisted before a reload."""
     coord.config = dict(FAKE_CONFIG)
     coord._consecutive_failures = 1  # below FAILURE_GRACE
 
@@ -270,7 +270,7 @@ async def test_repair_issue_not_deleted_on_normal_recovery(coord):
         ) as mock_delete:
             await coord._async_refresh_state()
 
-    mock_delete.assert_not_called()
+    mock_delete.assert_called_once()
 
 
 async def test_update_data_weather_failure_keeps_stale_weather(coord, caplog):
