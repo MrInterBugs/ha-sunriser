@@ -31,6 +31,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, PLATFORMS
 from .coordinator import DayplannerMarker, SunRiserCoordinator
+from .responses import InvalidResponse
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
     DOMAIN
@@ -177,9 +178,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         try:
             await coordinator.async_load_device_config()
-        except aiohttp.ClientError as err:
+        except (aiohttp.ClientError, TimeoutError, InvalidResponse) as err:
             raise ConfigEntryNotReady(
-                f"Cannot connect to SunRiser at {coordinator.host}: {err}"
+                f"Cannot read SunRiser configuration at {coordinator.host}: {err}"
             ) from err
         except Exception as err:
             _LOGGER.exception("Unexpected error loading SunRiser device config")

@@ -16,6 +16,7 @@ from custom_components.sunriser import (
 )
 from custom_components.sunriser.const import DOMAIN
 from custom_components.sunriser.coordinator import SunRiserCoordinator
+from custom_components.sunriser.responses import InvalidResponse
 from tests.conftest import ENTRY_ID, FAKE_STATE
 from tests.typing import as_async_mock, response_path
 
@@ -42,18 +43,25 @@ async def test_setup_entry_success(
     assert isinstance(mock_config_entry.runtime_data, SunRiserCoordinator)
 
 
+@pytest.mark.parametrize(
+    "error", [aiohttp.ClientError("down"), TimeoutError(), InvalidResponse("bad field")]
+)
 async def test_setup_entry_client_error_raises_not_ready(
-    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    error: Exception,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     mock_config_entry.add_to_hass(hass)
 
     with patch(
         "custom_components.sunriser.coordinator.SunRiserCoordinator.async_load_device_config",
-        side_effect=aiohttp.ClientError("down"),
+        side_effect=error,
     ):
         result = await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
+    assert "Unexpected error loading" not in caplog.text
     # HA marks the entry as not ready when ConfigEntryNotReady is raised
     assert result is False
     assert mock_config_entry.state.value in ("setup_error", "setup_retry")

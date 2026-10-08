@@ -1,10 +1,27 @@
 # Changelog
 
-## Unreleased
+## [2.0.1-fix-report-controller-read-failures-beta.1] - 2026-10-08
 
+### Changed
+
+- Distinguish expected controller read failures from programming errors, retaining
+  tracebacks for unexpected failures. Warn once after repeated weather/configuration
+  read failures and log recovery, with independent read-freshness tracking.
 - Validate controller state, configuration, and weather responses before publishing
   them. Invalid data preserves the last valid response; optional and unknown fields
   remain supported. Treat truncated weather data as a failed read.
+
+### Testing and upgrade notes
+
+- Includes response validation from PR #12 and failure handling from PR #13,
+  based on v2.0.0. This beta does not include PR #11 maintenance/blackout features.
+- Select this exact version in HACS with beta versions enabled, then restart HA.
+  When switching from the 2.1.0 maintenance beta, its additional entities will no
+  longer be provided by this version.
+- 446 mocked Python tests pass with 100% statement coverage; eight frontend tests
+  pass. Strict Pyright, mypy, Black, and the strict documentation build pass.
+- Real controller testing is still needed to confirm valid firmware responses are
+  accepted and polling, control, and recovery behave as expected.
 
 ## [2.0.0] - 2026-10-08
 

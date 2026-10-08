@@ -18,6 +18,14 @@ Entities are created as part of successful setup. Check the HA logs for failed s
 
 Check the poll interval under **Settings → Devices & Services → SunRiser → Configure** — a very long interval means infrequent updates. Confirm nothing is blocking HTTP between HA and the device. The connectivity sensor turns off after the first failed state poll. Other entities retain their last values until {{ cfg.failure_grace }} consecutive state failures make the controller unavailable. A successful state poll restores availability and clears the repair notification.
 
+State, configuration, and weather reads can fail independently. After three
+consecutive weather or configuration failures, the integration logs one warning
+and retains the previous values. It logs recovery after a successful read; a
+successful state read alone does not mean configuration or weather is fresh.
+These failures do not change the existing state-read availability grace period.
+Unexpected programming errors are logged by Home Assistant with a traceback,
+rather than being classified as a controller connection failure.
+
 If resets persist, include the integration version, controller firmware version, poll interval, and relevant HA/controller logs in an issue.
 
 ## Light brightness reverts after ~60 seconds
