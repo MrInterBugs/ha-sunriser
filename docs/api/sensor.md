@@ -7,7 +7,7 @@ Several sensor types are created at startup and dynamically as new data appears.
 | Entity | Source key | Notes |
 |---|---|---|
 | Uptime | `state.uptime` | Seconds since last boot |
-| Firmware Version | `state.version` | String |
+| Firmware Version | `config.factory_version` | Running firmware; refreshed with periodic configuration reads |
 | Hostname | `config.hostname` | Device hostname |
 
 These use `EntityCategory.DIAGNOSTIC`.

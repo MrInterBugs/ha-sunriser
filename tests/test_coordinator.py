@@ -32,7 +32,9 @@ def _chunked_responses(
 
 
 def _pwm_refresh_keys(coord: SunRiserCoordinator) -> list[str]:
-    keys = [f"pwm#{i}#color" for i in range(1, coord.pwm_count + 1)]
+    keys = ["factory_version"] + [
+        f"pwm#{i}#color" for i in range(1, coord.pwm_count + 1)
+    ]
     for i in range(1, coord.pwm_count + 1):
         if not coord.pwm_is_unused(i):
             keys.extend(
@@ -569,7 +571,7 @@ async def test_grace_period_returns_stale_data_on_first_failure(coord, caplog):
         with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
             data = await coord._async_update_data()
 
-    assert data is coord.data
+    assert data is not coord.data
     assert coord._consecutive_failures == 1
     assert "returning stale data" in caplog.text
 
@@ -585,7 +587,7 @@ async def test_grace_period_returns_stale_data_on_second_failure(coord):
         m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("blip"))
         data = await coord._async_update_data()
 
-    assert data is coord.data
+    assert data is not coord.data
     assert coord._consecutive_failures == 2
 
 
@@ -794,7 +796,7 @@ async def test_state_failure_does_not_advance_round_robin(coord):
         m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("blip"))
         data = await coord._async_update_data()
 
-    assert data is coord.data
+    assert data is not coord.data
     assert coord._next_refresh_index == 0
 
 

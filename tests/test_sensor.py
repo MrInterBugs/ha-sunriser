@@ -131,8 +131,8 @@ def test_firmware_value(coordinator):
     assert sensor.native_value == "1.005"
 
 
-def test_firmware_none_when_save_version_missing(coordinator):
-    coordinator.config["save_version"] = None
+def test_firmware_none_when_factory_version_missing(coordinator):
+    coordinator.config["factory_version"] = None
     sensor = SunRiserFirmwareSensor(coordinator)
     assert sensor.native_value is None
 

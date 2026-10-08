@@ -16,6 +16,7 @@ from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers import device_registry
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.issue_registry import (
     IssueSeverity,
@@ -119,10 +120,25 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             identifiers={(DOMAIN, self._entry_id)},
             name=self.config.get("name") or self.config.get("model") or self.host,
             model=self.config.get("model"),
-            sw_version=self.config.get("save_version"),
+            sw_version=self.firmware_version,
             manufacturer="LEDaquaristik",
             configuration_url=self.base_url,
         )
+
+    @property
+    def firmware_version(self) -> str | None:
+        """Running firmware, distinct from the saved configuration version."""
+        return self.config.get("factory_version") or None
+
+    @property
+    def firmware_handles_dst(self) -> bool:
+        """Firmware 1.006 and later handle DST without HA configuration writes."""
+        try:
+            return tuple(
+                int(part) for part in (self.firmware_version or "").split(".")
+            ) >= (1, 6)
+        except ValueError:
+            return False
 
     # ------------------------------------------------------------------
     # Session
@@ -343,6 +359,10 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         device is correct the moment the switch is turned on.  Poll-detected
         transitions are handled via _dst_sync_pending (replaces one tick).
         """
+        if self.firmware_handles_dst:
+            self._dst_auto_track = False
+            self._dst_sync_pending = False
+            return
         self._dst_auto_track = enabled
         if enabled:
             is_dst = bool(dt_util.now().dst())
@@ -357,7 +377,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         tick becomes a dedicated PUT / instead of state or weather.  This keeps
         every tick to exactly one request.
         """
-        if not self._dst_auto_track:
+        if self.firmware_handles_dst or not self._dst_auto_track:
             return
         is_dst = bool(dt_util.now().dst())
         if is_dst != self._last_known_dst:
@@ -365,6 +385,10 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_do_dst_sync(self) -> dict[str, Any]:
         """Execute the pending DST sync — replaces one poll tick entirely."""
+        if self.firmware_handles_dst:
+            self._dst_auto_track = False
+            self._dst_sync_pending = False
+            return dict(self.data or {})
         is_dst = bool(dt_util.now().dst())
         self._last_known_dst = is_dst
         try:
@@ -603,6 +627,9 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Init tick 0 — fetch name, model, pwm_count, etc."""
         base = await self.async_get_config(self._BASE_CONFIG_KEYS)
         self.config.update(base)
+        if self.firmware_handles_dst:
+            self._dst_auto_track = False
+            self._dst_sync_pending = False
         self._init_step = 1
         return {}
 
@@ -659,8 +686,9 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._pending_refresh_chunks = self._chunk_config_keys(keys)
             self._refresh_accumulator = {}
 
-        chunk = self._pending_refresh_chunks.pop(0)
+        chunk = self._pending_refresh_chunks[0]
         fresh = await self._async_get_config_raw(chunk)
+        self._pending_refresh_chunks.pop(0)
         self._refresh_accumulator.update(fresh)
 
         if self._pending_refresh_chunks:
@@ -708,7 +736,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         key list is too large for a single AT+IPD delivery.
         """
         pwm_count = self.config.get("pwm_count") or 8
-        keys: list[str] = []
+        keys: list[str] = ["factory_version"]
         for i in range(1, pwm_count + 1):
             keys.append(f"pwm#{i}#color")
         for i in range(1, pwm_count + 1):
@@ -751,6 +779,16 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._refresh_accumulator = {}
         changed = any(self.config.get(k) != v for k, v in fresh.items())
         self.config.update(fresh)
+        device = device_registry.async_get(self.hass).async_get_device(
+            identifiers={(DOMAIN, self._entry_id)}
+        )
+        if device is not None and device.sw_version != self.firmware_version:
+            device_registry.async_get(self.hass).async_update_device(
+                device.id, sw_version=self.firmware_version
+            )
+        if self.firmware_handles_dst:
+            self._dst_auto_track = False
+            self._dst_sync_pending = False
         data = dict(self.data or {})
         data["ok"] = self._last_state_refresh_succeeded
         return data if changed else (self.data or data)
@@ -771,7 +809,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._FAILURE_GRACE,
                     err,
                 )
-                return self.data
+                return dict(self.data)
             if (
                 self.data is not None
                 and self._consecutive_failures == self._FAILURE_GRACE

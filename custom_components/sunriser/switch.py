@@ -29,12 +29,28 @@ async def async_setup_entry(
         [
             SunRiserMaintenanceSwitch(coordinator, entry),
             SunRiserTimelapseSwitch(coordinator, entry),
-            SunRiserDSTAutoSwitch(coordinator, entry),
         ]
     )
 
+    if coordinator.firmware_handles_dst:
+        # Retire the old registry entry as well as suppressing its entity.
+        # This prevents an orphaned, unavailable configuration switch on upgrade.
+        eid = er.async_get_entity_id(
+            "switch", DOMAIN, f"{entry.entry_id}_dst_auto_track"
+        )
+        if eid:
+            er.async_remove(eid)
+    else:
+        async_add_entities([SunRiserDSTAutoSwitch(coordinator, entry)])
+
     @callback
     def _check_pwm_entities() -> None:
+        if coordinator.firmware_handles_dst:
+            eid = er.async_get_entity_id(
+                "switch", DOMAIN, f"{entry.entry_id}_dst_auto_track"
+            )
+            if eid:
+                er.async_remove(eid)
         new_entities: list[SunRiserSwitch] = []
         for pwm_num in range(1, coordinator.pwm_count + 1):
             is_switch = coordinator.pwm_is_onoff(

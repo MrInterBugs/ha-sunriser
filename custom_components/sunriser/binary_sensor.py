@@ -29,7 +29,7 @@ async def async_setup_entry(
 class SunRiserConnectivitySensor(
     CoordinatorEntity[SunRiserCoordinator], BinarySensorEntity
 ):
-    """Reports whether the most recent GET /ok refresh returned OK."""
+    """Reports whether the most recent GET /state refresh succeeded."""
 
     _attr_has_entity_name = True
     _attr_translation_key = "connectivity"

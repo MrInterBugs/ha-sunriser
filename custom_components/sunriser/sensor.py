@@ -114,7 +114,7 @@ class SunRiserFirmwareSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntit
 
     @property
     def native_value(self) -> str | None:
-        return self.coordinator.config.get("save_version") or None
+        return self.coordinator.firmware_version
 
 
 class SunRiserHostnameSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity):
