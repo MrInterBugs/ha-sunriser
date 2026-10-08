@@ -4,7 +4,7 @@
 
 - Home Assistant with HACS installed. Automated integration tests target Home Assistant 2026.2.3; an older minimum version has not been verified.
 - SunRiser 8 or 10 reachable from Home Assistant on your local network
-- Controller firmware 1.006 for this beta; compatibility with older firmware is unverified.
+- Controller firmware 1.006 for the 2.0 release; compatibility with older firmware is unverified.
 
 Install [HACS](https://hacs.xyz/) first if it is not already available.
 

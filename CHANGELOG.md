@@ -1,5 +1,34 @@
 # Changelog
 
+## [2.0.0] - 2026-10-08
+
+### Changed
+
+- Promote the firmware 1.006 integration update to a stable release following real Home Assistant testing, including restarts, with no further crashes reported during that testing.
+- Simplify polling to consecutive state, weather, and configuration reads. Remove request splitting, staged startup, rotating polls, deferred metadata queues, forced connection closure, and artificial request pacing.
+- Load entities during setup and discover channel, probe, firmware, and weather configuration changes on subsequent polls. Keep configuration read/write ordering and the existing availability grace period.
+- Make scheduled daily reboot opt-in; retain explicitly configured reboot settings.
+- Add strict repository-wide Python type checks, frontend regression checks, editor setup, refreshed documentation, and copyright notices.
+
+### Fixed
+
+- Report running firmware correctly and stop legacy DST writes on firmware 1.006 and newer.
+- Route service calls to the selected controller and create unique backup/export files without overwriting existing files.
+- Update fixed-value and manager entities immediately after successful writes; preserve their old values after failed writes.
+- Recover correctly after failed setup or polling, clear stale offline repairs, and update dynamically discovered entities.
+- Preserve unassigned week-planner days and classify raw sensor readings correctly.
+- Prevent overlapping or stale Day Planner card responses, including when changing controllers or reconnecting.
+- Restore missing English UI labels and update reboot and recovery help text.
+
+### Upgrade notes
+
+- This release targets controller firmware 1.006. Compatibility with older firmware has not been verified for the simplified polling strategy.
+- The poll interval remains configurable and defaults to 30 seconds. Each poll now reads state, weather, and configuration.
+- Existing explicit scheduled-reboot settings remain effective; review them if you no longer need daily reboots.
+- With multiple loaded controllers, supply `device_id` in service calls and Day Planner cards.
+- Backup/export filenames include a controller identifier and unique suffix. Restore automations should use the returned `path` instead of constructing filenames.
+- Restart Home Assistant after updating through HACS.
+
 ## [1.7.2-simplify-firmware-1006-requests-beta.3] - 2026-10-08
 
 ### Changed
