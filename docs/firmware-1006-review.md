@@ -18,12 +18,12 @@ The controller was reachable during this inspection. This does not establish why
 - Firmware 1.006+ no longer receives HA DST writes. Its old DST Auto-Track entity is removed, including its registry entry. Earlier firmware retains the helper.
 - Startup retries the same failed configuration chunk, avoiding partial entity configuration after a transient failure.
 - Transient state failures return a separate snapshot, preserving the previous published data. Connectivity still reports the last state request's success; the other entities retain the existing three-failure availability grace.
+- Beta.2 fixes require a successful state read before restoring availability after that grace period, clean up failed setup attempts, recover dynamic weather and channel entities, interleave older-firmware DST retries with state reads, and support explicit controller selection for services. See the beta.2 changelog for the complete set of fixes, including exports, duplicate setup, configuration ordering, sensor metadata, repairs, schedule validation, and stale entities.
 
 ## Remaining candidates
 
 - **Daily reboot defaults to enabled.** Both coordinator setup and the options form default to a daily reboot when the option is absent. Reassess whether this workaround is appropriate for 1.006 before changing existing users' behavior.
 - **Control acknowledgement can lag.** Light and switch actions request the next coordinator refresh, which may be a weather/configuration tick rather than a state tick. A queued state refresh could improve feedback while maintaining controller request spacing.
-- **Availability across auxiliary ticks.** Weather and periodic configuration errors are swallowed; their successful coordinator updates can temporarily obscure a prior state failure. A separate state-health policy would make availability more consistent.
 - **PWM range needs protocol confirmation.** The live state contained 1024 on two channels, while HA uses a nominal maximum of 1000. The original UI also uses 1000 for the expert limit. Do not rescale all lights from this observation alone; confirm whether 1024 is a full-on sentinel or a distinct hardware range.
 - **Missing model metadata.** The configuration returned no model, but state identifies model 10. A verified mapping could populate device model information.
 

@@ -59,7 +59,7 @@ async def async_setup_entry(
             if is_switch and pwm_num not in _added:
                 _added.add(pwm_num)
                 new_entities.append(SunRiserSwitch(coordinator, entry, pwm_num))
-            elif not is_switch and pwm_num in _added:
+            elif not is_switch:
                 _added.discard(pwm_num)
                 uid = f"{entry.entry_id}_pwm_{pwm_num}"
                 eid = er.async_get_entity_id("switch", DOMAIN, uid)

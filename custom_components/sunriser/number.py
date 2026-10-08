@@ -32,7 +32,7 @@ async def async_setup_entry(
             if active and pwm_num not in _added:
                 _added.add(pwm_num)
                 new_entities.append(SunRiserPWMFixedNumber(coordinator, entry, pwm_num))
-            elif not active and pwm_num in _added:
+            elif not active:
                 _added.discard(pwm_num)
                 uid = f"{entry.entry_id}_pwm_{pwm_num}_fixed"
                 eid = er.async_get_entity_id("number", DOMAIN, uid)
@@ -79,4 +79,3 @@ class SunRiserPWMFixedNumber(CoordinatorEntity[SunRiserCoordinator], NumberEntit
         await self.coordinator.async_set_config(
             {f"pwm#{self._pwm_num}#fixed": int_value}
         )
-        self.coordinator.config[f"pwm#{self._pwm_num}#fixed"] = int_value

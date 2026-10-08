@@ -44,27 +44,24 @@ async def async_setup_entry(
         ]
     )
 
-    # Weather channel sensors are fixed at setup time (weather list length
-    # is determined by pwm_count and doesn't change without a reload).
-    weather = coordinator.data.get("weather") or [] if coordinator.data else []
-    weather_entities: list[SunRiserWeatherChannelSensor] = [
-        SunRiserWeatherChannelSensor(coordinator, i + 1)
-        for i, ch in enumerate(weather)
-        if ch is not None
-    ]
-    if weather_entities:
-        async_add_entities(weather_entities)
-
-    # DS1820 temperature sensors: add at setup and dynamically as new ROMs appear.
+    # Discover weather channels and DS1820 ROMs on every update, including
+    # recovery after the optional initial weather request failed.
+    _added_weather_channels: set[int] = set()
     _added_roms: set[str] = set()
 
     @callback
-    def _check_ds1820_sensors() -> None:
+    def _check_sensors() -> None:
         if coordinator.data is None:
             return
-        new_entities: list[SunRiserTemperatureSensor] = []
+        new_entities: list[SunRiserTemperatureSensor | SunRiserWeatherChannelSensor] = (
+            []
+        )
+        for channel, weather in enumerate(coordinator.data.get("weather") or [], 1):
+            if weather is not None and channel not in _added_weather_channels:
+                _added_weather_channels.add(channel)
+                new_entities.append(SunRiserWeatherChannelSensor(coordinator, channel))
         for rom, reading in (coordinator.data.get("sensors") or {}).items():
-            if rom in _added_roms:
+            if rom in _added_roms or not coordinator.sensor_config_loaded(rom):
                 continue
             device_type = reading[0]
             if device_type == _DS1820:
@@ -73,8 +70,8 @@ async def async_setup_entry(
         if new_entities:
             async_add_entities(new_entities)
 
-    _check_ds1820_sensors()
-    entry.async_on_unload(coordinator.async_add_listener(_check_ds1820_sensors))
+    _check_sensors()
+    entry.async_on_unload(coordinator.async_add_listener(_check_sensors))
 
 
 class SunRiserUptimeSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity):

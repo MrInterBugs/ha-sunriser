@@ -36,15 +36,14 @@ def _pwm_refresh_keys(coord: SunRiserCoordinator) -> list[str]:
         f"pwm#{i}#color" for i in range(1, coord.pwm_count + 1)
     ]
     for i in range(1, coord.pwm_count + 1):
-        if not coord.pwm_is_unused(i):
-            keys.extend(
-                [
-                    f"pwm#{i}#onoff",
-                    f"pwm#{i}#name",
-                    f"pwm#{i}#manager",
-                    f"pwm#{i}#fixed",
-                ]
-            )
+        keys.extend(
+            [
+                f"pwm#{i}#onoff",
+                f"pwm#{i}#name",
+                f"pwm#{i}#manager",
+                f"pwm#{i}#fixed",
+            ]
+        )
     return keys
 
 
@@ -375,18 +374,19 @@ async def test_update_data_weather_tick(coord):
 
 
 async def test_update_data_pwm_config_tick(coord):
-    """PWM config tick fetches color for all channels, extra keys only for active ones."""
+    """PWM config tick fetches color and details for all channels."""
     coord._init_step = 4
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True, "weather": []}
     coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
 
     # pwm_count=4; channels 1,2,4 active (non-empty color), channel 3 unused.
-    # Expect: color for 1-4, plus onoff/name/manager/fixed for 1,2,4 only.
-    active = [i for i in range(1, 5) if FAKE_CONFIG.get(f"pwm#{i}#color")]
+    # Even inactive channels need details in case they were just activated.
     color_keys = [f"pwm#{i}#color" for i in range(1, 5)]
     extra_keys = [
-        f"pwm#{i}#{k}" for i in active for k in ("onoff", "name", "manager", "fixed")
+        f"pwm#{i}#{k}"
+        for i in range(1, 5)
+        for k in ("onoff", "name", "manager", "fixed")
     ]
     fresh = {k: coord.config.get(k) for k in color_keys + extra_keys}
 
@@ -665,7 +665,7 @@ async def test_repair_issue_created_at_failure_grace(coord):
 
     mock_create.assert_called_once()
     call_kwargs = mock_create.call_args
-    assert call_kwargs.args[2] == "device_unreachable"
+    assert call_kwargs.args[2] == f"device_unreachable_{ENTRY_ID}"
     assert call_kwargs.kwargs["translation_placeholders"]["host"] == coord.host
 
 
@@ -703,7 +703,7 @@ async def test_repair_issue_deleted_on_recovery(coord):
             await coord._async_refresh_state()
 
     mock_delete.assert_called_once()
-    assert mock_delete.call_args.args[2] == "device_unreachable"
+    assert mock_delete.call_args.args[2] == f"device_unreachable_{ENTRY_ID}"
 
 
 async def test_repair_issue_not_deleted_on_normal_recovery(coord):
@@ -1170,6 +1170,7 @@ def test_check_dst_changed_disabled_is_noop(coordinator):
 
 async def test_async_do_dst_sync_success(coordinator):
     """Successful DST sync updates config and clears _dst_sync_pending."""
+    coordinator._dst_auto_track = True
     from unittest.mock import patch
     import datetime
 
@@ -1189,6 +1190,7 @@ async def test_async_do_dst_sync_success(coordinator):
 
 async def test_async_do_dst_sync_failure_retries(coordinator, caplog):
     """If async_set_config raises ClientError, log a warning and re-queue the sync."""
+    coordinator._dst_auto_track = True
     import aiohttp
     from unittest.mock import patch
     import datetime

@@ -36,7 +36,7 @@ async def async_setup_entry(
                 new_entities.append(
                     SunRiserPWMManagerSelect(coordinator, entry, pwm_num)
                 )
-            elif not active and pwm_num in _added:
+            elif not active:
                 _added.discard(pwm_num)
                 uid = f"{entry.entry_id}_pwm_{pwm_num}_manager"
                 eid = er.async_get_entity_id("select", DOMAIN, uid)
@@ -78,4 +78,3 @@ class SunRiserPWMManagerSelect(CoordinatorEntity[SunRiserCoordinator], SelectEnt
     async def async_select_option(self, option: str) -> None:
         value = _MANAGER_TO_INT.get(option, 0)
         await self.coordinator.async_set_config({f"pwm#{self._pwm_num}#manager": value})
-        self.coordinator.config[f"pwm#{self._pwm_num}#manager"] = value

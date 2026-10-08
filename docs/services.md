@@ -2,6 +2,29 @@
 
 The integration registers the following service actions under the `sunriser` domain.
 
+Every action accepts an optional `device_id` in its `data`. With one loaded
+SunRiser controller, existing calls work unchanged. With multiple loaded
+controllers, select the Controller field or supply its Home Assistant device ID;
+calls without a selection fail rather than operating on an arbitrary controller.
+Unloaded entries are excluded, and an explicitly selected unloaded or unknown
+device produces an error without falling back to another controller.
+
+The Day Planner card accepts the same `device_id` in its card configuration.
+
+Backup and firmware exports include the controller's entry ID and a unique suffix
+in their filenames. Repeated calls create separate files; existing files are never
+overwritten. Use the returned `path` when restoring a backup.
+
+Day-planner marker times must be valid clock times (`00:00` through `23:59`);
+`24:00` is also accepted as an end-of-day marker.
+
+```yaml
+action: sunriser.get_log
+data:
+  device_id: YOUR_HOME_ASSISTANT_DEVICE_ID
+response_variable: result
+```
+
 {% for service_id, service in services.items() %}
 ## {{ service.name }} (`sunriser.{{ service_id }}`)
 
@@ -19,7 +42,7 @@ The integration registers the following service actions under the `sunriser` dom
 # Take a backup
 action: sunriser.backup
 response_variable: result
-# result.path = /config/sunriser_backup_20260323_120000.msgpack
+# result.path contains the unique filename of this backup
 
 # Restore from backup
 action: sunriser.restore

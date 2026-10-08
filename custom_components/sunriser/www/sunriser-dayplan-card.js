@@ -5,6 +5,7 @@
 // Optional config:
 //   title: "My Aquarium"          # card title (default: "Day Planner")
 //   refresh_interval: 300         # seconds between refreshes (default: 300)
+//   device_id: "..."              # required with multiple loaded controllers
 //   channels:                     # override labels per PWM
 //     1: "4500K White"
 //     2: "Royal Blue"
@@ -296,7 +297,10 @@ class SunRiserDayplanCard extends LitElement {
           type: "call_service",
           domain: "sunriser",
           service: "get_dayplanner_schedule",
-          service_data: { pwm: i },
+          service_data: {
+            pwm: i,
+            ...(this._config?.device_id ? { device_id: this._config.device_id } : {}),
+          },
           return_response: true,
         });
         const resp = result?.response;

@@ -70,6 +70,21 @@ class SunRiserConfigFlow(ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(config_entry: ConfigEntry) -> SunRiserOptionsFlow:
         return SunRiserOptionsFlow(config_entry)
 
+    def _entry_for_endpoint(
+        self, host: str, port: int, exclude_entry_id: str | None = None
+    ) -> ConfigEntry | None:
+        """Match endpoints independently of manual or DHCP unique IDs."""
+        return next(
+            (
+                entry
+                for entry in self._async_current_entries()
+                if entry.entry_id != exclude_entry_id
+                and entry.data[CONF_HOST].strip().lower() == host.strip().lower()
+                and entry.data.get(CONF_PORT, DEFAULT_PORT) == port
+            ),
+            None,
+        )
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -81,11 +96,15 @@ class SunRiserConfigFlow(ConfigFlow, domain=DOMAIN):
 
             await self.async_set_unique_id(f"{host}:{port}")
             self._abort_if_unique_id_configured()
+            if self._entry_for_endpoint(host, port) is not None:
+                return self.async_abort(reason="already_configured")
 
             error = await _test_connection(host, port)
             if error:
                 errors["base"] = error
             else:
+                if self._entry_for_endpoint(host, port) is not None:
+                    return self.async_abort(reason="already_configured")
                 return self.async_create_entry(
                     title=host,
                     data={
@@ -110,10 +129,23 @@ class SunRiserConfigFlow(ConfigFlow, domain=DOMAIN):
             host = user_input[CONF_HOST].strip()
             port = user_input.get(CONF_PORT, DEFAULT_PORT)
 
+            if self._entry_for_endpoint(host, port, entry.entry_id) is not None:
+                return self.async_abort(reason="already_configured")
+
             error = await _test_connection(host, port)
             if error:
                 errors["base"] = error
             else:
+                # Manual IDs follow the endpoint; DHCP IDs retain their MAC.
+                if self._entry_for_endpoint(host, port, entry.entry_id) is not None:
+                    return self.async_abort(reason="already_configured")
+                if (
+                    entry.unique_id
+                    == f"{entry.data[CONF_HOST]}:{entry.data.get(CONF_PORT, DEFAULT_PORT)}"
+                ):
+                    self.hass.config_entries.async_update_entry(
+                        entry, unique_id=f"{host}:{port}"
+                    )
                 return self.async_update_reload_and_abort(
                     entry,
                     data_updates={CONF_HOST: host, CONF_PORT: port},
@@ -141,11 +173,33 @@ class SunRiserConfigFlow(ConfigFlow, domain=DOMAIN):
         # If an entry already exists for this MAC, update the host and reload.
         for entry in self._async_current_entries():
             if entry.unique_id == discovery_info.macaddress:
+                if (
+                    self._entry_for_endpoint(
+                        discovery_info.ip,
+                        entry.data.get(CONF_PORT, DEFAULT_PORT),
+                        entry.entry_id,
+                    )
+                    is not None
+                ):
+                    return self.async_abort(reason="already_configured")
                 return self.async_update_reload_and_abort(
                     entry,
                     data_updates={CONF_HOST: discovery_info.ip},
                     reason="already_configured",
                 )
+
+        # A manually configured endpoint may be discovered later. Adopt its
+        # stable MAC identity while preserving the entry, entities and options.
+        existing = self._entry_for_endpoint(discovery_info.ip, DEFAULT_PORT)
+        if existing is not None:
+            if existing.unique_id in (
+                None,
+                f"{existing.data[CONF_HOST]}:{DEFAULT_PORT}",
+            ):
+                self.hass.config_entries.async_update_entry(
+                    existing, unique_id=discovery_info.macaddress
+                )
+            return self.async_abort(reason="already_configured")
 
         # New device — test connectivity then confirm with user.
         error = await _test_connection(discovery_info.ip, DEFAULT_PORT)
@@ -160,6 +214,12 @@ class SunRiserConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Confirm adding a DHCP-discovered device."""
         if user_input is not None:
+            self._abort_if_unique_id_configured()
+            if (
+                self._entry_for_endpoint(self._discovered_host, DEFAULT_PORT)
+                is not None
+            ):
+                return self.async_abort(reason="already_configured")
             return self.async_create_entry(
                 title=self._discovered_host,
                 data={

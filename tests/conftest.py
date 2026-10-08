@@ -116,5 +116,5 @@ def coordinator(hass, mock_config_entry):
     coord.async_set_pwms = AsyncMock()
     coord.async_set_service_mode = AsyncMock()
     coord.async_request_refresh = AsyncMock()
-    coord.async_set_config = AsyncMock()
+    coord.async_set_config = AsyncMock(side_effect=coord.update_config_cache)
     return coord

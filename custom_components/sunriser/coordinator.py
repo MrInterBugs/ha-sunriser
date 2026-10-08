@@ -106,6 +106,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self._last_known_dst: bool | None = None
         self._dst_sync_pending: bool = False
+        self._dst_retry_needs_state: bool = False
 
         self._scheduled_reboot_cancel: Callable[[], None] | None = None
         self._setup_scheduled_reboot(entry)
@@ -282,6 +283,15 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ) as resp:
                 resp.raise_for_status()
 
+            self.update_config_cache(payload)
+
+    @callback
+    def update_config_cache(self, params: dict[str, Any]) -> None:
+        """Apply an acknowledged write without later publishing an older read."""
+        self.config.update(params)
+        if self._pending_refresh_chunks:
+            self._refresh_accumulator.update(params)
+
     async def async_get_state(self) -> dict[str, Any]:
         """GET /state — returns PWM values, sensor readings, uptime, etc."""
         session = self._get_session()
@@ -364,11 +374,12 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._dst_sync_pending = False
             return
         self._dst_auto_track = enabled
+        self._dst_sync_pending = False
+        self._dst_retry_needs_state = False
         if enabled:
             is_dst = bool(dt_util.now().dst())
-            self._last_known_dst = is_dst
             await self.async_set_config({"summertime": 1 if is_dst else 0})
-            self.config["summertime"] = 1 if is_dst else 0
+            self._last_known_dst = is_dst
 
     def _check_dst_changed(self) -> None:
         """After each successful poll tick, check whether DST has transitioned.
@@ -385,18 +396,21 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_do_dst_sync(self) -> dict[str, Any]:
         """Execute the pending DST sync — replaces one poll tick entirely."""
-        if self.firmware_handles_dst:
+        if self.firmware_handles_dst or not self._dst_auto_track:
             self._dst_auto_track = False
             self._dst_sync_pending = False
+            self._dst_retry_needs_state = False
             return dict(self.data or {})
         is_dst = bool(dt_util.now().dst())
-        self._last_known_dst = is_dst
         try:
             await self.async_set_config({"summertime": 1 if is_dst else 0})
-            self.config["summertime"] = 1 if is_dst else 0
-        except aiohttp.ClientError as err:
+            self._last_known_dst = is_dst
+        except (aiohttp.ClientError, TimeoutError) as err:
             _LOGGER.warning("Could not sync DST to device: %s", err)
-            self._dst_sync_pending = True  # retry next tick
+            self._dst_sync_pending = True
+            # Confirm state health before retrying, without a second request
+            # in this tick or starving state polling while writes fail.
+            self._dst_retry_needs_state = True
         return dict(self.data or {})
 
     async def async_set_pwms(self, pwm_values: dict[str, int]) -> None:
@@ -599,7 +613,6 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             h, mn = map(int, m["time"].split(":"))
             flat.extend([h * 60 + mn, int(m["percent"])])
         await self.async_set_config({f"dayplanner#marker#{pwm}": flat})
-        self.config[f"dayplanner#marker#{pwm}"] = flat
 
     _BASE_CONFIG_KEYS: list[str] = [
         "name",
@@ -641,7 +654,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._pending_sensor_roms = [
             rom
             for rom in state.get("sensors", {})
-            if f"sensors#sensor#{rom}#name" not in self.config
+            if not self.sensor_config_loaded(rom)
         ]
         self._last_state_refresh_succeeded = True
         self._consecutive_failures = 0
@@ -726,8 +739,8 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _enqueue_pwm_refresh(self) -> None:
         """Build the PWM config key list and queue it as per-tick chunks.
 
-        Fetches pwm#X#color for every channel (activation detection) plus the
-        four detail keys only for currently-active channels.  Also drains
+        Fetches color and details for every channel so newly activated channels
+        are published with their current type and name. Also drains
         _pending_config_keys (new sensor ROMs, weather program names).
 
         The full list is split into msgpack bodies no larger than
@@ -740,13 +753,12 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for i in range(1, pwm_count + 1):
             keys.append(f"pwm#{i}#color")
         for i in range(1, pwm_count + 1):
-            if not self.pwm_is_unused(i):
-                keys += [
-                    f"pwm#{i}#onoff",
-                    f"pwm#{i}#name",
-                    f"pwm#{i}#manager",
-                    f"pwm#{i}#fixed",
-                ]
+            keys += [
+                f"pwm#{i}#onoff",
+                f"pwm#{i}#name",
+                f"pwm#{i}#manager",
+                f"pwm#{i}#fixed",
+            ]
         pending = list(self._pending_config_keys)
         self._pending_config_keys.difference_update(pending)
         keys += pending
@@ -822,7 +834,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 async_create_issue(
                     self.hass,
                     DOMAIN,
-                    "device_unreachable",
+                    f"device_unreachable_{self._entry_id}",
                     is_fixable=False,
                     severity=IssueSeverity.WARNING,
                     translation_key="device_unreachable",
@@ -834,7 +846,9 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if self._consecutive_failures >= self._FAILURE_GRACE:
             _LOGGER.info("SunRiser at %s is available again", self.host)
-            async_delete_issue(self.hass, DOMAIN, "device_unreachable")
+            async_delete_issue(
+                self.hass, DOMAIN, f"device_unreachable_{self._entry_id}"
+            )
             # Reset the PWM config refresh counter so it doesn't fire
             # immediately on the first tick back — a freshly booted device
             # needs time to stabilise before it can handle a large batch.
@@ -850,7 +864,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # drain the queue on the next pwm_config tick alongside the PWM keys.
         if state.get("sensors"):
             for rom in state["sensors"]:
-                if f"sensors#sensor#{rom}#name" not in self.config:
+                if not self.sensor_config_loaded(rom):
                     self._pending_config_keys.update(
                         [
                             f"sensors#sensor#{rom}#name",
@@ -899,6 +913,19 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if self._init_step == 3:
             return await self._async_init_weather()
+
+        # Only a successful state read can restore availability. Auxiliary
+        # requests may return cached data even when they fail.
+        if (
+            self._consecutive_failures >= self._FAILURE_GRACE
+            or self._dst_retry_needs_state
+        ):
+            data = await self._async_refresh_state()
+            data["ok"] = self._last_state_refresh_succeeded
+            if self._last_state_refresh_succeeded:
+                self._dst_retry_needs_state = False
+                self._check_dst_changed()
+            return data
 
         # ── Pending DST sync — replaces one tick, keeps 1 request/tick ──────────
         if self._dst_sync_pending:
@@ -975,6 +1002,13 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def sensor_name(self, rom: str) -> str:
         return self.config.get(f"sensors#sensor#{rom}#name") or rom
 
+    def sensor_config_loaded(self, rom: str) -> bool:
+        """Whether sensor naming, units and scaling have actually been fetched."""
+        return all(
+            f"sensors#sensor#{rom}#{key}" in self.config
+            for key in ("name", "unit", "unitcomma")
+        )
+
     def sensor_unit(self, rom: str) -> int:
         """0 = raw, 1 = celsius."""
         return self.config.get(f"sensors#sensor#{rom}#unit") or 0
@@ -984,7 +1018,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def sensor_value(self, rom: str) -> float | None:
         """Decoded sensor reading, or None if unavailable."""
-        if self.data is None:
+        if self.data is None or not self.sensor_config_loaded(rom):
             return None
         entry = self.data.get("sensors", {}).get(rom)
         if entry is None:

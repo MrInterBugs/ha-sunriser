@@ -116,6 +116,9 @@
     }
   },
   "exceptions": {
+    "device_required": {
+      "message": "Select a SunRiser controller using device_id when multiple controllers are loaded"
+    },
     "integration_not_loaded": {
       "message": "SunRiser integration not loaded"
     },

@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.7.2-1.006-beta.2] - 2026-10-08
+
+### Fixed
+
+- Give every backup and firmware export a unique filename and create it exclusively, preventing silent overwrites across controllers or repeated calls.
+- Deduplicate manual and DHCP setup by endpoint, adopt MAC identity for discovered manual entries, and reject conflicting reconfiguration.
+- Preserve acknowledged configuration writes when an older, multi-tick refresh finishes; failed writes leave the cache unchanged.
+- Wait for sensor units and decimal scaling before creating new temperature entities or decoding readings.
+- Track offline repairs per controller, so another controller's recovery cannot clear the warning.
+- Reject invalid day-planner hours and minutes while retaining the `24:00` end-of-day marker.
+- Remove stale channel registry entries at startup as well as during live configuration changes.
+- Cancel scheduled reboot callbacks and close HTTP sessions when integration setup fails or is cancelled.
+- Keep unavailable entities unavailable until a state request succeeds; auxiliary refreshes cannot report a false recovery.
+- Poll state before retrying failed DST writes on older firmware, and cancel pending writes when DST Auto-Track is disabled.
+- Fetch channel types and names alongside activation changes so newly activated pumps are created as switches immediately.
+- Discover weather sensors after startup, including recovery from an initial weather request failure.
+- Route services to an explicitly selected controller with `device_id` when multiple controllers are loaded, and ignore unloaded entries. Single-controller calls remain compatible; the Day Planner card supports the same selection.
+
+### Upgrade notes
+
+- With multiple loaded controllers, service calls and Day Planner cards must specify `device_id`. Calls with one loaded controller remain compatible.
+- Backup and firmware exports now use unique filenames. Automations should use the returned `path` rather than constructing a filename.
+- Newly connected temperature sensors appear after their metadata is fetched at the next periodic configuration refresh, preventing unscaled readings.
+
+### Validation
+
+- 399 mocked tests pass with 100% statement coverage, including 61 regression cases added since beta.1.
+- Black, strict mypy, Hassfest, and the strict documentation build pass.
+- No live controller requests were made during beta.2 validation; hardware testing is still required before a stable release.
+
 ## [1.7.2-1.006-beta.1] - 2026-10-08
 
 ### Fixed

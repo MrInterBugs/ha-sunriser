@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import pathlib
+from uuid import uuid4
 from typing import Any, TypedDict, cast
 
 import aiohttp
@@ -12,7 +13,7 @@ import voluptuous as vol
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.lovelace.resources import ResourceStorageCollection
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import (
     CoreState,
@@ -25,6 +26,8 @@ from homeassistant.core import (
 )
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry
+from homeassistant.helpers.issue_registry import async_delete_issue
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, PLATFORMS
@@ -35,7 +38,7 @@ from .coordinator import DayplannerMarker, SunRiserCoordinator
 
 _CARD_URL = "/sunriser/sunriser-dayplan-card.js"
 _CARD_PATH = pathlib.Path(__file__).parent / "www" / "sunriser-dayplan-card.js"
-_CARD_VERSION = "1.4.8"
+_CARD_VERSION = "1.4.9"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,23 +55,26 @@ _SERVICE_FIRMWARE = "download_firmware"
 _SERVICE_BOOTLOAD = "download_bootload"
 _SERVICE_FACTORY_RESET = "factory_reset"
 
-_RESTORE_SCHEMA = vol.Schema({vol.Required("file_path"): cv.string})
+_DEVICE_FIELDS: dict[vol.Marker, Any] = {vol.Optional("device_id"): cv.string}
+_DEVICE_SCHEMA = vol.Schema(_DEVICE_FIELDS)
+_RESTORE_SCHEMA = vol.Schema({**_DEVICE_FIELDS, vol.Required("file_path"): cv.string})
 
 _GET_DAYPLANNER_SCHEMA = vol.Schema(
-    {vol.Required("pwm"): vol.All(int, vol.Range(min=1, max=10))}
+    {**_DEVICE_FIELDS, vol.Required("pwm"): vol.All(int, vol.Range(min=1, max=10))}
 )
 
 _MARKER_SCHEMA = vol.Schema(
     {
         vol.Required("time"): vol.All(
             cv.string,
-            vol.Match(r"^\d{1,2}:\d{2}$"),
+            vol.Match(r"^(?:(?:[01]?[0-9]|2[0-3]):[0-5][0-9]|24:00)\Z"),
         ),
         vol.Required("percent"): vol.All(int, vol.Range(min=0, max=100)),
     }
 )
 _SET_DAYPLANNER_SCHEMA = vol.Schema(
     {
+        **_DEVICE_FIELDS,
         vol.Required("pwm"): vol.All(int, vol.Range(min=1, max=10)),
         vol.Required("markers"): vol.All(
             [_MARKER_SCHEMA],
@@ -89,11 +95,12 @@ _WEEK_DAYS = [
 ]
 
 _GET_WEEKPLANNER_SCHEMA = vol.Schema(
-    {vol.Required("pwm"): vol.All(int, vol.Range(min=1, max=10))}
+    {**_DEVICE_FIELDS, vol.Required("pwm"): vol.All(int, vol.Range(min=1, max=10))}
 )
 
 _SET_WEEKPLANNER_SCHEMA = vol.Schema(
     {
+        **_DEVICE_FIELDS,
         vol.Required("pwm"): vol.All(int, vol.Range(min=1, max=10)),
         vol.Required("schedule"): vol.Schema(
             {vol.In(_WEEK_DAYS): vol.All(int, vol.Range(min=0))}
@@ -102,12 +109,15 @@ _SET_WEEKPLANNER_SCHEMA = vol.Schema(
 )
 
 _FACTORY_RESET_SCHEMA = vol.Schema(
-    {vol.Required("confirm"): vol.All(bool, vol.IsTrue())}
+    {**_DEVICE_FIELDS, vol.Required("confirm"): vol.All(bool, vol.IsTrue())}
 )
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Serve the Day Planner card JS and register it as a Lovelace resource."""
+    # Older releases shared one repair across controllers. Each coordinator
+    # now owns its repair and will recreate it if that controller is offline.
+    async_delete_issue(hass, DOMAIN, "device_unreachable")
     await hass.http.async_register_static_paths(
         [StaticPathConfig(_CARD_URL, str(_CARD_PATH), cache_headers=False)]
     )
@@ -156,17 +166,23 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = SunRiserCoordinator(hass, entry)
 
+    ready = False
     try:
-        await coordinator.async_load_device_config()
-    except aiohttp.ClientError as err:
-        raise ConfigEntryNotReady(
-            f"Cannot connect to SunRiser at {coordinator.host}: {err}"
-        ) from err
-    except Exception as err:
-        _LOGGER.exception("Unexpected error loading SunRiser device config")
-        raise ConfigEntryNotReady(f"Unexpected error: {err}") from err
+        try:
+            await coordinator.async_load_device_config()
+        except aiohttp.ClientError as err:
+            raise ConfigEntryNotReady(
+                f"Cannot connect to SunRiser at {coordinator.host}: {err}"
+            ) from err
+        except Exception as err:
+            _LOGGER.exception("Unexpected error loading SunRiser device config")
+            raise ConfigEntryNotReady(f"Unexpected error: {err}") from err
 
-    await coordinator.async_config_entry_first_refresh()
+        await coordinator.async_config_entry_first_refresh()
+        ready = True
+    finally:
+        if not ready:
+            await coordinator.async_close()
 
     entry.runtime_data = coordinator
 
@@ -233,15 +249,33 @@ class _WeekplannerScheduleResponse(TypedDict):
     schedule: dict[str, int | None]
 
 
-def _get_coordinator(hass: HomeAssistant) -> SunRiserCoordinator:
-    entries = hass.config_entries.async_entries(DOMAIN)
-    try:
-        return cast(SunRiserCoordinator, next(iter(entries)).runtime_data)
-    except StopIteration:
+def _get_coordinator(
+    hass: HomeAssistant, device_id: str | None = None
+) -> SunRiserCoordinator:
+    entries = [
+        entry
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.state is ConfigEntryState.LOADED
+        and isinstance(getattr(entry, "runtime_data", None), SunRiserCoordinator)
+    ]
+    if device_id is not None:
+        device = device_registry.async_get(hass).async_get(device_id)
+        entries = [
+            entry
+            for entry in entries
+            if device is not None and entry.entry_id in device.config_entries
+        ]
+    if not entries:
         raise HomeAssistantError(
             translation_domain=DOMAIN,
             translation_key="integration_not_loaded",
-        ) from None
+        )
+    if len(entries) != 1:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="device_required",
+        )
+    return cast(SunRiserCoordinator, entries[0].runtime_data)
 
 
 def _register_services(hass: HomeAssistant) -> None:
@@ -249,7 +283,7 @@ def _register_services(hass: HomeAssistant) -> None:
         return  # already registered (re-entrant safety)
 
     async def handle_backup(call: ServiceCall) -> ServiceResponse:
-        coordinator = _get_coordinator(hass)
+        coordinator = _get_coordinator(hass, call.data.get("device_id"))
         try:
             data = await coordinator.async_get_backup()
         except aiohttp.ClientError as err:
@@ -259,11 +293,13 @@ def _register_services(hass: HomeAssistant) -> None:
                 translation_placeholders={"error": str(err)},
             ) from err
         now = dt_util.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"sunriser_backup_{now}.msgpack"
+        filename = (
+            f"sunriser_backup_{now}_{coordinator._entry_id}_{uuid4().hex}.msgpack"
+        )
         path = hass.config.path(filename)
 
         def _write() -> None:
-            with open(path, "wb") as f:
+            with open(path, "xb") as f:
                 f.write(data)
 
         try:
@@ -303,7 +339,7 @@ def _register_services(hass: HomeAssistant) -> None:
                 translation_key="restore_read_failed",
                 translation_placeholders={"error": str(err)},
             ) from err
-        coordinator = _get_coordinator(hass)
+        coordinator = _get_coordinator(hass, call.data.get("device_id"))
         try:
             await coordinator.async_restore(data)
         except aiohttp.ClientError as err:
@@ -314,7 +350,7 @@ def _register_services(hass: HomeAssistant) -> None:
             ) from err
 
     async def handle_get_errors(call: ServiceCall) -> ServiceResponse:
-        coordinator = _get_coordinator(hass)
+        coordinator = _get_coordinator(hass, call.data.get("device_id"))
         try:
             content = await coordinator.async_get_errors()
         except aiohttp.ClientError as err:
@@ -327,7 +363,7 @@ def _register_services(hass: HomeAssistant) -> None:
         return cast(ServiceResponse, result)
 
     async def handle_get_log(call: ServiceCall) -> ServiceResponse:
-        coordinator = _get_coordinator(hass)
+        coordinator = _get_coordinator(hass, call.data.get("device_id"))
         try:
             content = await coordinator.async_get_log()
         except aiohttp.ClientError as err:
@@ -343,6 +379,7 @@ def _register_services(hass: HomeAssistant) -> None:
         DOMAIN,
         _SERVICE_BACKUP,
         handle_backup,
+        schema=_DEVICE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
     hass.services.async_register(
@@ -355,17 +392,19 @@ def _register_services(hass: HomeAssistant) -> None:
         DOMAIN,
         _SERVICE_GET_ERRORS,
         handle_get_errors,
+        schema=_DEVICE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
     hass.services.async_register(
         DOMAIN,
         _SERVICE_GET_LOG,
         handle_get_log,
+        schema=_DEVICE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
 
     async def handle_get_dayplanner(call: ServiceCall) -> ServiceResponse:
-        coordinator = _get_coordinator(hass)
+        coordinator = _get_coordinator(hass, call.data.get("device_id"))
         pwm: int = call.data["pwm"]
         markers = await coordinator.async_get_dayplanner(pwm)
         result: _DayplannerScheduleResponse = {
@@ -377,7 +416,7 @@ def _register_services(hass: HomeAssistant) -> None:
         return cast(ServiceResponse, result)
 
     async def handle_set_dayplanner(call: ServiceCall) -> None:
-        coordinator = _get_coordinator(hass)
+        coordinator = _get_coordinator(hass, call.data.get("device_id"))
         try:
             await coordinator.async_set_dayplanner(
                 call.data["pwm"], call.data["markers"]
@@ -404,7 +443,7 @@ def _register_services(hass: HomeAssistant) -> None:
     )
 
     async def handle_get_weekplanner(call: ServiceCall) -> ServiceResponse:
-        coordinator = _get_coordinator(hass)
+        coordinator = _get_coordinator(hass, call.data.get("device_id"))
         pwm: int = call.data["pwm"]
         try:
             schedule = await coordinator.async_get_weekplanner(pwm)
@@ -423,7 +462,7 @@ def _register_services(hass: HomeAssistant) -> None:
         return cast(ServiceResponse, result)
 
     async def handle_set_weekplanner(call: ServiceCall) -> None:
-        coordinator = _get_coordinator(hass)
+        coordinator = _get_coordinator(hass, call.data.get("device_id"))
         try:
             await coordinator.async_set_weekplanner(
                 call.data["pwm"], call.data["schedule"]
@@ -450,7 +489,7 @@ def _register_services(hass: HomeAssistant) -> None:
     )
 
     async def handle_factory_backup(call: ServiceCall) -> ServiceResponse:
-        coordinator = _get_coordinator(hass)
+        coordinator = _get_coordinator(hass, call.data.get("device_id"))
         try:
             data = await coordinator.async_get_factory_backup()
         except aiohttp.ClientResponseError as err:
@@ -471,11 +510,11 @@ def _register_services(hass: HomeAssistant) -> None:
                 translation_placeholders={"error": str(err)},
             ) from err
         now = dt_util.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"sunriser_factory_backup_{now}.msgpack"
+        filename = f"sunriser_factory_backup_{now}_{coordinator._entry_id}_{uuid4().hex}.msgpack"
         path = hass.config.path(filename)
 
         def _write() -> None:
-            with open(path, "wb") as f:
+            with open(path, "xb") as f:
                 f.write(data)
 
         try:
@@ -491,7 +530,7 @@ def _register_services(hass: HomeAssistant) -> None:
         return cast(ServiceResponse, result)
 
     async def handle_firmware(call: ServiceCall) -> ServiceResponse:
-        coordinator = _get_coordinator(hass)
+        coordinator = _get_coordinator(hass, call.data.get("device_id"))
         try:
             data = await coordinator.async_get_firmware()
         except aiohttp.ClientError as err:
@@ -501,11 +540,13 @@ def _register_services(hass: HomeAssistant) -> None:
                 translation_placeholders={"error": str(err)},
             ) from err
         now = dt_util.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"sunriser_firmware_{now}.msgpack"
+        filename = (
+            f"sunriser_firmware_{now}_{coordinator._entry_id}_{uuid4().hex}.msgpack"
+        )
         path = hass.config.path(filename)
 
         def _write() -> None:
-            with open(path, "wb") as f:
+            with open(path, "xb") as f:
                 f.write(data)
 
         try:
@@ -521,7 +562,7 @@ def _register_services(hass: HomeAssistant) -> None:
         return cast(ServiceResponse, result)
 
     async def handle_bootload(call: ServiceCall) -> ServiceResponse:
-        coordinator = _get_coordinator(hass)
+        coordinator = _get_coordinator(hass, call.data.get("device_id"))
         try:
             data = await coordinator.async_get_bootload()
         except aiohttp.ClientError as err:
@@ -531,11 +572,13 @@ def _register_services(hass: HomeAssistant) -> None:
                 translation_placeholders={"error": str(err)},
             ) from err
         now = dt_util.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"sunriser_bootload_{now}.msgpack"
+        filename = (
+            f"sunriser_bootload_{now}_{coordinator._entry_id}_{uuid4().hex}.msgpack"
+        )
         path = hass.config.path(filename)
 
         def _write() -> None:
-            with open(path, "wb") as f:
+            with open(path, "xb") as f:
                 f.write(data)
 
         try:
@@ -551,7 +594,7 @@ def _register_services(hass: HomeAssistant) -> None:
         return cast(ServiceResponse, result)
 
     async def handle_factory_reset(call: ServiceCall) -> None:
-        coordinator = _get_coordinator(hass)
+        coordinator = _get_coordinator(hass, call.data.get("device_id"))
         try:
             await coordinator.async_factory_reset()
         except aiohttp.ClientError as err:
@@ -566,18 +609,21 @@ def _register_services(hass: HomeAssistant) -> None:
         DOMAIN,
         _SERVICE_FACTORY_BACKUP,
         handle_factory_backup,
+        schema=_DEVICE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
     hass.services.async_register(
         DOMAIN,
         _SERVICE_FIRMWARE,
         handle_firmware,
+        schema=_DEVICE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
     hass.services.async_register(
         DOMAIN,
         _SERVICE_BOOTLOAD,
         handle_bootload,
+        schema=_DEVICE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
     hass.services.async_register(
