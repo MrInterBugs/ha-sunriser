@@ -3,18 +3,31 @@
 
 import importlib.util
 import re
+from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
+from typing import Any, Protocol
+
 import yaml
 
 _ROOT = Path(__file__).parent
 
 
-def _load_const() -> object:
+class MacroEnvironment(Protocol):
+    """The MkDocs macros API used by this hook."""
+
+    variables: dict[str, Any]
+
+    def macro[F: Callable[..., Any]](self, function: F) -> F: ...
+
+
+def _load_const() -> ModuleType:
     """Load custom_components/sunriser/const.py without triggering HA imports."""
     spec = importlib.util.spec_from_file_location(
         "sunriser_const",
         _ROOT / "custom_components" / "sunriser" / "const.py",
     )
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -26,7 +39,7 @@ def _parse_int(name: str, text: str, default: int) -> int:
     return int(m.group(1)) if m else default
 
 
-def define_env(env):
+def define_env(env: MacroEnvironment) -> None:
     const = _load_const()
 
     coord_text = (
@@ -51,7 +64,7 @@ def define_env(env):
     }
 
     @env.macro
-    def fields_table(fields: dict) -> str:
+    def fields_table(fields: dict[str, dict[str, Any]]) -> str:
         """Render a service fields dict as a markdown table with no blank lines."""
         if not fields:
             return ""

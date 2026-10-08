@@ -1,9 +1,12 @@
 """Service calls select a loaded controller and never silently pick another."""
 
+from collections.abc import AsyncIterator
+from typing import Any
 from unittest.mock import AsyncMock, mock_open, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -11,11 +14,12 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.sunriser import _get_coordinator, _register_services
 from custom_components.sunriser.const import DOMAIN
 from custom_components.sunriser.coordinator import SunRiserCoordinator
+from tests.typing import Controllers, as_async_mock
 
 
 @pytest.fixture
-async def controllers(hass):
-    result = []
+async def controllers(hass: HomeAssistant) -> AsyncIterator[Controllers]:
+    result: Controllers = []
     for i in range(2):
         entry = MockConfigEntry(
             domain=DOMAIN,
@@ -38,7 +42,9 @@ async def controllers(hass):
         await coord.async_close()
 
 
-async def test_ambiguous_service_requires_selection(hass, controllers):
+async def test_ambiguous_service_requires_selection(
+    hass: HomeAssistant, controllers: Controllers
+) -> None:
     for _, coord, _ in controllers:
         coord.async_factory_reset = AsyncMock()
     with pytest.raises(HomeAssistantError) as error:
@@ -47,10 +53,12 @@ async def test_ambiguous_service_requires_selection(hass, controllers):
         )
     assert error.value.translation_key == "device_required"
     for _, coord, _ in controllers:
-        coord.async_factory_reset.assert_not_awaited()
+        as_async_mock(coord.async_factory_reset).assert_not_awaited()
 
 
-async def test_unloaded_first_entry_is_skipped(hass, controllers):
+async def test_unloaded_first_entry_is_skipped(
+    hass: HomeAssistant, controllers: Controllers
+) -> None:
     entry, _, _ = controllers[0]
     entry._async_set_state(hass, ConfigEntryState.NOT_LOADED, None)
     del entry.runtime_data
@@ -58,7 +66,9 @@ async def test_unloaded_first_entry_is_skipped(hass, controllers):
 
 
 @pytest.mark.parametrize("selection", ["unknown", "unloaded", "foreign"])
-async def test_invalid_selected_device_does_not_fall_back(hass, controllers, selection):
+async def test_invalid_selected_device_does_not_fall_back(
+    hass: HomeAssistant, controllers: Controllers, selection: str
+) -> None:
     entry, _, device = controllers[0]
     selected_id = device.id
     if selection == "unknown":
@@ -114,14 +124,14 @@ async def test_invalid_selected_device_does_not_fall_back(hass, controllers, sel
     ],
 )
 async def test_each_service_targets_selected_controller(
-    hass,
-    controllers,
-    service,
-    method,
-    data,
-    result,
-    response,
-):
+    hass: HomeAssistant,
+    controllers: Controllers,
+    service: str,
+    method: str,
+    data: Any,
+    result: Any,
+    response: bool,
+) -> None:
     first, second = controllers[0][1], controllers[1][1]
     setattr(first, method, AsyncMock(return_value=result))
     setattr(second, method, AsyncMock(return_value=result))

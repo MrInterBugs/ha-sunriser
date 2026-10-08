@@ -5,18 +5,15 @@ import asyncio
 import logging
 from collections.abc import Callable
 from datetime import datetime, timedelta
+from typing import Any, TypedDict, cast
 
 import aiohttp
 import msgpack
-
-from typing import Any, TypedDict, cast
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.util import dt as dt_util
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers import device_registry
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.issue_registry import (
     IssueSeverity,
@@ -24,6 +21,7 @@ from homeassistant.helpers.issue_registry import (
     async_delete_issue,
 )
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .const import (
     COLOR_NAMES,
@@ -34,8 +32,6 @@ from .const import (
     DEFAULT_REBOOT_TIME,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
-    MANAGER_OPTIONS,
-    PWM_MAX,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -46,7 +42,7 @@ class DayplannerMarker(TypedDict):
     percent: int
 
 
-class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
     """Coordinator that polls /state and holds device config."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -57,7 +53,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             name=DOMAIN,
             update_interval=timedelta(seconds=scan_interval),
         )
-        self._entry_id = entry.entry_id
+        self.entry_id = entry.entry_id
         self.host: str = entry.data[CONF_HOST]
         self.port: int = entry.data.get(CONF_PORT, DEFAULT_PORT)
 
@@ -80,7 +76,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Restored from hass.data bridge on same-session reloads (e.g. options
         # change).  RestoreEntity in switch.py handles HA restarts via recorder.
         _bridge: dict[str, Any] = hass.data.get(DOMAIN, {})
-        self._dst_auto_track: bool = bool(
+        self.dst_auto_track: bool = bool(
             _bridge.pop(f"{entry.entry_id}_dst_auto_track", False)
         )
         self._last_known_dst: bool | None = None
@@ -95,7 +91,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
-            identifiers={(DOMAIN, self._entry_id)},
+            identifiers={(DOMAIN, self.entry_id)},
             name=self.config.get("name") or self.config.get("model") or self.host,
             model=self.config.get("model"),
             sw_version=self.firmware_version,
@@ -275,15 +271,15 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def async_set_dst_auto_track(self, enabled: bool) -> None:
         """Enable legacy DST tracking and synchronize immediately when enabled."""
-        self._dst_auto_track = enabled and not self.firmware_handles_dst
-        if self._dst_auto_track:
+        self.dst_auto_track = enabled and not self.firmware_handles_dst
+        if self.dst_auto_track:
             is_dst = bool(dt_util.now().dst())
             await self.async_set_config({"summertime": 1 if is_dst else 0})
             self._last_known_dst = is_dst
 
     async def _async_sync_dst(self) -> None:
         """Sync legacy firmware after a successful poll; retry failures next poll."""
-        if self.firmware_handles_dst or not self._dst_auto_track:
+        if self.firmware_handles_dst or not self.dst_auto_track:
             return
         is_dst = bool(dt_util.now().dst())
         if is_dst == self._last_known_dst:
@@ -422,7 +418,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Returns a list of markers in the form [{"time": "HH:MM", "percent": N}, ...],
         sorted by time. Returns an empty list if no schedule is set.
         """
-        flat = self.config.get(f"dayplanner#marker#{pwm}") or []
+        flat: list[Any] = self.config.get(f"dayplanner#marker#{pwm}") or []
         markers: list[DayplannerMarker] = []
         for i in range(0, len(flat) - 1, 2):
             if flat[i] is None or flat[i + 1] is None:
@@ -456,7 +452,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         'default' is the fallback program used on days with no explicit assignment.
         """
         result = await self.async_get_config([f"weekplanner#programs#{pwm}"])
-        flat = result.get(f"weekplanner#programs#{pwm}") or []
+        flat: list[Any] = result.get(f"weekplanner#programs#{pwm}") or []
         return {
             day: (int(flat[i]) if i < len(flat) and flat[i] is not None else None)
             for i, day in enumerate(self._WEEK_DAYS)
@@ -509,14 +505,14 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Publish config and keep the firmware registry and DST helper current."""
         self.config.update(fresh)
         device = device_registry.async_get(self.hass).async_get_device(
-            identifiers={(DOMAIN, self._entry_id)}
+            identifiers={(DOMAIN, self.entry_id)}
         )
         if device is not None and device.sw_version != self.firmware_version:
             device_registry.async_get(self.hass).async_update_device(
                 device.id, sw_version=self.firmware_version
             )
         if self.firmware_handles_dst:
-            self._dst_auto_track = False
+            self.dst_auto_track = False
 
     async def _async_refresh_config(self, data: dict[str, Any]) -> None:
         """Read channel and sensor metadata in one request, then publish it."""
@@ -579,7 +575,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 async_create_issue(
                     self.hass,
                     DOMAIN,
-                    f"device_unreachable_{self._entry_id}",
+                    f"device_unreachable_{self.entry_id}",
                     is_fixable=False,
                     severity=IssueSeverity.WARNING,
                     translation_key="device_unreachable",
@@ -592,7 +588,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._consecutive_failures >= self._FAILURE_GRACE:
             _LOGGER.info("SunRiser at %s is available again", self.host)
         # Repairs persist across coordinator reloads; the counter does not.
-        async_delete_issue(self.hass, DOMAIN, f"device_unreachable_{self._entry_id}")
+        async_delete_issue(self.hass, DOMAIN, f"device_unreachable_{self.entry_id}")
         self._consecutive_failures = 0
         self._last_state_refresh_succeeded = True
         data = dict(self.data or {})

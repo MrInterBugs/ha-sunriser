@@ -2,34 +2,37 @@
 """Shared fixtures for SunRiser HA integration unit tests."""
 
 import os
-from unittest.mock import AsyncMock
+from collections.abc import Iterator
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.const import CONF_HOST, CONF_PORT
+from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.sunriser.const import DEFAULT_PORT, DOMAIN
+from custom_components.sunriser.coordinator import SunRiserCoordinator
 
 # Point hass at our project root so it finds custom_components/sunriser/
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 @pytest.fixture
-def hass_config_dir():
+def hass_config_dir() -> str:
     return _PROJECT_ROOT
 
 
 @pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(enable_custom_integrations):
+def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
     """Allow HA to load custom integrations from custom_components/ in this repo."""
 
-
-from custom_components.sunriser.const import DEFAULT_PORT, DOMAIN
-from custom_components.sunriser.coordinator import SunRiserCoordinator
 
 ENTRY_ID = "test_entry_id"
 HOST = "192.168.0.99"
 
 # Fake config matching what async_load_device_config populates
-FAKE_CONFIG = {
+FAKE_CONFIG: dict[str, Any] = {
     "hostname": "testunit",
     "save_version": "1.005",
     "factory_version": "1.005",
@@ -66,7 +69,7 @@ FAKE_CONFIG = {
 }
 
 # Fake state matching what /state returns
-FAKE_STATE = {
+FAKE_STATE: dict[str, Any] = {
     "pwms": {"1": 500, "2": 1000, "3": 0, "4": 0},
     "uptime": 12345,
     "service_mode": 0,
@@ -75,7 +78,7 @@ FAKE_STATE = {
 
 
 @pytest.fixture
-def mock_config_entry():
+def mock_config_entry() -> MockConfigEntry:
     return MockConfigEntry(
         domain=DOMAIN,
         entry_id=ENTRY_ID,
@@ -89,13 +92,17 @@ def mock_config_entry():
 
 
 @pytest.fixture(autouse=True)
-def mock_http_frontend(hass):
+def mock_http_frontend(hass: HomeAssistant) -> Iterator[MagicMock]:
     """Mock the HTTP static-path registration and add_extra_js_url called by
     async_setup so all tests that trigger component load don't need a real
     HTTP server."""
     from unittest.mock import (
         AsyncMock as _AsyncMock,
+    )
+    from unittest.mock import (
         MagicMock as _MagicMock,
+    )
+    from unittest.mock import (
         patch as _patch,
     )
 
@@ -107,7 +114,9 @@ def mock_http_frontend(hass):
 
 
 @pytest.fixture
-def coordinator(hass, mock_config_entry):
+def coordinator(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+) -> SunRiserCoordinator:
     """Real SunRiserCoordinator pre-populated with fake data; network calls mocked."""
     coord = SunRiserCoordinator(hass, mock_config_entry)
     coord.config = dict(FAKE_CONFIG)

@@ -6,8 +6,6 @@ from typing import Any
 
 import aiohttp
 import voluptuous as vol
-
-from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -16,6 +14,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import callback
+from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 
 from .const import (
     CONF_REBOOT_TIME,

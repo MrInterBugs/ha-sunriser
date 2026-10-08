@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# HA entity mixins and dynamic properties override cached_property descriptors.
+# pyright: reportIncompatibleVariableOverride=false
 from __future__ import annotations
 
 from datetime import timedelta
@@ -10,14 +12,12 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.const import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
 from .coordinator import SunRiserCoordinator
 
 PARALLEL_UPDATES = 0
@@ -60,7 +60,8 @@ async def async_setup_entry(
             if weather is not None and channel not in _added_weather_channels:
                 _added_weather_channels.add(channel)
                 new_entities.append(SunRiserWeatherChannelSensor(coordinator, channel))
-        for rom, reading in (coordinator.data.get("sensors") or {}).items():
+        sensors: dict[str, Any] = coordinator.data.get("sensors") or {}
+        for rom, reading in sensors.items():
             if rom in _added_roms or not coordinator.sensor_config_loaded(rom):
                 continue
             device_type = reading[0]
@@ -87,7 +88,7 @@ class SunRiserUptimeSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity)
 
     def __init__(self, coordinator: SunRiserCoordinator) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator._entry_id}_uptime"
+        self._attr_unique_id = f"{coordinator.entry_id}_uptime"
         self._attr_device_info = coordinator.device_info
 
     @property
@@ -106,7 +107,7 @@ class SunRiserFirmwareSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntit
 
     def __init__(self, coordinator: SunRiserCoordinator) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator._entry_id}_firmware"
+        self._attr_unique_id = f"{coordinator.entry_id}_firmware"
         self._attr_device_info = coordinator.device_info
 
     @property
@@ -123,7 +124,7 @@ class SunRiserHostnameSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntit
 
     def __init__(self, coordinator: SunRiserCoordinator) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator._entry_id}_hostname"
+        self._attr_unique_id = f"{coordinator.entry_id}_hostname"
         self._attr_device_info = coordinator.device_info
 
     @property
@@ -189,14 +190,14 @@ class SunRiserWeatherChannelSensor(
     def __init__(self, coordinator: SunRiserCoordinator, channel: int) -> None:
         super().__init__(coordinator)
         self._channel = channel
-        self._attr_unique_id = f"{coordinator._entry_id}_weather_{channel}"
+        self._attr_unique_id = f"{coordinator.entry_id}_weather_{channel}"
         self._attr_translation_placeholders = {"channel": coordinator.pwm_name(channel)}
         self._attr_device_info = coordinator.device_info
 
     def _channel_data(self) -> dict[str, Any] | None:
         if self.coordinator.data is None:
             return None
-        weather = self.coordinator.data.get("weather") or []
+        weather: list[Any] = self.coordinator.data.get("weather") or []
         idx = self._channel - 1
         if idx >= len(weather):
             return None

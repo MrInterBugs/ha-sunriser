@@ -7,25 +7,25 @@ from custom_components.sunriser.light import _to_device_brightness, _to_ha_brigh
 class TestToHaBrightness:
     """_to_ha_brightness(pwm_value: int) -> int"""
 
-    def test_zero_returns_zero(self):
+    def test_zero_returns_zero(self) -> None:
         assert _to_ha_brightness(0) == 0
 
-    def test_negative_returns_zero(self):
+    def test_negative_returns_zero(self) -> None:
         assert _to_ha_brightness(-1) == 0
 
-    def test_max_returns_255(self):
+    def test_max_returns_255(self) -> None:
         assert _to_ha_brightness(1000) == 255
 
-    def test_above_max_returns_255(self):
+    def test_above_max_returns_255(self) -> None:
         assert _to_ha_brightness(1001) == 255
 
-    def test_midpoint_not_endpoint(self):
+    def test_midpoint_not_endpoint(self) -> None:
         """Values strictly between 0 and 1000 must map strictly between 1 and 254."""
         for pwm in [1, 100, 500, 999]:
             result = _to_ha_brightness(pwm)
             assert 1 <= result <= 254, f"pwm={pwm} → {result}"
 
-    def test_monotone(self):
+    def test_monotone(self) -> None:
         """Higher PWM must give higher (or equal) HA brightness."""
         values = [_to_ha_brightness(i) for i in range(0, 1001, 50)]
         assert values == sorted(values)
@@ -34,19 +34,19 @@ class TestToHaBrightness:
 class TestToDeviceBrightness:
     """_to_device_brightness(brightness: int) -> int"""
 
-    def test_zero_returns_zero(self):
+    def test_zero_returns_zero(self) -> None:
         assert _to_device_brightness(0) == 0
 
-    def test_255_returns_1000(self):
+    def test_255_returns_1000(self) -> None:
         assert _to_device_brightness(255) == 1000
 
-    def test_above_255_returns_1000(self):
+    def test_above_255_returns_1000(self) -> None:
         assert _to_device_brightness(256) == 1000
 
-    def test_midpoint(self):
+    def test_midpoint(self) -> None:
         result = _to_device_brightness(128)
         assert 0 < result < 1000
 
-    def test_monotone(self):
+    def test_monotone(self) -> None:
         values = [_to_device_brightness(i) for i in range(0, 256, 16)]
         assert values == sorted(values)

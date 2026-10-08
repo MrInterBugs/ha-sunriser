@@ -1,11 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Tests for the SunRiser switch platform."""
 
-from unittest.mock import AsyncMock, patch
-import datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from tests.conftest import DOMAIN, ENTRY_ID, FAKE_STATE
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import Entity
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
 from custom_components.sunriser.const import PWM_MAX
+from custom_components.sunriser.coordinator import SunRiserCoordinator
 from custom_components.sunriser.switch import (
     SunRiserDSTAutoSwitch,
     SunRiserMaintenanceSwitch,
@@ -13,30 +16,38 @@ from custom_components.sunriser.switch import (
     SunRiserTimelapseSwitch,
     async_setup_entry,
 )
+from tests.conftest import ENTRY_ID, FAKE_STATE
+from tests.typing import as_async_mock, collect_entities
 
 # ---------------------------------------------------------------------------
 # async_setup_entry — entity creation
 # ---------------------------------------------------------------------------
 
 
-async def test_setup_creates_maintenance_switch(hass, coordinator, mock_config_entry):
+async def test_setup_creates_maintenance_switch(
+    hass: HomeAssistant,
+    coordinator: SunRiserCoordinator,
+    mock_config_entry: MockConfigEntry,
+) -> None:
     mock_config_entry.runtime_data = coordinator
 
-    added = []
-    await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))
+    added: list[Entity] = []
+    await async_setup_entry(hass, mock_config_entry, collect_entities(added))
 
     types = [type(e).__name__ for e in added]
     assert "SunRiserMaintenanceSwitch" in types
 
 
 async def test_setup_creates_pwm_switch_for_onoff_channels(
-    hass, coordinator, mock_config_entry
-):
+    hass: HomeAssistant,
+    coordinator: SunRiserCoordinator,
+    mock_config_entry: MockConfigEntry,
+) -> None:
     """pwm2 has onoff=True → becomes a SunRiserSwitch."""
     mock_config_entry.runtime_data = coordinator
 
-    added = []
-    await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))
+    added: list[Entity] = []
+    await async_setup_entry(hass, mock_config_entry, collect_entities(added))
 
     pwm_switches = [e for e in added if isinstance(e, SunRiserSwitch)]
     assert len(pwm_switches) == 1  # only pwm2
@@ -44,14 +55,16 @@ async def test_setup_creates_pwm_switch_for_onoff_channels(
 
 
 async def test_setup_excludes_unused_onoff_channels(
-    hass, coordinator, mock_config_entry
-):
+    hass: HomeAssistant,
+    coordinator: SunRiserCoordinator,
+    mock_config_entry: MockConfigEntry,
+) -> None:
     """Unused channels (empty color) are excluded even if onoff=True."""
     coordinator.config["pwm#3#onoff"] = True  # still unused (empty color)
     mock_config_entry.runtime_data = coordinator
 
-    added = []
-    await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))
+    added: list[Entity] = []
+    await async_setup_entry(hass, mock_config_entry, collect_entities(added))
 
     pwm_switches = [e for e in added if isinstance(e, SunRiserSwitch)]
     assert len(pwm_switches) == 1  # pwm2 still present
@@ -63,43 +76,57 @@ async def test_setup_excludes_unused_onoff_channels(
 # ---------------------------------------------------------------------------
 
 
-def _make_maint(coordinator, mock_config_entry):
+def _make_maint(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> SunRiserMaintenanceSwitch:
     return SunRiserMaintenanceSwitch(coordinator, mock_config_entry)
 
 
-def test_maintenance_is_off_when_service_mode_zero(coordinator, mock_config_entry):
+def test_maintenance_is_off_when_service_mode_zero(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     coordinator.data = {**FAKE_STATE, "service_mode": 0}
     switch = _make_maint(coordinator, mock_config_entry)
     assert switch.is_on is False
 
 
-def test_maintenance_is_on_when_service_mode_nonzero(coordinator, mock_config_entry):
+def test_maintenance_is_on_when_service_mode_nonzero(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     coordinator.data = {**FAKE_STATE, "service_mode": 1711234567}
     switch = _make_maint(coordinator, mock_config_entry)
     assert switch.is_on is True
 
 
-def test_maintenance_is_off_when_data_none(coordinator, mock_config_entry):
+def test_maintenance_is_off_when_data_none(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     coordinator.data = None
     switch = _make_maint(coordinator, mock_config_entry)
     assert switch.is_on is False
 
 
-async def test_maintenance_turn_on(coordinator, mock_config_entry):
+async def test_maintenance_turn_on(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     switch = _make_maint(coordinator, mock_config_entry)
     await switch.async_turn_on()
-    coordinator.async_set_service_mode.assert_awaited_once_with(True)
-    coordinator.async_request_refresh.assert_awaited_once()
+    as_async_mock(coordinator.async_set_service_mode).assert_awaited_once_with(True)
+    as_async_mock(coordinator.async_request_refresh).assert_awaited_once()
 
 
-async def test_maintenance_turn_off(coordinator, mock_config_entry):
+async def test_maintenance_turn_off(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     switch = _make_maint(coordinator, mock_config_entry)
     await switch.async_turn_off()
-    coordinator.async_set_service_mode.assert_awaited_once_with(False)
-    coordinator.async_request_refresh.assert_awaited_once()
+    as_async_mock(coordinator.async_set_service_mode).assert_awaited_once_with(False)
+    as_async_mock(coordinator.async_request_refresh).assert_awaited_once()
 
 
-def test_maintenance_unique_id(coordinator, mock_config_entry):
+def test_maintenance_unique_id(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     switch = _make_maint(coordinator, mock_config_entry)
     assert switch.unique_id == f"{ENTRY_ID}_maintenance"
 
@@ -109,37 +136,51 @@ def test_maintenance_unique_id(coordinator, mock_config_entry):
 # ---------------------------------------------------------------------------
 
 
-def _make_switch(coordinator, mock_config_entry, pwm_num=2):
+def _make_switch(
+    coordinator: SunRiserCoordinator,
+    mock_config_entry: MockConfigEntry,
+    pwm_num: int = 2,
+) -> SunRiserSwitch:
     return SunRiserSwitch(coordinator, mock_config_entry, pwm_num)
 
 
-def test_pwm_switch_is_on(coordinator, mock_config_entry):
+def test_pwm_switch_is_on(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     # FAKE_STATE pwms["2"] = 1000
     switch = _make_switch(coordinator, mock_config_entry, pwm_num=2)
     assert switch.is_on is True
 
 
-def test_pwm_switch_is_off(coordinator, mock_config_entry):
+def test_pwm_switch_is_off(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     coordinator.data = {**FAKE_STATE, "pwms": {"1": 0, "2": 0, "3": 0, "4": 0}}
     switch = _make_switch(coordinator, mock_config_entry, pwm_num=2)
     assert switch.is_on is False
 
 
-async def test_pwm_switch_turn_on_sends_max(coordinator, mock_config_entry):
+async def test_pwm_switch_turn_on_sends_max(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     switch = _make_switch(coordinator, mock_config_entry, pwm_num=2)
     await switch.async_turn_on()
-    coordinator.async_set_pwms.assert_awaited_once_with({"2": PWM_MAX})
-    coordinator.async_request_refresh.assert_awaited_once()
+    as_async_mock(coordinator.async_set_pwms).assert_awaited_once_with({"2": PWM_MAX})
+    as_async_mock(coordinator.async_request_refresh).assert_awaited_once()
 
 
-async def test_pwm_switch_turn_off_sends_zero(coordinator, mock_config_entry):
+async def test_pwm_switch_turn_off_sends_zero(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     switch = _make_switch(coordinator, mock_config_entry, pwm_num=2)
     await switch.async_turn_off()
-    coordinator.async_set_pwms.assert_awaited_once_with({"2": 0})
-    coordinator.async_request_refresh.assert_awaited_once()
+    as_async_mock(coordinator.async_set_pwms).assert_awaited_once_with({"2": 0})
+    as_async_mock(coordinator.async_request_refresh).assert_awaited_once()
 
 
-def test_pwm_switch_unique_id(coordinator, mock_config_entry):
+def test_pwm_switch_unique_id(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     switch = _make_switch(coordinator, mock_config_entry, pwm_num=2)
     assert switch.unique_id == f"{ENTRY_ID}_pwm_2"
 
@@ -149,56 +190,74 @@ def test_pwm_switch_unique_id(coordinator, mock_config_entry):
 # ---------------------------------------------------------------------------
 
 
-def _make_timelapse(coordinator, mock_config_entry):
+def _make_timelapse(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> SunRiserTimelapseSwitch:
     return SunRiserTimelapseSwitch(coordinator, mock_config_entry)
 
 
-async def test_setup_creates_timelapse_switch(hass, coordinator, mock_config_entry):
+async def test_setup_creates_timelapse_switch(
+    hass: HomeAssistant,
+    coordinator: SunRiserCoordinator,
+    mock_config_entry: MockConfigEntry,
+) -> None:
     coordinator.async_set_timewarp = AsyncMock()
     mock_config_entry.runtime_data = coordinator
 
-    added = []
-    await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))
+    added: list[Entity] = []
+    await async_setup_entry(hass, mock_config_entry, collect_entities(added))
 
     types = [type(e).__name__ for e in added]
     assert "SunRiserTimelapseSwitch" in types
 
 
-def test_timelapse_is_on_when_timewarp_set(coordinator, mock_config_entry):
+def test_timelapse_is_on_when_timewarp_set(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     coordinator.data = {**FAKE_STATE, "timewarp": 1}
     switch = _make_timelapse(coordinator, mock_config_entry)
     assert switch.is_on is True
 
 
-def test_timelapse_is_off_when_timewarp_zero(coordinator, mock_config_entry):
+def test_timelapse_is_off_when_timewarp_zero(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     coordinator.data = {**FAKE_STATE, "timewarp": 0}
     switch = _make_timelapse(coordinator, mock_config_entry)
     assert switch.is_on is False
 
 
-def test_timelapse_is_off_when_data_none(coordinator, mock_config_entry):
+def test_timelapse_is_off_when_data_none(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     coordinator.data = None
     switch = _make_timelapse(coordinator, mock_config_entry)
     assert switch.is_on is False
 
 
-async def test_timelapse_turn_on(coordinator, mock_config_entry):
+async def test_timelapse_turn_on(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     coordinator.async_set_timewarp = AsyncMock()
     switch = _make_timelapse(coordinator, mock_config_entry)
     await switch.async_turn_on()
-    coordinator.async_set_timewarp.assert_awaited_once_with(True)
-    coordinator.async_request_refresh.assert_awaited_once()
+    as_async_mock(coordinator.async_set_timewarp).assert_awaited_once_with(True)
+    as_async_mock(coordinator.async_request_refresh).assert_awaited_once()
 
 
-async def test_timelapse_turn_off(coordinator, mock_config_entry):
+async def test_timelapse_turn_off(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     coordinator.async_set_timewarp = AsyncMock()
     switch = _make_timelapse(coordinator, mock_config_entry)
     await switch.async_turn_off()
-    coordinator.async_set_timewarp.assert_awaited_once_with(False)
-    coordinator.async_request_refresh.assert_awaited_once()
+    as_async_mock(coordinator.async_set_timewarp).assert_awaited_once_with(False)
+    as_async_mock(coordinator.async_request_refresh).assert_awaited_once()
 
 
-def test_timelapse_unique_id(coordinator, mock_config_entry):
+def test_timelapse_unique_id(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     switch = _make_timelapse(coordinator, mock_config_entry)
     assert switch.unique_id == f"{ENTRY_ID}_timelapse"
 
@@ -208,61 +267,77 @@ def test_timelapse_unique_id(coordinator, mock_config_entry):
 # ---------------------------------------------------------------------------
 
 
-def _make_dst(coordinator, mock_config_entry):
+def _make_dst(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> SunRiserDSTAutoSwitch:
     return SunRiserDSTAutoSwitch(coordinator, mock_config_entry)
 
 
-async def test_setup_creates_dst_switch(hass, coordinator, mock_config_entry):
+async def test_setup_creates_dst_switch(
+    hass: HomeAssistant,
+    coordinator: SunRiserCoordinator,
+    mock_config_entry: MockConfigEntry,
+) -> None:
     coordinator.async_set_dst_auto_track = AsyncMock()
     mock_config_entry.runtime_data = coordinator
 
-    added = []
-    await async_setup_entry(hass, mock_config_entry, lambda e: added.extend(e))
+    added: list[Entity] = []
+    await async_setup_entry(hass, mock_config_entry, collect_entities(added))
 
     types = [type(e).__name__ for e in added]
     assert "SunRiserDSTAutoSwitch" in types
 
 
-def test_dst_is_on_reflects_coordinator_flag(coordinator, mock_config_entry):
-    coordinator._dst_auto_track = True
+def test_dst_is_on_reflects_coordinator_flag(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
+    coordinator.dst_auto_track = True
     switch = _make_dst(coordinator, mock_config_entry)
     assert switch.is_on is True
 
 
-def test_dst_is_off_reflects_coordinator_flag(coordinator, mock_config_entry):
-    coordinator._dst_auto_track = False
+def test_dst_is_off_reflects_coordinator_flag(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
+    coordinator.dst_auto_track = False
     switch = _make_dst(coordinator, mock_config_entry)
     assert switch.is_on is False
 
 
-async def test_dst_turn_on(coordinator, mock_config_entry):
+async def test_dst_turn_on(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     coordinator.async_set_dst_auto_track = AsyncMock()
     switch = _make_dst(coordinator, mock_config_entry)
-    switch.hass = None  # async_write_ha_state needs hass; stub it
     with patch.object(switch, "async_write_ha_state"):
         await switch.async_turn_on()
-    coordinator.async_set_dst_auto_track.assert_awaited_once_with(True)
+    as_async_mock(coordinator.async_set_dst_auto_track).assert_awaited_once_with(True)
 
 
-async def test_dst_turn_off(coordinator, mock_config_entry):
+async def test_dst_turn_off(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     coordinator.async_set_dst_auto_track = AsyncMock()
     switch = _make_dst(coordinator, mock_config_entry)
     with patch.object(switch, "async_write_ha_state"):
         await switch.async_turn_off()
-    coordinator.async_set_dst_auto_track.assert_awaited_once_with(False)
+    as_async_mock(coordinator.async_set_dst_auto_track).assert_awaited_once_with(False)
 
 
-def test_dst_unique_id(coordinator, mock_config_entry):
+def test_dst_unique_id(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
     switch = _make_dst(coordinator, mock_config_entry)
     assert switch.unique_id == f"{ENTRY_ID}_dst_auto_track"
 
 
 async def test_dst_restores_on_state_from_last_state(
-    hass, coordinator, mock_config_entry
-):
+    hass: HomeAssistant,
+    coordinator: SunRiserCoordinator,
+    mock_config_entry: MockConfigEntry,
+) -> None:
     """async_added_to_hass restores auto-track when last state was ON."""
     from homeassistant.const import STATE_ON
-    from unittest.mock import MagicMock
 
     coordinator.async_set_dst_auto_track = AsyncMock()
     switch = _make_dst(coordinator, mock_config_entry)
@@ -281,15 +356,16 @@ async def test_dst_restores_on_state_from_last_state(
             ):
                 await switch.async_added_to_hass()
 
-    coordinator.async_set_dst_auto_track.assert_awaited_once_with(True)
+    as_async_mock(coordinator.async_set_dst_auto_track).assert_awaited_once_with(True)
 
 
 async def test_dst_does_not_restore_when_last_state_off(
-    hass, coordinator, mock_config_entry
-):
+    hass: HomeAssistant,
+    coordinator: SunRiserCoordinator,
+    mock_config_entry: MockConfigEntry,
+) -> None:
     """async_added_to_hass does not enable auto-track when last state was OFF."""
     from homeassistant.const import STATE_OFF
-    from unittest.mock import MagicMock
 
     coordinator.async_set_dst_auto_track = AsyncMock()
     switch = _make_dst(coordinator, mock_config_entry)
@@ -306,12 +382,14 @@ async def test_dst_does_not_restore_when_last_state_off(
         ):
             await switch.async_added_to_hass()
 
-    coordinator.async_set_dst_auto_track.assert_not_awaited()
+    as_async_mock(coordinator.async_set_dst_auto_track).assert_not_awaited()
 
 
 async def test_dst_does_not_restore_when_no_last_state(
-    hass, coordinator, mock_config_entry
-):
+    hass: HomeAssistant,
+    coordinator: SunRiserCoordinator,
+    mock_config_entry: MockConfigEntry,
+) -> None:
     """async_added_to_hass does not enable auto-track when there is no prior state."""
     coordinator.async_set_dst_auto_track = AsyncMock()
     switch = _make_dst(coordinator, mock_config_entry)
@@ -323,12 +401,14 @@ async def test_dst_does_not_restore_when_no_last_state(
         ):
             await switch.async_added_to_hass()
 
-    coordinator.async_set_dst_auto_track.assert_not_awaited()
+    as_async_mock(coordinator.async_set_dst_auto_track).assert_not_awaited()
 
 
 async def test_dst_does_not_restore_when_last_state_unavailable(
-    hass, coordinator, mock_config_entry
-):
+    hass: HomeAssistant,
+    coordinator: SunRiserCoordinator,
+    mock_config_entry: MockConfigEntry,
+) -> None:
     """async_added_to_hass must not re-enable auto-track when last state is 'unavailable'.
 
     Same-session reload scenario: the entity transitions to 'unavailable' when
@@ -337,7 +417,6 @@ async def test_dst_does_not_restore_when_last_state_unavailable(
     persistence; RestoreEntity only covers HA restarts.
     """
     from homeassistant.const import STATE_UNAVAILABLE
-    from unittest.mock import MagicMock
 
     coordinator.async_set_dst_auto_track = AsyncMock()
     switch = _make_dst(coordinator, mock_config_entry)
@@ -354,12 +433,14 @@ async def test_dst_does_not_restore_when_last_state_unavailable(
         ):
             await switch.async_added_to_hass()
 
-    coordinator.async_set_dst_auto_track.assert_not_awaited()
+    as_async_mock(coordinator.async_set_dst_auto_track).assert_not_awaited()
 
 
 async def test_dst_skips_put_when_bridge_already_restored(
-    hass, coordinator, mock_config_entry
-):
+    hass: HomeAssistant,
+    coordinator: SunRiserCoordinator,
+    mock_config_entry: MockConfigEntry,
+) -> None:
     """No PUT / when _dst_auto_track was already True from the hass.data bridge.
 
     Regression test for options-change reload (e.g. 60 s → 30 s scan interval).
@@ -370,9 +451,8 @@ async def test_dst_skips_put_when_bridge_already_restored(
     and makes the entity go unavailable.
     """
     from homeassistant.const import STATE_ON
-    from unittest.mock import MagicMock
 
-    coordinator._dst_auto_track = True  # simulates bridge restore
+    coordinator.dst_auto_track = True  # simulates bridge restore
     coordinator.async_set_dst_auto_track = AsyncMock()
     switch = _make_dst(coordinator, mock_config_entry)
 
@@ -389,4 +469,4 @@ async def test_dst_skips_put_when_bridge_already_restored(
             await switch.async_added_to_hass()
 
     # Bridge already restored the value — no HTTP PUT should be made.
-    coordinator.async_set_dst_auto_track.assert_not_awaited()
+    as_async_mock(coordinator.async_set_dst_auto_track).assert_not_awaited()

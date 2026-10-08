@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# HA entity mixins and dynamic properties override cached_property descriptors.
+# pyright: reportIncompatibleVariableOverride=false
 from __future__ import annotations
 
-from homeassistant.components.switch import SwitchEntity, SwitchDeviceClass
+from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, STATE_ON
+from homeassistant.const import STATE_ON, EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -176,14 +178,14 @@ class SunRiserDSTAutoSwitch(
         # _dst_auto_track on same-session reloads (options change, reconfigure).
         # Only fall back to the recorder when the bridge didn't supply the value
         # (i.e. a true HA restart).
-        if not self.coordinator._dst_auto_track:
+        if not self.coordinator.dst_auto_track:
             last_state = await self.async_get_last_state()
             if last_state is not None and last_state.state == STATE_ON:
                 await self.coordinator.async_set_dst_auto_track(True)
 
     @property
     def is_on(self) -> bool:
-        return self.coordinator._dst_auto_track
+        return self.coordinator.dst_auto_track
 
     async def async_turn_on(self, **kwargs: object) -> None:
         await self.coordinator.async_set_dst_auto_track(True)

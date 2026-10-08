@@ -3,13 +3,12 @@ from __future__ import annotations
 
 import logging
 import pathlib
-from uuid import uuid4
 from typing import Any, TypedDict, cast
+from uuid import uuid4
 
 import aiohttp
 import msgpack
 import voluptuous as vol
-
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.lovelace.resources import ResourceStorageCollection
@@ -22,7 +21,6 @@ from homeassistant.core import (
     ServiceCall,
     ServiceResponse,
     SupportsResponse,
-    callback,
 )
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv
@@ -31,10 +29,12 @@ from homeassistant.helpers.issue_registry import async_delete_issue
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, PLATFORMS
-
-CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
-
 from .coordinator import DayplannerMarker, SunRiserCoordinator
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    DOMAIN
+)
+
 
 _CARD_URL = "/sunriser/sunriser-dayplan-card.js"
 _CARD_PATH = pathlib.Path(__file__).parent / "www" / "sunriser-dayplan-card.js"
@@ -109,7 +109,13 @@ _SET_WEEKPLANNER_SCHEMA = vol.Schema(
 )
 
 _FACTORY_RESET_SCHEMA = vol.Schema(
-    {**_DEVICE_FIELDS, vol.Required("confirm"): vol.All(bool, vol.IsTrue())}
+    {
+        **_DEVICE_FIELDS,
+        vol.Required("confirm"): vol.All(
+            bool,
+            vol.IsTrue(),  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
+        ),
+    }
 )
 
 
@@ -141,13 +147,13 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
                 if item_url != url_versioned and isinstance(
                     resources, ResourceStorageCollection
                 ):
-                    await resources.async_update_item(
+                    await resources.async_update_item(  # pyright: ignore[reportUnknownMemberType]  # Upstream HA/Voluptuous annotations.
                         item["id"], {"res_type": "module", "url": url_versioned}
                     )
                 return
 
         if isinstance(resources, ResourceStorageCollection):
-            await resources.async_create_item(
+            await resources.async_create_item(  # pyright: ignore[reportUnknownMemberType]  # Upstream HA/Voluptuous annotations.
                 {"res_type": "module", "url": url_versioned}
             )
             _LOGGER.debug("SunRiser: registered Day Planner card as Lovelace resource")
@@ -202,7 +208,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # reconfigure).  RestoreEntity covers HA restarts via the recorder.
     hass.data.setdefault(DOMAIN, {})[
         f"{entry.entry_id}_dst_auto_track"
-    ] = coordinator._dst_auto_track
+    ] = coordinator.dst_auto_track
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         await coordinator.async_close()
@@ -281,9 +287,7 @@ def _register_services(hass: HomeAssistant) -> None:
                 translation_placeholders={"error": str(err)},
             ) from err
         now = dt_util.now().strftime("%Y%m%d_%H%M%S")
-        filename = (
-            f"sunriser_backup_{now}_{coordinator._entry_id}_{uuid4().hex}.msgpack"
-        )
+        filename = f"sunriser_backup_{now}_{coordinator.entry_id}_{uuid4().hex}.msgpack"
         path = hass.config.path(filename)
 
         def _write() -> None:
@@ -498,7 +502,7 @@ def _register_services(hass: HomeAssistant) -> None:
                 translation_placeholders={"error": str(err)},
             ) from err
         now = dt_util.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"sunriser_factory_backup_{now}_{coordinator._entry_id}_{uuid4().hex}.msgpack"
+        filename = f"sunriser_factory_backup_{now}_{coordinator.entry_id}_{uuid4().hex}.msgpack"
         path = hass.config.path(filename)
 
         def _write() -> None:
@@ -529,7 +533,7 @@ def _register_services(hass: HomeAssistant) -> None:
             ) from err
         now = dt_util.now().strftime("%Y%m%d_%H%M%S")
         filename = (
-            f"sunriser_firmware_{now}_{coordinator._entry_id}_{uuid4().hex}.msgpack"
+            f"sunriser_firmware_{now}_{coordinator.entry_id}_{uuid4().hex}.msgpack"
         )
         path = hass.config.path(filename)
 
@@ -561,7 +565,7 @@ def _register_services(hass: HomeAssistant) -> None:
             ) from err
         now = dt_util.now().strftime("%Y%m%d_%H%M%S")
         filename = (
-            f"sunriser_bootload_{now}_{coordinator._entry_id}_{uuid4().hex}.msgpack"
+            f"sunriser_bootload_{now}_{coordinator.entry_id}_{uuid4().hex}.msgpack"
         )
         path = hass.config.path(filename)
 
