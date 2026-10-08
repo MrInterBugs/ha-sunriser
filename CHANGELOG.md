@@ -1,13 +1,27 @@
 # Changelog
 
-## Unreleased — firmware 1.006 request simplification
+## [1.7.2-simplify-firmware-1006-requests-beta.1] - 2026-10-08
+
+### Changed
 
 - Remove configuration request splitting, staged startup, rotating state/weather polls, deferred metadata queues, and queued DST ticks. Each poll now fetches state, weather, and full channel/sensor configuration.
 - Allow normal HTTP connection reuse and remove the global request lock. Keep configuration read/write ordering and acknowledged-write caching.
 - Load entity platforms during setup; discover channel and sensor changes on the next successful poll. Preserve firmware reporting, native DST handling, availability grace, per-controller repairs, service routing, and export protections.
-- Make daily reboot opt-in. Explicit existing reboot settings remain effective.
-- Validation: 383 mocked tests pass with 100% statement coverage; Black, strict mypy, and the strict documentation build pass. Live-device tests were excluded.
-- Experimental: firmware 1.006 is assumed to tolerate larger requests and consecutive connections. No live controller validation has been performed for this change; older firmware compatibility is unverified.
+- Reduce the coordinator from 1,028 to 702 lines.
+
+### Upgrade notes
+
+- This experimental release builds on `v1.7.2-1.006-beta.2` and is intended for testing with controller firmware 1.006.
+- Daily reboot now defaults to off. Existing explicit reboot settings remain effective; disable it in the integration options if you want to test without scheduled reboots.
+- The configured poll interval remains unchanged (30 seconds by default), but each poll now performs consecutive state, weather, and configuration reads.
+- With multiple loaded controllers, service calls and Day Planner cards still require `device_id`. Export automations should still use the returned `path`.
+- If the simplified request strategy causes controller instability, return to `v1.7.2-1.006-beta.2`.
+
+### Validation
+
+- 383 mocked tests pass with 100% statement coverage.
+- Black, strict mypy, and the strict documentation build pass.
+- No live controller validation has been performed for this change. Firmware 1.006 is assumed to tolerate larger requests and consecutive connections; controller stability and older firmware compatibility remain unverified.
 
 ## [1.7.2-1.006-beta.2] - 2026-10-08
 
