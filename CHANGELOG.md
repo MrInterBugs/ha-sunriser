@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [1.7.2-simplify-firmware-1006-requests-beta.2] - 2026-10-08
 
 ### Fixed
 
@@ -9,7 +9,11 @@
 - Clear controller-specific offline repairs after a successful reload and when removing the integration entry.
 - Preserve unassigned (`null`) week-planner days instead of raising an error while decoding them.
 - Keep Day Planner card responses tied to the selected controller, discard obsolete responses after reconfiguration/disconnection, and prevent overlapping refreshes. Refresh immediately on reconnect and apply changed refresh intervals safely.
-- Document the upstream HACS issue affecting bundled brand icons.
+
+### Notes
+
+- Includes the request simplification from beta.1, which passed the user's initial real-HA smoke test. The fixes in this release still need hardware testing.
+- The missing HACS listing icon is an upstream HACS issue; the bundled SunRiser icon is already valid. The troubleshooting documentation now explains this limitation.
 
 ### Validation
 
