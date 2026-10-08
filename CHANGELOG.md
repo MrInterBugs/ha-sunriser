@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.1.1-fix-channel-entity-reconciliation-beta.1] - 2026-10-08
+## [2.1.2-fix-channel-entity-reconciliation-beta.1] - 2026-10-08
 
 ### Fixed
 
