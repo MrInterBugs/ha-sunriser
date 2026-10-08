@@ -70,8 +70,10 @@ preserved at reset, not pristine factory defaults.
 Validation boundary: the public simulator's read-only state reported `service_mode: 0`
 and `blackout: false`; it did not include `service_left`. Tests exercise explicit
 synthetic countdown/active-mode fixtures and HTTP contracts. No real controller
-was written to. Before a release, verify mode changes in both directions,
+was written to during protocol validation. Remaining hardware checks include mode
+changes in both directions,
 automatic expiry, changing timeout mid-session, excluded/on-off outputs, physical
-button changes, and HA restart during a running session on firmware 1.006 hardware.
+button changes, and HA restart during a running session on firmware 1.006 hardware. These checks
+were not performed against the combined v2.1.0 build.
 
 ::: custom_components.sunriser.maintenance

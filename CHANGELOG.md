@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.1.0] - 2026-10-08
+
+### Added
+
+- Add firmware 1.006+ blackout and operating mode entities, optional maintenance
+  timeout, channel level/exclusion controls, and an optional estimated end sensor.
+- Keep Maintenance Mode on during blackout; turning it off ends either session.
+  Remove the redundant resume button/action from the initial maintenance beta.
+
+### Reliability
+
+- Validate controller responses before updating caches and preserve valid data on
+  malformed responses. Allow optional and unknown firmware fields.
+- Separate expected read failures from programming errors, retain tracebacks, and
+  report persistent weather/configuration failures and recovery without warning spam.
+- Correct factory-reset backup descriptions and expand troubleshooting guidance.
+
+### Upgrade and validation
+
+- Update through HACS and restart HA. Maintenance configuration and estimated-end
+  entities default to disabled; existing enabled entities retain their settings.
+- Replace the beta.1 resume action with `switch.turn_off` targeting Maintenance Mode.
+- 477 mocked Python tests pass with 100% statement coverage; eight frontend tests
+  and strict type, formatting, documentation, HACS, and Hassfest checks pass.
+- The reliability beta was reported to work in real HA. Additional live tests of
+  the combined build were not performed; physical transitions, exclusions, timeout
+  expiry, and restart behaviour remain unverified together on hardware.
+
 ## [2.1.0-feature-maintenance-blackout-beta.3] - 2026-10-08
 
 - Combine maintenance/blackout controls with response validation and failure
