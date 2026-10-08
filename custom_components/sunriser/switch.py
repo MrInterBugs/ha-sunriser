@@ -15,6 +15,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, PWM_MAX
 from .coordinator import SunRiserCoordinator
+from .discovery import pwm_entity_reconciler
 from .maintenance import setup_maintenance_entities
 
 PARALLEL_UPDATES = 1
@@ -27,7 +28,6 @@ async def async_setup_entry(
 ) -> None:
     coordinator: SunRiserCoordinator = entry.runtime_data
     setup_maintenance_entities(hass, entry, async_add_entities, "switch")
-    _added: set[int] = set()
     er = entity_registry.async_get(hass)
 
     async_add_entities(
@@ -48,6 +48,17 @@ async def async_setup_entry(
     else:
         async_add_entities([SunRiserDSTAutoSwitch(coordinator, entry)])
 
+    reconcile_pwm = pwm_entity_reconciler(
+        hass,
+        entry,
+        async_add_entities,
+        "switch",
+        "",
+        lambda channel: coordinator.pwm_is_onoff(channel)
+        and not coordinator.pwm_is_unused(channel),
+        lambda channel: SunRiserSwitch(coordinator, entry, channel),
+    )
+
     @callback
     def _check_pwm_entities() -> None:
         if coordinator.firmware_handles_dst:
@@ -56,22 +67,7 @@ async def async_setup_entry(
             )
             if eid:
                 er.async_remove(eid)
-        new_entities: list[SunRiserSwitch] = []
-        for pwm_num in range(1, coordinator.pwm_count + 1):
-            is_switch = coordinator.pwm_is_onoff(
-                pwm_num
-            ) and not coordinator.pwm_is_unused(pwm_num)
-            if is_switch and pwm_num not in _added:
-                _added.add(pwm_num)
-                new_entities.append(SunRiserSwitch(coordinator, entry, pwm_num))
-            elif not is_switch:
-                _added.discard(pwm_num)
-                uid = f"{entry.entry_id}_pwm_{pwm_num}"
-                eid = er.async_get_entity_id("switch", DOMAIN, uid)
-                if eid:
-                    er.async_remove(eid)
-        if new_entities:
-            async_add_entities(new_entities)
+        reconcile_pwm()
 
     _check_pwm_entities()
     entry.async_on_unload(coordinator.async_add_listener(_check_pwm_entities))

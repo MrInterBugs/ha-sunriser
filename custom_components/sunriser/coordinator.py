@@ -71,6 +71,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         self._consecutive_failures: int = 0
 
         self._session: aiohttp.ClientSession | None = None
+        self._closed = False
         # Serialize config reads through cache publication with config writes.
         # Other HTTP requests need no artificial spacing or global lock.
         self._config_lock = asyncio.Lock()
@@ -187,12 +188,16 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
     # ------------------------------------------------------------------
 
     def _get_session(self) -> aiohttp.ClientSession:
+        if self._closed:
+            raise HomeAssistantError("SunRiser coordinator is closed")
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession()
         return self._session
 
     async def async_close(self) -> None:
-        """Close the dedicated HTTP session, if one was created."""
+        """Stop refreshes and prevent old commands reopening a session after unload."""
+        self._closed = True
+        await self.async_shutdown()
         if self._scheduled_reboot_cancel is not None:
             self._scheduled_reboot_cancel()
             self._scheduled_reboot_cancel = None
@@ -215,7 +220,11 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         @callback
         def _trigger(_now: datetime) -> None:
             _LOGGER.info("SunRiser: scheduled reboot at %s", time_str)
-            self.hass.async_create_task(self._async_do_scheduled_reboot())
+            entry.async_create_background_task(
+                self.hass,
+                self._async_do_scheduled_reboot(),
+                "SunRiser scheduled reboot",
+            )
 
         self._scheduled_reboot_cancel = async_track_time_change(
             self.hass, _trigger, hour=hour, minute=minute, second=0
@@ -338,11 +347,12 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
 
     async def async_set_dst_auto_track(self, enabled: bool) -> None:
         """Enable legacy DST tracking and synchronize immediately when enabled."""
-        self.dst_auto_track = enabled and not self.firmware_handles_dst
-        if self.dst_auto_track:
+        track = enabled and not self.firmware_handles_dst
+        if track:
             is_dst = bool(dt_util.now().dst())
             await self.async_set_config({"summertime": 1 if is_dst else 0})
             self._last_known_dst = is_dst
+        self.dst_auto_track = track
 
     async def _async_sync_dst(self) -> None:
         """Sync legacy firmware after a successful poll; retry failures next poll."""

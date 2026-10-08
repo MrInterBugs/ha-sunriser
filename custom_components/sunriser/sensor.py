@@ -65,7 +65,11 @@ async def async_setup_entry(
                 new_entities.append(SunRiserWeatherChannelSensor(coordinator, channel))
         sensors: dict[str, Any] = coordinator.data.get("sensors") or {}
         for rom, reading in sensors.items():
-            if rom in _added_roms or not coordinator.sensor_config_loaded(rom):
+            if (
+                reading is None
+                or rom in _added_roms
+                or not coordinator.sensor_config_loaded(rom)
+            ):
                 continue
             device_type = reading[0]
             if device_type == _DS1820:
