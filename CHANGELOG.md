@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.7.2-simplify-firmware-1006-requests-beta.3] - 2026-10-08
+
+### Changed
+
+- Add strict Python type checking across the integration, tests, and documentation hook, with a reproducible VS Code environment and CI check.
+- Type the coordinator's initial empty state correctly and expose shared coordinator fields through public names.
+- Refresh installation, configuration, service, and troubleshooting guides; add Day Planner card setup examples and remove obsolete firmware review notes.
+- Synchronize English UI text for reconfiguration, scheduled reboot options, and offline repairs. Describe daily reboot as optional and remove the automatic-recovery guarantee.
+
+### Testing
+
+- Intended for testing on controller firmware 1.006; retains beta.2 polling and control behaviour.
+- 390 mocked Python tests pass with 100% statement coverage; all eight frontend tests pass.
+- Strict Pyright, mypy, formatting, and documentation checks pass.
+
 ## [1.7.2-simplify-firmware-1006-requests-beta.2] - 2026-10-08
 
 ### Fixed
