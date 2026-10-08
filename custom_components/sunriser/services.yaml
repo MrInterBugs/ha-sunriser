@@ -258,8 +258,8 @@ factory_reset:
 get_planning:
   name: Get Planning Snapshot
   description: >
-    Read configured channels, named programs, daily curves and weekly assignments
-    for the schedule card. Includes revision tokens for conflict-checked editing.
+    Read configured channels and their selected daily or weekly curves
+    for the read-only schedule card. Includes the active weekly program name.
     Weekly curves use the controller timezone and exclude weather/manual overrides.
   fields:
     device_id:
@@ -268,47 +268,3 @@ get_planning:
       selector:
         device:
           integration: sunriser
-
-save_planning:
-  name: Save Planning Draft
-  description: >
-    Save a daily curve, shared program curve, or full weekly assignment using the
-    revision from Get Planning Snapshot. Rejects stale edits. Does not change the
-    selected planner or send an immediate output command. Firmware 1.006+ only.
-  fields:
-    device_id:
-      name: Controller
-      description: Required when more than one SunRiser controller is loaded.
-      selector:
-        device:
-          integration: sunriser
-    kind:
-      name: Schedule type
-      required: true
-      selector:
-        select:
-          options: [daily, week, program]
-    target:
-      name: Channel or program ID
-      description: PWM channel for daily/week, or existing program ID for program.
-      required: true
-      selector:
-        number:
-          min: 1
-          mode: box
-    revision:
-      name: Revision
-      description: Copy the relevant revision token from Get Planning Snapshot.
-      required: true
-      selector:
-        text: {}
-    markers:
-      name: Curve markers
-      description: Required for daily/program. Unique HH:MM times (including 24:00) and integer percentages from 0 to 100.
-      selector:
-        object: {}
-    schedule:
-      name: Weekly program IDs
-      description: Required for week. Eight IDs in Sunday-to-Saturday then fallback order. Zero uses the fallback; zero fallback means no program.
-      selector:
-        object: {}

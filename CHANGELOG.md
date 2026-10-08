@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Keep the Day Planner card compact and read-only, with daily and weekly curves
+  together and planner/program details in legend hover labels.
+- Remove the beta schedule editor and its save action; edit schedules in the
+  controller interface. Retain weather-profile selectors and existing day/week
+  service actions.
+
 ## [2.2.0-feature-weather-schedule-editor-beta.1] - 2026-10-08
 
 ### Added

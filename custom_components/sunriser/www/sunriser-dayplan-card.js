@@ -157,29 +157,12 @@ class SunRiserDayplanCard extends LitElement {
     _schedules: { state: true },
     _loading:   { state: true },
     _error:     { state: true },
-    _draft: { state: true },
-    _saving: { state: true },
-    _editError: { state: true },
   };
 
   static styles = css`
     :host { display: block; }
 
     ha-card { padding: 0 16px 12px; }
-    .channel { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 10px 0; border-top: 1px solid var(--divider-color, #ccc); }
-    .channel span { flex: 1 1 180px; }
-    .editor { border-top: 1px solid var(--divider-color, #ccc); margin-top: 12px; }
-    fieldset { border: 0; padding: 0; min-width: 0; }
-    label { display: flex; gap: 12px; justify-content: space-between; margin: 8px 0; }
-    table { width: 100%; text-align: left; }
-    input { width: 90px; box-sizing: border-box; }
-    button, input, select { font: inherit; color: var(--primary-text-color, #222); background: var(--card-background-color, white); border: 1px solid var(--divider-color, #888); border-radius: 4px; padding: 8px; }
-    button { cursor: pointer; margin: 4px 4px 4px 0; }
-    button:disabled { opacity: .5; cursor: default; }
-    [role="alert"] { color: var(--error-color, #b00020); }
-    details { padding: 10px 0; }
-
-
     .chart-row {
       display: flex;
       align-items: stretch;
@@ -275,17 +258,10 @@ class SunRiserDayplanCard extends LitElement {
     this._initialized = false;
     this._refreshTimer = null;
     this._fetchId = 0;
-    this._draft = null;
-    this._programs = [];
-    this._saving = false;
-    this._editError = null;
   }
 
   setConfig(config) {
     this._config = { ...config };
-    this._draft = null;
-    this._saving = false;
-    this._editError = null;
     this._fetchId++;
     this._loading = false;
     this._schedules = null;
@@ -330,8 +306,6 @@ class SunRiserDayplanCard extends LitElement {
     this._fetchId++;
     this._loading = false;
     this._initialized = false;
-    this._draft = null;
-    this._saving = false;
   }
 
   async _fetch() {
@@ -349,114 +323,12 @@ class SunRiserDayplanCard extends LitElement {
       });
       if (fetchId !== this._fetchId) return;
       this._schedules = result.response.channels;
-      this._programs = result.response.programs;
       this._weekday = result.response.weekday;
     } catch (err) {
       if (fetchId !== this._fetchId) return;
       this._error = err?.message ?? String(err);
     }
     if (fetchId === this._fetchId) this._loading = false;
-  }
-
-  _edit(kind, item) {
-    if (this._draft || this._saving) return;
-    this._editError = null;
-    this._draft = {
-      kind, target: kind === "program" ? item.id : item.pwm, name: item.name,
-      revision: kind === "program" ? item.revision : item[`${kind}_revision`],
-      markers: (kind === "daily" ? item.daily : item.markers || []).map(m => ({ ...m })),
-      schedule: [...(item.week || [])], channels: item.channels || [],
-    };
-  }
-
-  _marker(index, key, value) {
-    const markers = this._draft.markers.map((m, i) => i === index ? { ...m, [key]: value } : m);
-    this._draft = { ...this._draft, markers };
-  }
-
-  _draftProblem() {
-    if (!this._draft || this._draft.kind === "week") return null;
-    const seen = new Set();
-    if (!this._draft.markers.length) return "Add at least one marker.";
-    for (const marker of this._draft.markers) {
-      if (!/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$|^24:00$/.test(marker.time) ||
-          !Number.isInteger(marker.percent) || marker.percent < 0 || marker.percent > 100) {
-        return "Use times from 00:00 to 24:00 and whole percentages from 0 to 100.";
-      }
-      if (seen.has(marker.time)) return "Each marker needs a different time.";
-      seen.add(marker.time);
-    }
-    return null;
-  }
-
-  async _save() {
-    if (!this._draft || this._saving || this._draftProblem()) return;
-    const draft = this._draft;
-    const deviceId = this._config?.device_id;
-    this._saving = true;
-    this._editError = null;
-    try {
-      await this._hass.connection.sendMessagePromise({
-        type: "call_service", domain: "sunriser", service: "save_planning",
-        service_data: { kind: draft.kind, target: draft.target, revision: draft.revision,
-          ...(deviceId ? { device_id: deviceId } : {}),
-          ...(draft.kind === "week" ? { schedule: draft.schedule } : { markers: draft.markers }),
-        },
-      });
-      if (this._draft !== draft) return;
-      this._draft = null;
-      this._fetchId++;
-      this._loading = false;
-      await this._fetch();
-    } catch (err) {
-      if (this._draft !== draft) return;
-      this._editError = err?.message ?? String(err);
-    } finally {
-      if (this._draft === draft || this._draft === null) this._saving = false;
-    }
-  }
-
-  _discard() {
-    if (this._saving) return;
-    this._draft = null;
-    this._editError = null;
-    this._schedules = null;
-    this._fetchId++;
-    this._loading = false;
-    return this._fetch();
-  }
-
-  _renderEditor() {
-    const draft = this._draft;
-    if (!draft) return "";
-    const problem = this._draftProblem();
-    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Fallback"];
-    return html`<section class="editor" aria-label="Schedule editor">
-      <h3>${draft.name} — ${draft.kind === "week" ? "Weekly assignments" : "Curve"}</h3>
-      ${draft.kind === "program" ? html`<p>This is a shared program. Used by: ${draft.channels.join(", ") || "no channels"}.</p>` : ""}
-      ${draft.kind === "daily" ? html`<p>Saving this curve does not change the channel's selected planner.</p>` : ""}
-      <fieldset ?disabled=${this._saving}>
-      ${draft.kind === "week" ? days.map((day, index) => html`<label>${day}
-        <select aria-label=${day} @change=${e => { const schedule = [...draft.schedule]; schedule[index] = Number(e.target.value); this._draft = { ...draft, schedule }; }}>
-          <option value="0" ?selected=${draft.schedule[index] === 0}>${index === 7 ? "None" : "Use fallback"}</option>
-          ${this._programs.map(p => html`<option value=${p.id} ?selected=${draft.schedule[index] === p.id}>${p.name} [${p.id}]</option>`)}
-          ${draft.schedule[index] && !this._programs.some(p => p.id === draft.schedule[index]) ? html`<option selected value=${draft.schedule[index]}>Missing program [${draft.schedule[index]}]</option>` : ""}
-        </select></label>`) : html`
-        <table><thead><tr><th>Time</th><th>Percent</th><th></th></tr></thead><tbody>
-        ${draft.markers.map((marker, index) => html`<tr>
-          <td><input aria-label=${`Time ${index + 1}`} .value=${marker.time} @change=${e => this._marker(index, "time", e.target.value)} placeholder="HH:MM" maxlength="5"></td>
-          <td><input aria-label=${`Percent ${index + 1}`} type="number" min="0" max="100" step="1" .value=${String(marker.percent ?? "")} @change=${e => this._marker(index, "percent", e.target.value === "" ? null : Number(e.target.value))}></td>
-          <td><button @click=${() => { this._draft = { ...draft, markers: draft.markers.filter((_, i) => i !== index) }; }}>Remove</button></td>
-        </tr>`)}</tbody></table>
-        <button @click=${() => { this._draft = { ...draft, markers: [...draft.markers, { time: "12:00", percent: 0 }] }; }}>Add marker</button>
-        ${!problem ? html`<p>Preview — scheduled output, before weather and other overrides</p><svg aria-label="Draft preview" viewBox=${VBOX} preserveAspectRatio="none">${unsafeSVG(buildSVGContent([{ markers: draft.markers }]))}</svg>` : ""}
-      `}
-      </fieldset>
-      ${problem ? html`<p role="alert">${problem}</p>` : ""}
-      ${this._editError ? html`<p role="alert">${this._editError} Your draft is kept. Discard and reopen to load current values.</p>` : ""}
-      <button ?disabled=${this._saving || !!problem} @click=${() => this._save()}>${this._saving ? "Saving…" : "Save"}</button>
-      <button ?disabled=${this._saving} @click=${() => this._discard()}>Discard</button>
-    </section>`;
   }
 
   _renderBody() {
@@ -475,11 +347,14 @@ class SunRiserDayplanCard extends LitElement {
       return html`<div class="state">No configured channels found.</div>`;
     }
 
-    const legend = this._schedules.map(({ pwm, name, color_id }, idx) => {
+    const legend = this._schedules.map(({ pwm, name, color_id, manager, program_name, fixed }, idx) => {
       const color = channelColor(color_id, idx);
       const label = this._config?.channels?.[pwm] ?? name;
+      const mode = manager === 1 ? "Daily planner" : manager === 2
+        ? (this._weekday === null ? "Weekly planner — controller timezone unavailable" : `Weekly planner — ${program_name || "no available program today"}`)
+        : manager === 3 ? `Fixed output: ${fixed / 10}%` : "No planner";
       return html`
-        <span class="legend-item">
+        <span class="legend-item" title=${`${label}: ${mode}`} aria-label=${`${label}: ${mode}`}>
           <span class="swatch" style="background:${color}"></span>
           <span>${label}</span>
         </span>`;
@@ -501,17 +376,6 @@ class SunRiserDayplanCard extends LitElement {
         </div>
       </div>
       <div class="legend">${legend}</div>
-      <p>Scheduled curves before weather, maintenance, or manual overrides.</p>
-      ${this._schedules.map(channel => html`<div class="channel">
-        <b>${this._config?.channels?.[channel.pwm] ?? channel.name}</b>
-        <span>${channel.manager === 1 ? "Daily planner" : channel.manager === 2 ? (this._weekday === null ? "Weekly planner — controller timezone unavailable" : `Weekly planner — ${channel.program_name || "no available program today"}`) : channel.manager === 3 ? `Fixed output: ${channel.fixed / 10}%` : "No planner"}</span>
-        <button ?disabled=${!!this._draft} @click=${() => this._edit("daily", channel)}>Edit daily curve</button>
-        <button ?disabled=${!!this._draft} @click=${() => this._edit("week", channel)}>Edit week</button>
-      </div>`)}
-      ${this._programs.length ? html`<details><summary>Named programs</summary>
-        ${this._programs.map(program => html`<div class="channel"><span>${program.name} [${program.id}]</span>
-          <button ?disabled=${!!this._draft} @click=${() => this._edit("program", program)}>Edit program</button></div>`)}
-      </details>` : ""}
       `;
   }
 
@@ -520,7 +384,6 @@ class SunRiserDayplanCard extends LitElement {
     return html`
       <ha-card .header=${title}>
         ${this._renderBody()}
-        ${this._renderEditor()}
       </ha-card>`;
   }
 
@@ -539,7 +402,7 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: "sunriser-dayplan-card",
   name: "SunRiser Day Planner",
-  description: "Daily and weekly schedules with explicit save/discard editing",
+  description: "Read-only daily and weekly schedule graph",
   preview: true,
   documentationURL: "https://github.com/MrInterBugs/ha-sunriser",
 });

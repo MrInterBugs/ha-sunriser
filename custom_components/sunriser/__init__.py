@@ -40,7 +40,7 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(  # pyright: ignore[reportUnk
 
 _CARD_URL = "/sunriser/sunriser-dayplan-card.js"
 _CARD_PATH = pathlib.Path(__file__).parent / "www" / "sunriser-dayplan-card.js"
-_CARD_VERSION = "1.5.0"
+_CARD_VERSION = "1.5.1"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -489,50 +489,12 @@ def _register_services(hass: HomeAssistant) -> None:
         except (aiohttp.ClientError, TimeoutError, InvalidResponse) as err:
             raise HomeAssistantError("Could not read controller schedules") from err
 
-    async def handle_save_planning(call: ServiceCall) -> None:
-        coordinator = _get_coordinator(hass, call.data.get("device_id"))
-        kind = call.data["kind"]
-        if (kind == "week") != ("schedule" in call.data) or (kind != "week") != (
-            "markers" in call.data
-        ):
-            raise HomeAssistantError(
-                "Provide schedule for a week or markers for a curve"
-            )
-        try:
-            await coordinator.async_save_planning(
-                kind,
-                call.data["target"],
-                call.data["revision"],
-                call.data.get("schedule") if kind == "week" else call.data["markers"],
-            )
-        except (aiohttp.ClientError, TimeoutError, InvalidResponse) as err:
-            raise HomeAssistantError(
-                "Save could not be confirmed. Reload the controller schedule before retrying."
-            ) from err
-
     hass.services.async_register(
         DOMAIN,
         "get_planning",
         handle_get_planning,
         schema=_DEVICE_SCHEMA,
         supports_response=SupportsResponse.ONLY,
-    )
-    hass.services.async_register(
-        DOMAIN,
-        "save_planning",
-        handle_save_planning,
-        schema=vol.Schema(
-            {
-                **_DEVICE_FIELDS,
-                vol.Required("kind"): vol.In(["daily", "week", "program"]),
-                vol.Required("target"): vol.All(int, vol.Range(min=1)),
-                vol.Required("revision"): cv.string,
-                vol.Optional("markers"): vol.All([_MARKER_SCHEMA], vol.Length(min=1)),
-                vol.Optional("schedule"): vol.All(
-                    [vol.All(int, vol.Range(min=0))], vol.Length(min=8, max=8)
-                ),
-            }
-        ),
     )
 
     async def handle_factory_backup(call: ServiceCall) -> ServiceResponse:

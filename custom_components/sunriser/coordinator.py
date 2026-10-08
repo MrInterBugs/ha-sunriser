@@ -301,7 +301,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             self.update_config_cache({"weather#web": fresh.get("weather#web")})
 
     async def _async_planning_snapshot(self) -> dict[str, Any]:
-        """Read the program library only when the card/editor needs it."""
+        """Read the program library only when the card needs it."""
         keys = ["pwm_count", "programs#web", "tz", "gmtoff", "summertime"]
         for channel in range(1, self.pwm_count + 1):
             keys.extend(
@@ -331,7 +331,6 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
                 {
                     **profile,
                     "markers": curve,
-                    "channels": [],
                 }
             )
         by_id = {p["id"]: p for p in programs}
@@ -348,9 +347,6 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             active_id = (week[day] or week[7]) if day is not None else None
             active = by_id.get(active_id)
             name = config.get(f"pwm#{channel}#name") or self.pwm_name(channel)
-            for program in programs:
-                if manager == 2 and program["id"] in week:
-                    program["channels"].append(name)
             channels.append(
                 {
                     "pwm": channel,
@@ -362,65 +358,16 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
                         if manager == 1
                         else (active["markers"] if manager == 2 and active else [])
                     ),
-                    "daily": daily,
-                    "week": week,
                     "program_id": active_id if manager == 2 else None,
                     "program_name": active["name"] if manager == 2 and active else None,
-                    "daily_revision": planning.revision([channel, manager, daily]),
-                    "week_revision": planning.revision([channel, manager, week]),
                     "fixed": config.get(f"pwm#{channel}#fixed") or 0,
                 }
             )
-        for program in programs:
-            program["revision"] = planning.revision(
-                [
-                    program["id"],
-                    program["name"],
-                    program["markers"],
-                    program["channels"],
-                ]
-            )
-        return {"channels": channels, "programs": programs, "weekday": day}
+        return {"channels": channels, "weekday": day}
 
     async def async_get_planning(self) -> dict[str, Any]:
         async with self._config_lock:
             return await self._async_planning_snapshot()
-
-    async def async_save_planning(
-        self, kind: str, target: int, revision: str, value: Any
-    ) -> None:
-        """Compare fresh data before writing; vendor-side writes cannot be locked by HA."""
-        self._require_maintenance_support("Schedule editing")
-        async with self._config_lock:
-            snapshot = await self._async_planning_snapshot()
-            items = snapshot["programs"] if kind == "program" else snapshot["channels"]
-            item = next(
-                (
-                    item
-                    for item in items
-                    if item["id" if kind == "program" else "pwm"] == target
-                ),
-                None,
-            )
-            revision_key = "revision" if kind == "program" else f"{kind}_revision"
-            if item is None or item[revision_key] != revision:
-                raise HomeAssistantError(
-                    "Schedule changed on the controller. Reload the editor before saving."
-                )
-            if kind == "week":
-                week = planning.assignments(value)
-                available = {p["id"] for p in snapshot["programs"]} | {0}
-                if any(pid not in available for pid in week):
-                    raise HomeAssistantError("A selected program no longer exists")
-                params = {f"weekplanner#programs#{target}": week}
-            else:
-                key = (
-                    f"programs#setup#{target}#marker"
-                    if kind == "program"
-                    else f"dayplanner#marker#{target}"
-                )
-                params = {key: planning.flatten(value)}
-            await self._async_write_config(params)
 
     @callback
     def update_config_cache(self, params: dict[str, Any]) -> None:

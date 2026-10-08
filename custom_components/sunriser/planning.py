@@ -1,16 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Aedan Lawrence <aedan@mrinterbugs.uk>
-"""Validated planning snapshots for the editor; no output or mode commands."""
+"""Validated profiles and read-only schedule snapshots."""
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from hashlib import sha256
 import json
 from typing import Any, TypedDict, TypeGuard
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-
-from homeassistant.exceptions import HomeAssistantError
 
 from .responses import InvalidResponse
 
@@ -79,31 +76,6 @@ def markers(value: Any) -> list[dict[str, Any]]:
     return sorted(result, key=lambda marker: marker["time"])
 
 
-def flatten(value: list[dict[str, Any]]) -> list[int]:
-    flat: list[int] = []
-    try:
-        for marker in value:
-            hour, minute = map(int, marker["time"].split(":"))
-            if not 0 <= minute < 60 or not 0 <= hour <= 24 or (hour == 24 and minute):
-                raise ValueError
-            flat.extend([hour * 60 + minute, marker["percent"]])
-        if not flat:
-            raise ValueError
-        ordered = markers(flat)
-    except (KeyError, TypeError, ValueError) as err:
-        raise HomeAssistantError(
-            "Use unique times from 00:00 to 24:00 and whole percentages from 0 to 100"
-        ) from err
-    return [
-        part
-        for marker in ordered
-        for part in (
-            int(marker["time"][:2]) * 60 + int(marker["time"][3:]),
-            marker["percent"],
-        )
-    ]
-
-
 def assignments(value: Any) -> list[int]:
     if value is None or value == []:
         return [0] * 8
@@ -114,12 +86,6 @@ def assignments(value: Any) -> list[int]:
     ):
         raise InvalidResponse("Weekly assignments must contain eight program IDs")
     return [v or 0 for v in value]
-
-
-def revision(value: Any) -> str:
-    return sha256(
-        json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
 
 
 def weekday(config: dict[str, Any], now: datetime) -> int | None:

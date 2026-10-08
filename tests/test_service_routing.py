@@ -150,90 +150,37 @@ async def test_each_service_targets_selected_controller(
     getattr(second, method).assert_awaited_once()
 
 
-async def test_planning_services_route_and_validate_drafts(
+async def test_planning_service_is_read_only_and_routes_to_selected_controller(
     hass: HomeAssistant,
     controllers: Controllers,
 ) -> None:
     first, second = controllers[0][1], controllers[1][1]
     first.async_get_planning = AsyncMock(return_value={"channels": []})
     second.async_get_planning = AsyncMock(return_value={"channels": [{"pwm": 1}]})
-    first.async_save_planning = AsyncMock()
-    second.async_save_planning = AsyncMock()
-    selected = controllers[1][2].id
     response = await hass.services.async_call(
         DOMAIN,
         "get_planning",
-        {"device_id": selected},
+        {"device_id": controllers[1][2].id},
         blocking=True,
         return_response=True,
     )
     assert response == {"channels": [{"pwm": 1}]}
     as_async_mock(first.async_get_planning).assert_not_awaited()
-    for kind, value in (
-        ("daily", {"markers": [{"time": "24:00", "percent": 0}]}),
-        ("program", {"markers": [{"time": "00:00", "percent": 30}]}),
-        ("week", {"schedule": [0] * 8}),
-    ):
-        await hass.services.async_call(
-            DOMAIN,
-            "save_planning",
-            {
-                "device_id": selected,
-                "kind": kind,
-                "target": 1,
-                "revision": "token",
-                **value,
-            },
-            blocking=True,
-        )
-        as_async_mock(second.async_save_planning).assert_awaited_with(
-            kind, 1, "token", next(iter(value.values()))
-        )
-    as_async_mock(first.async_save_planning).assert_not_awaited()
-    with pytest.raises(HomeAssistantError, match="Provide"):
-        await hass.services.async_call(
-            DOMAIN,
-            "save_planning",
-            {
-                "device_id": selected,
-                "kind": "week",
-                "target": 1,
-                "revision": "token",
-                "markers": [{"time": "00:00", "percent": 0}],
-            },
-            blocking=True,
-        )
+    assert not hass.services.has_service(DOMAIN, "save_planning")
     with pytest.raises(HomeAssistantError):
         await hass.services.async_call(
-            DOMAIN, "get_planning", {}, blocking=True, return_response=True
+            DOMAIN,
+            "get_planning",
+            {},
+            blocking=True,
+            return_response=True,
         )
-
-
-async def test_planning_connection_errors_are_actionable(
-    hass: HomeAssistant, controllers: Controllers
-) -> None:
-    coordinator = controllers[0][1]
-    coordinator.async_get_planning = AsyncMock(side_effect=TimeoutError)
-    coordinator.async_save_planning = AsyncMock(side_effect=TimeoutError)
-    selected = controllers[0][2].id
+    second.async_get_planning = AsyncMock(side_effect=TimeoutError)
     with pytest.raises(HomeAssistantError, match="Could not read"):
         await hass.services.async_call(
             DOMAIN,
             "get_planning",
-            {"device_id": selected},
+            {"device_id": controllers[1][2].id},
             blocking=True,
             return_response=True,
-        )
-    with pytest.raises(HomeAssistantError, match="could not be confirmed"):
-        await hass.services.async_call(
-            DOMAIN,
-            "save_planning",
-            {
-                "device_id": selected,
-                "kind": "week",
-                "target": 1,
-                "revision": "token",
-                "schedule": [0] * 8,
-            },
-            blocking=True,
         )

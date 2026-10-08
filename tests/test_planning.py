@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Weather assignment and draft editing never send live output commands."""
+"""Weather assignments and read-only daily/weekly schedule snapshots."""
 
 from collections.abc import AsyncIterator
 from copy import deepcopy
@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
-import aiohttp
 import msgpack
 import pytest
 from aioresponses import aioresponses
@@ -29,7 +28,7 @@ from tests.typing import collect_entities
 
 
 @pytest.fixture
-async def editor(
+async def controller(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry
 ) -> AsyncIterator[tuple[SunRiserCoordinator, dict[str, Any]]]:
     coord = SunRiserCoordinator(hass, mock_config_entry)
@@ -66,120 +65,36 @@ async def editor(
 
 
 async def test_snapshot_uses_weekly_program_and_fallback(
-    editor: tuple[SunRiserCoordinator, dict[str, Any]],
+    controller: tuple[SunRiserCoordinator, dict[str, Any]],
 ) -> None:
-    coord, config = editor
+    coord, config = controller
     snapshot = await coord.async_get_planning()
     assert [c["pwm"] for c in snapshot["channels"]] == [1, 2, 4]
     weekly = snapshot["channels"][-1]
     assert snapshot["weekday"] == 4
     assert weekly["program_name"] == "Weekday"
     assert weekly["markers"][1]["percent"] == 80
-    assert weekly["daily"][0]["percent"] == 10
-    assert len(snapshot["programs"]) == 2
-    assert snapshot["programs"][0]["channels"] == [coord.pwm_name(4)]
     config["weekplanner#programs#4"][4] = 2
     snapshot = await coord.async_get_planning()
     assert snapshot["channels"][-1]["program_name"] == "Weekend"
     config["tz"] = "invalid"
     assert (await coord.async_get_planning())["channels"][-1]["markers"] == []
-
-
-@pytest.mark.parametrize(
-    "kind,target,key",
-    [
-        ("daily", 1, "dayplanner#marker#1"),
-        ("program", 1, "programs#setup#1#marker"),
-        ("week", 4, "weekplanner#programs#4"),
-    ],
-)
-async def test_save_writes_only_selected_schedule(
-    editor: tuple[SunRiserCoordinator, dict[str, Any]], kind: str, target: int, key: str
-) -> None:
-    coord, _ = editor
-    snapshot = await coord.async_get_planning()
-    item = (
-        snapshot["programs"][0]
-        if kind == "program"
-        else next(c for c in snapshot["channels"] if c["pwm"] == target)
-    )
-    token = item["revision" if kind == "program" else f"{kind}_revision"]
-    value = (
-        [1] * 8
-        if kind == "week"
-        else [{"time": "24:00", "percent": 0}, {"time": "00:00", "percent": 80}]
-    )
-    with aioresponses() as http:
-        http.put(f"{coord.base_url}/", status=200)
-        await coord.async_save_planning(kind, target, token, value)
-        request = http.requests[("PUT", URL(f"{coord.base_url}/"))][0]
-        payload = msgpack.unpackb(request.kwargs["data"], raw=False)
-        assert payload == {
-            key: [1] * 8 if kind == "week" else [0, 80, 1440, 0],
-            "save_version": "1.006",
-        }
-    assert coord.config[key] == payload[key]
-
-
-@pytest.mark.parametrize("change", ["curve", "manager", "removed"])
-async def test_stale_draft_never_writes(
-    editor: tuple[SunRiserCoordinator, dict[str, Any]], change: str
-) -> None:
-    coord, config = editor
-    item = (await coord.async_get_planning())["channels"][0]
-    config[
-        {
-            "curve": "dayplanner#marker#1",
-            "manager": "pwm#1#manager",
-            "removed": "pwm#1#color",
-        }[change]
-    ] = {"curve": [0, 50], "manager": 3, "removed": ""}[change]
-    with aioresponses() as http:
-        with pytest.raises(HomeAssistantError, match="changed"):
-            await coord.async_save_planning(
-                "daily", 1, item["daily_revision"], [{"time": "00:00", "percent": 0}]
-            )
-        assert not http.requests
-
-
-async def test_missing_week_program_and_failed_save(
-    editor: tuple[SunRiserCoordinator, dict[str, Any]],
-) -> None:
-    coord, config = editor
-    item = (await coord.async_get_planning())["channels"][-1]
-    with pytest.raises(HomeAssistantError, match="no longer exists"):
-        await coord.async_save_planning("week", 4, item["week_revision"], [99] * 8)
-    before = deepcopy(coord.config)
-    with aioresponses() as http:
-        http.put(f"{coord.base_url}/", status=500)
-        with pytest.raises(aiohttp.ClientResponseError):
-            await coord.async_save_planning("week", 4, item["week_revision"], [1] * 8)
-        assert len(http.requests[("PUT", URL(f"{coord.base_url}/"))]) == 1
-    assert coord.config == before
+    config["tz"] = "Europe/Berlin"
     config["programs#web"] = None
-    assert (await coord.async_get_planning())["programs"] == []
-
-
-async def test_shared_program_new_channel_rejects_open_draft(
-    editor: tuple[SunRiserCoordinator, dict[str, Any]],
-) -> None:
-    coord, config = editor
-    program = (await coord.async_get_planning())["programs"][0]
-    config["pwm#1#manager"] = 2
-    config["weekplanner#programs#1"] = [1] * 8
     with aioresponses() as http:
-        with pytest.raises(HomeAssistantError, match="changed"):
-            await coord.async_save_planning(
-                "program", 1, program["revision"], [{"time": "00:00", "percent": 0}]
-            )
+        snapshot = await coord.async_get_planning()
+        assert snapshot["channels"][-1]["markers"] == []
+        assert snapshot["channels"][0]["markers"][1]["percent"] == 60
         assert not http.requests
+    assert "programs" not in snapshot
+    assert "revision" not in str(snapshot)
 
 
 async def test_weather_names_identity_and_external_removal(
-    editor: tuple[SunRiserCoordinator, dict[str, Any]],
+    controller: tuple[SunRiserCoordinator, dict[str, Any]],
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    coord, config = editor
+    coord, config = controller
     entity = SunRiserWeatherProfileSelect(coord, mock_config_entry, 1)
     uid = entity.unique_id
     assert entity.options == ["None", "Clouds [1]", "Clouds [2]"]
@@ -214,10 +129,10 @@ async def test_weather_names_identity_and_external_removal(
 
 async def test_weather_discovered_when_metadata_arrives(
     hass: HomeAssistant,
-    editor: tuple[SunRiserCoordinator, dict[str, Any]],
+    controller: tuple[SunRiserCoordinator, dict[str, Any]],
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    coord, _ = editor
+    coord, _ = controller
     mock_config_entry.runtime_data = coord
     added: list[Entity] = []
     await async_setup_entry(hass, mock_config_entry, collect_entities(added))
@@ -249,20 +164,6 @@ async def test_malformed_program_curve_rejected(bad: Any) -> None:
 async def test_malformed_program_deleted_flag_rejected() -> None:
     with pytest.raises(InvalidResponse):
         decode_config(msgpack.packb({"programs#setup#1#deleted": "false"}))
-
-
-@pytest.mark.parametrize(
-    "bad",
-    [
-        [],
-        [{"time": "24:01", "percent": 1}],
-        [{"time": "12:00", "percent": True}],
-        [{"time": "bad", "percent": 1}],
-    ],
-)
-async def test_invalid_edits_rejected(bad: list[dict[str, Any]]) -> None:
-    with pytest.raises(HomeAssistantError):
-        planning.flatten(bad)
 
 
 async def test_parsing_optional_values_and_controller_timezone() -> None:
