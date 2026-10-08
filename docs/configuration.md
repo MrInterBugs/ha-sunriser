@@ -23,7 +23,7 @@ Changing any option reloads the integration automatically — no restart require
 
 Each poll reads state, weather, and configuration consecutively. Channel changes, new temperature probes, firmware changes, and weather program names are refreshed every {{ cfg.default_scan_interval }} seconds by default. New temperature sensors appear only after their names, units, and decimal scaling have loaded; failed metadata reads are retried on the next poll.
 
-The Day Planner card reads this configuration cache. Its separate display refresh interval does not change how often HA polls the controller.
+The Day Planner card requests a fresh read-only schedule snapshot on each card refresh, including program details needed for weekly curves. Its refresh interval controls these additional reads independently of the regular coordinator poll interval. It makes no controller writes.
 
 ## Entity types
 
@@ -31,7 +31,7 @@ The Day Planner card reads this configuration cache. Its separate display refres
 |---|---|---|
 | `light` | PWM channel with `pwm#X#onoff = false` (dimmable) | |
 | `switch` | PWM channel with `pwm#X#onoff = true` (on/off only) | Also creates Maintenance Mode and Time-lapse; DST Auto-Track is only created for firmware older than 1.006 |
-| `select` | Every active channel — controls the manager (`none` / `dayplanner` / `weekplanner` / `fixed`) | Disabled by default; enable in entity settings |
+| `select` | Every active channel — controls the manager (`none` / `dayplanner` / `weekplanner` / `fixed`); firmware 1.006+ also provides existing weather-profile assignment | Disabled by default; enable in entity settings |
 | `number` | Every active channel — sets the fixed brightness (0–{{ cfg.pwm_max }}) | Disabled by default; enable in entity settings |
 | `sensor` | Uptime, Firmware Version, and Hostname are always created; probes and weather channels are discovered from device data | Uptime is disabled by default; weather states are `clear`, `cloudy`, `rain`, `thunder`, or `moon` |
 | `binary_sensor` | Always — device connectivity (derived from last state poll) | |
@@ -52,7 +52,7 @@ refresh_interval: 300
 | Setting | Description | Default |
 |---|---|---|
 | `title` | Card heading | `Day Planner` |
-| `refresh_interval` | Seconds between display refreshes; at least 1 | `300` |
+| `refresh_interval` | Seconds between fresh schedule reads and graph updates; at least 1 | `300` |
 | `device_id` | HA device ID of the SunRiser controller; required when more than one is loaded | The only loaded controller |
 | `channels` | Map of PWM channel numbers to display labels | Controller channel names |
 
@@ -68,7 +68,9 @@ channels:
 
 To find the device ID, select the controller in **Developer Tools → Actions** for a SunRiser action and switch to YAML to copy `data.device_id`.
 
-The card shows channels with stored day-planner markers. It does not show live PWM output, weather effects, or which week-planner program is currently active. Use the light and weather entities for live values. A schedule changed in the device web UI appears after a successful controller poll and the next card refresh.
+The card is a compact, read-only graph of the selected daily/weekly schedules.
+See [Schedule graph](#schedule-graph) below for details. Program details are read
+on demand without increasing the coordinator polling rate.
 
 ## Maintenance and blackout (firmware 1.006+)
 
@@ -104,4 +106,33 @@ changes from the physical button. It never replays mode commands after restart.
 If a command times out, its outcome can be uncertain: check state before retrying.
 The estimated end time is anchored to a successful state read and is not moved
 forward by failed polls. Exact timing and timeout changes during a session need
-hardware beta validation.
+hardware validation.
+
+## Weather profile assignment (firmware 1.006+)
+
+Enable the optional **Weather Profile** select for each channel in the device's
+entity settings. Select an existing profile or **None**. Names include the profile
+ID so identically named profiles remain distinguishable. Renaming a profile does
+not change the entity identity. Changes in the vendor interface appear after a
+successful poll. A missing assigned profile is shown explicitly until reassigned.
+
+This changes only the channel assignment. Create profiles and edit their shared
+cloud/rain/thunder/moon settings in the vendor interface; no storm commands are
+sent when selecting a profile.
+
+## Schedule graph
+
+The Day Planner card displays the daily or weekly curve selected by each channel's
+planner. Weekly selection uses the controller's timezone (`tz`, or its legacy UTC
+offset and summertime flag), not the browser timezone. If that information is
+missing, no weekly curve is guessed. Unassigned weekdays use the fallback program.
+
+Hover over a channel in the legend to see its planner and active weekly program
+name, or its fixed/unassigned state. Fixed and unassigned channels have no schedule
+curve. Curves describe scheduled output before weather, maintenance, manual
+changes, and other overrides.
+
+Edit schedules and programs in the controller's own interface. The card has no
+editing controls and makes no writes. Changes appear on the next successful card
+refresh. Program details are fetched on demand; normal polling does not fetch the
+program library. Existing day/week service actions retain their previous semantics.

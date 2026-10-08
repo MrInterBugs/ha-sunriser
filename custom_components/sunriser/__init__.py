@@ -40,7 +40,7 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(  # pyright: ignore[reportUnk
 
 _CARD_URL = "/sunriser/sunriser-dayplan-card.js"
 _CARD_PATH = pathlib.Path(__file__).parent / "www" / "sunriser-dayplan-card.js"
-_CARD_VERSION = "1.4.10"
+_CARD_VERSION = "1.5.1"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -480,6 +480,21 @@ def _register_services(hass: HomeAssistant) -> None:
         _SERVICE_SET_WEEKPLANNER,
         handle_set_weekplanner,
         schema=_SET_WEEKPLANNER_SCHEMA,
+    )
+
+    async def handle_get_planning(call: ServiceCall) -> ServiceResponse:
+        coordinator = _get_coordinator(hass, call.data.get("device_id"))
+        try:
+            return cast(ServiceResponse, await coordinator.async_get_planning())
+        except (aiohttp.ClientError, TimeoutError, InvalidResponse) as err:
+            raise HomeAssistantError("Could not read controller schedules") from err
+
+    hass.services.async_register(
+        DOMAIN,
+        "get_planning",
+        handle_get_planning,
+        schema=_DEVICE_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
     )
 
     async def handle_factory_backup(call: ServiceCall) -> ServiceResponse:

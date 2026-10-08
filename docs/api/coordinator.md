@@ -12,6 +12,10 @@ Every poll performs these requests sequentially, without artificial delays:
 
 The configured poll interval defaults to {{ cfg.default_scan_interval }} seconds. The HTTP session reuses connections. Configuration reads through cache publication and configuration writes share a lock to preserve ordering; unrelated requests are not globally serialized. Successful configuration writes update the cache and notify entity listeners immediately.
 
+## Schedule graph reads
+
+`async_get_planning()` reads a fresh channel/schedule snapshot under the configuration lock, then reads named program markers when a program library exists. The card calls it at its own refresh interval; these additional reads do not change the normal polling schedule. The response resolves today's weekly program using the controller timezone and fallback assignment. It performs no writes.
+
 ## Setup
 
 Setup first reads the controller identity and channel count, then performs a complete poll. Platforms are loaded before setup returns, with no waits for later poll ticks. Missing required startup configuration causes Home Assistant to retry setup. Weather is optional and is retried on the next poll.

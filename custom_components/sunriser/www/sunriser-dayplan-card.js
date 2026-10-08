@@ -163,7 +163,6 @@ class SunRiserDayplanCard extends LitElement {
     :host { display: block; }
 
     ha-card { padding: 0 16px 12px; }
-
     .chart-row {
       display: flex;
       align-items: stretch;
@@ -317,47 +316,19 @@ class SunRiserDayplanCard extends LitElement {
     this._loading = true;
     this._error = null;
 
-    const schedules = [];
-    let firstError = null;
-
-    for (let i = 1; i <= 10; i++) {
-      try {
-        const result = await hass.connection.sendMessagePromise({
-          type: "call_service",
-          domain: "sunriser",
-          service: "get_dayplanner_schedule",
-          service_data: {
-            pwm: i,
-            ...(deviceId ? { device_id: deviceId } : {}),
-          },
-          return_response: true,
-        });
-        if (fetchId !== this._fetchId) return;
-        const resp = result?.response;
-        const markers = resp?.markers;
-        if (markers && markers.length > 0) {
-          schedules.push({
-            pwm: i,
-            name: resp.name ?? `PWM ${i}`,
-            color_id: resp.color_id ?? "",
-            markers,
-          });
-        }
-      } catch (err) {
-        if (fetchId !== this._fetchId) return;
-        if (!firstError) firstError = err;
-        console.error(`[sunriser-dayplan-card] PWM ${i} failed:`, err);
-      }
+    try {
+      const result = await hass.connection.sendMessagePromise({
+        type: "call_service", domain: "sunriser", service: "get_planning",
+        service_data: deviceId ? { device_id: deviceId } : {}, return_response: true,
+      });
+      if (fetchId !== this._fetchId) return;
+      this._schedules = result.response.channels;
+      this._weekday = result.response.weekday;
+    } catch (err) {
+      if (fetchId !== this._fetchId) return;
+      this._error = err?.message ?? String(err);
     }
-
-    // If every channel failed, surface the first error rather than showing
-    // an empty chart — makes misconfiguration much easier to diagnose.
-    if (schedules.length === 0 && firstError) {
-      this._error = firstError?.message ?? String(firstError);
-    }
-
-    this._schedules = schedules;
-    this._loading = false;
+    if (fetchId === this._fetchId) this._loading = false;
   }
 
   _renderBody() {
@@ -369,19 +340,21 @@ class SunRiserDayplanCard extends LitElement {
         <div class="state error">
           <b>Could not load schedules</b><br>
           <code>${this._error}</code><br>
-          <small>Check browser console (F12) for details. Make sure the SunRiser
-          integration is added in Settings → Integrations.</small>
+          <small>Check the controller connection and the selected SunRiser device.</small>
         </div>`;
     }
     if (!this._schedules || this._schedules.length === 0) {
-      return html`<div class="state">No day planner schedules found.</div>`;
+      return html`<div class="state">No configured channels found.</div>`;
     }
 
-    const legend = this._schedules.map(({ pwm, name, color_id }, idx) => {
+    const legend = this._schedules.map(({ pwm, name, color_id, manager, program_name, fixed }, idx) => {
       const color = channelColor(color_id, idx);
       const label = this._config?.channels?.[pwm] ?? name;
+      const mode = manager === 1 ? "Daily planner" : manager === 2
+        ? (this._weekday === null ? "Weekly planner — controller timezone unavailable" : `Weekly planner — ${program_name || "no available program today"}`)
+        : manager === 3 ? `Fixed output: ${fixed / 10}%` : "No planner";
       return html`
-        <span class="legend-item">
+        <span class="legend-item" title=${`${label}: ${mode}`} aria-label=${`${label}: ${mode}`}>
           <span class="swatch" style="background:${color}"></span>
           <span>${label}</span>
         </span>`;
@@ -395,14 +368,15 @@ class SunRiserDayplanCard extends LitElement {
         <div class="chart-col">
           <svg viewBox="${VBOX}" preserveAspectRatio="none"
                xmlns="http://www.w3.org/2000/svg">
-            ${unsafeSVG(buildSVGContent(this._schedules))}
+            ${unsafeSVG(buildSVGContent(this._schedules.filter(s => s.markers.length)))}
           </svg>
           <div class="xaxis">
             <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>24h</span>
           </div>
         </div>
       </div>
-      <div class="legend">${legend}</div>`;
+      <div class="legend">${legend}</div>
+      `;
   }
 
   render() {
@@ -428,7 +402,7 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: "sunriser-dayplan-card",
   name: "SunRiser Day Planner",
-  description: "Day planner schedule chart for all active PWM channels",
+  description: "Read-only daily and weekly schedule graph",
   preview: true,
   documentationURL: "https://github.com/MrInterBugs/ha-sunriser",
 });

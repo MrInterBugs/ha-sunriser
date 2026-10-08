@@ -124,3 +124,11 @@ data:
 Turn off the controller's **Maintenance Mode** switch to end either session.
 Automations can use `switch.turn_off` targeting that switch. This leaves stored
 configuration and time-lapse unchanged.
+
+## Planning snapshot
+
+`sunriser.get_planning` returns configured channels with their selected daily or
+weekly curves, active weekly program names, and the current controller weekday.
+It is read-only and powers the Day Planner graph. It supports `device_id`;
+selection is required when multiple controllers are loaded. Edit schedules in the
+controller interface. Existing day/week service actions are unchanged.

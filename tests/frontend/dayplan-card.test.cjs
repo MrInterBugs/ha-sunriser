@@ -27,7 +27,7 @@ function loadCard() {
   vm.runInNewContext(source, context);
   return { card: new Card(), timers };
 }
-const response = name => ({ response: { name, markers: [{ time: '12:00', percent: 50 }] } });
+const response = name => ({ response: { channels: Array.from({ length: 4 }, (_, i) => ({ pwm: i + 1, name, manager: 1, markers: [{ time: '12:00', percent: 50 }] })), weekday: 4 } });
 const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
 
 test('changing controller discards pending old responses and never mixes devices', async () => {
@@ -44,7 +44,7 @@ test('changing controller discards pending old responses and never mixes devices
   await flush();
   release(response('old'));
   await flush();
-  assert.equal(card._schedules.length, 10);
+  assert.equal(card._schedules.length, 4);
   assert.ok(card._schedules.every(schedule => schedule.name === 'new'));
   assert.equal(calls.filter(device => device === 'old').length, 1);
 });
@@ -108,11 +108,11 @@ test('reconnecting refreshes immediately', async () => {
     return Promise.resolve(response('current'));
   } } };
   await flush();
-  assert.equal(count, 10);
+  assert.equal(count, 1);
   card.disconnectedCallback();
   card.connectedCallback();
   await flush();
-  assert.equal(count, 20);
+  assert.equal(count, 2);
 });
 
 test('a rejected response from the previous controller cannot replace the new result', async () => {
@@ -141,5 +141,5 @@ test('request failures are displayed and a later refresh can recover', async () 
   card._hass.connection.sendMessagePromise = () => Promise.resolve(response('recovered'));
   await card._fetch();
   assert.equal(card._error, null);
-  assert.equal(card._schedules.length, 10);
+  assert.equal(card._schedules.length, 4);
 });

@@ -148,3 +148,39 @@ async def test_each_service_targets_selected_controller(
         )
     getattr(first, method).assert_not_awaited()
     getattr(second, method).assert_awaited_once()
+
+
+async def test_planning_service_is_read_only_and_routes_to_selected_controller(
+    hass: HomeAssistant,
+    controllers: Controllers,
+) -> None:
+    first, second = controllers[0][1], controllers[1][1]
+    first.async_get_planning = AsyncMock(return_value={"channels": []})
+    second.async_get_planning = AsyncMock(return_value={"channels": [{"pwm": 1}]})
+    response = await hass.services.async_call(
+        DOMAIN,
+        "get_planning",
+        {"device_id": controllers[1][2].id},
+        blocking=True,
+        return_response=True,
+    )
+    assert response == {"channels": [{"pwm": 1}]}
+    as_async_mock(first.async_get_planning).assert_not_awaited()
+    assert not hass.services.has_service(DOMAIN, "save_planning")
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            DOMAIN,
+            "get_planning",
+            {},
+            blocking=True,
+            return_response=True,
+        )
+    second.async_get_planning = AsyncMock(side_effect=TimeoutError)
+    with pytest.raises(HomeAssistantError, match="Could not read"):
+        await hass.services.async_call(
+            DOMAIN,
+            "get_planning",
+            {"device_id": controllers[1][2].id},
+            blocking=True,
+            return_response=True,
+        )

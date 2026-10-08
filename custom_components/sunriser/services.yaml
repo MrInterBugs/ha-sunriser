@@ -254,3 +254,17 @@ factory_reset:
       example: true
       selector:
         boolean: {}
+
+get_planning:
+  name: Get Planning Snapshot
+  description: >
+    Read configured channels and their selected daily or weekly curves
+    for the read-only schedule card. Includes the active weekly program name.
+    Weekly curves use the controller timezone and exclude weather/manual overrides.
+  fields:
+    device_id:
+      name: Controller
+      description: Required when more than one SunRiser controller is loaded.
+      selector:
+        device:
+          integration: sunriser
