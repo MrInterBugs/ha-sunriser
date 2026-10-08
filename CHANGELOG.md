@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## [2.1.0-feature-maintenance-blackout-beta.2] - 2026-10-08
+
+### Changed
 
 - Remove the redundant Resume Normal Operation button and action. Turn off the
   Maintenance Mode switch to end maintenance or blackout. Remove the obsolete
@@ -8,6 +10,21 @@
 - Disable Maintenance Ends At by default for newly discovered entities. Existing
   enabled sensors remain enabled and can be disabled in the device entity settings.
 - Clarify that the default maintenance timeout is 24 hours and is configurable.
+
+### Upgrade notes
+
+- Select beta.2 in HACS and restart Home Assistant. The obsolete resume button is
+  removed automatically. Existing Maintenance Ends At sensors stay enabled; disable
+  yours in the device's entity settings if unwanted.
+- Replace any beta.1 `sunriser.resume_normal_operation` actions with
+  `switch.turn_off` targeting the controller's Maintenance Mode switch.
+
+### Testing
+
+- 421 mocked Python tests pass with 100% statement coverage.
+- Strict Pyright, mypy, Black, and the strict documentation build pass.
+- Regression checks cover removing the obsolete button, stopping blackout using
+  Maintenance Mode, and preserving an explicitly enabled end-time sensor on reload.
 
 ## [2.1.0-feature-maintenance-blackout-beta.1] - 2026-10-08
 
