@@ -7,7 +7,7 @@ import logging
 import math
 from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Any, Literal, TypedDict, cast
+from typing import Any, Literal, TypedDict
 
 import aiohttp
 import msgpack
@@ -26,6 +26,8 @@ from homeassistant.helpers.issue_registry import (
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
+from .responses import InvalidResponse, decode_config, decode_state, decode_weather
+
 from .const import (
     COLOR_NAMES,
     CONF_REBOOT_TIME,
@@ -38,6 +40,7 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+_READ_ERRORS = (aiohttp.ClientError, TimeoutError, InvalidResponse)
 
 
 class DayplannerMarker(TypedDict):
@@ -72,6 +75,8 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         # Other HTTP requests need no artificial spacing or global lock.
         self._config_lock = asyncio.Lock()
         self._last_state_refresh_succeeded = False
+        self._last_successful_read: dict[str, datetime] = {}
+        self._auxiliary_failures = {"weather": 0, "configuration": 0}
 
         # DST auto-tracking — when enabled the coordinator syncs the device's
         # summertime config key to the actual HA timezone DST state.
@@ -237,7 +242,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             timeout=aiohttp.ClientTimeout(total=10),
         ) as resp:
             resp.raise_for_status()
-            return cast(dict[str, Any], msgpack.unpackb(await resp.read(), raw=False))
+            return decode_config(await resp.read())
 
     async def async_set_config(self, params: dict[str, Any]) -> None:
         """PUT / — write config key/value pairs.
@@ -276,7 +281,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             timeout=aiohttp.ClientTimeout(total=10),
         ) as resp:
             resp.raise_for_status()
-            return cast(dict[str, Any], msgpack.unpackb(await resp.read(), raw=False))
+            return decode_state(await resp.read())
 
     async def async_get_weather(self) -> list[Any]:
         """GET /weather — returns per-channel weather simulation state.
@@ -293,9 +298,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             timeout=aiohttp.ClientTimeout(total=10),
         ) as resp:
             resp.raise_for_status()
-            unpacker = msgpack.Unpacker(raw=False)
-            unpacker.feed(await resp.read())
-            return next(iter(unpacker), None) or []
+            return decode_weather(await resp.read())
 
     async def async_set_service_mode(self, enabled: bool) -> None:
         """PUT /state — enable or disable maintenance mode.
@@ -568,6 +571,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
     def _apply_config(self, fresh: dict[str, Any]) -> None:
         """Publish config and keep the firmware registry and DST helper current."""
         self.config.update(fresh)
+        self._auxiliary_read_succeeded("configuration")
         device = device_registry.async_get(self.hass).async_get_device(
             identifiers={(DOMAIN, self.entry_id)}
         )
@@ -615,10 +619,10 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
     _FAILURE_GRACE = 3
 
     async def _async_refresh_state(self) -> dict[str, Any]:
+        self._last_state_refresh_succeeded = False
         try:
             state = await self.async_get_state()
-        except (aiohttp.ClientError, Exception) as err:
-            self._last_state_refresh_succeeded = False
+        except _READ_ERRORS as err:
             self._consecutive_failures += 1
             if (
                 self.data is not None
@@ -659,6 +663,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         async_delete_issue(self.hass, DOMAIN, f"device_unreachable_{self.entry_id}")
         self._consecutive_failures = 0
         self._last_state_refresh_succeeded = True
+        self._last_successful_read["state"] = dt_util.utcnow()
         data = dict(self.data or {})
         # Keep the countdown and its timestamp in the same published snapshot.
         data["_state_received_at"] = dt_util.utcnow()
@@ -669,18 +674,39 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
 
         return data
 
+    def _auxiliary_read_failed(
+        self, source: Literal["weather", "configuration"], err: Exception
+    ) -> None:
+        self._auxiliary_failures[source] += 1
+        if self._auxiliary_failures[source] == self._FAILURE_GRACE:
+            _LOGGER.warning(
+                "SunRiser at %s: %s read failed %d consecutive times; "
+                "retaining previous data: %s",
+                self.host,
+                source,
+                self._FAILURE_GRACE,
+                err,
+            )
+        else:
+            _LOGGER.debug("Could not fetch %s data from %s: %s", source, self.host, err)
+
+    def _auxiliary_read_succeeded(
+        self, source: Literal["weather", "configuration"]
+    ) -> None:
+        if self._auxiliary_failures[source] >= self._FAILURE_GRACE:
+            _LOGGER.info("SunRiser at %s: %s reads recovered", self.host, source)
+        self._auxiliary_failures[source] = 0
+        self._last_successful_read[source] = dt_util.utcnow()
+
     async def _async_refresh_weather(self, data: dict[str, Any]) -> dict[str, Any]:
         try:
             weather = await self.async_get_weather()
+        except _READ_ERRORS as err:
+            self._auxiliary_read_failed("weather", err)
+            data.setdefault("weather", [])
+        else:
             data["weather"] = weather
-
-        except aiohttp.ClientError as err:
-            _LOGGER.debug("Could not fetch weather data: %s", err)
-            data.setdefault("weather", [])
-        except Exception as err:
-            _LOGGER.debug("Unexpected error fetching weather data: %s", err)
-            data.setdefault("weather", [])
-
+            self._auxiliary_read_succeeded("weather")
         return data
 
     async def _async_update_data(self) -> dict[str, Any]:
@@ -692,13 +718,13 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         await self._async_refresh_weather(data)
         try:
             await self._async_refresh_config(data)
-        except Exception as err:
+        except _READ_ERRORS as err:
+            self._auxiliary_read_failed("configuration", err)
             if self.data is None:
                 # Do not create entities from incomplete startup metadata.
                 raise UpdateFailed(
                     f"Could not load SunRiser configuration: {err}"
                 ) from err
-            _LOGGER.debug("Could not refresh device config: %s", err)
         else:
             # Refresh firmware first so an upgrade cannot trigger a legacy DST write.
             await self._async_sync_dst()

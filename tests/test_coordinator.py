@@ -119,14 +119,15 @@ async def test_update_data_client_error_raises_update_failed(
             await coord._async_update_data()
 
 
-async def test_update_data_unexpected_error_raises_update_failed(
+async def test_update_data_unexpected_error_is_not_a_communication_failure(
     coord: SunRiserCoordinator,
 ) -> None:
 
     with aioresponses() as m:
         m.get(f"{BASE}/state", exception=ValueError("boom"))
-        with pytest.raises(UpdateFailed, match="Error communicating"):
+        with pytest.raises(ValueError, match="boom"):
             await coord._async_update_data()
+    assert coord._consecutive_failures == 0
 
 
 # ---------------------------------------------------------------------------
@@ -334,14 +335,13 @@ async def test_async_get_weather_returns_first_msgpack_object(
     assert result == weather
 
 
-async def test_async_get_weather_returns_empty_list_for_empty_stream(
+async def test_async_get_weather_rejects_empty_stream(
     coord: SunRiserCoordinator,
 ) -> None:
     with aioresponses() as m:
         m.get(f"{BASE}/weather", body=b"")
-        result = await coord.async_get_weather()
-
-    assert result == []
+        with pytest.raises(ValueError, match="Malformed MessagePack"):
+            await coord.async_get_weather()
 
 
 async def test_update_data_weather_client_error_logs_debug_and_returns_empty_weather(
@@ -360,23 +360,15 @@ async def test_update_data_weather_client_error_logs_debug_and_returns_empty_wea
     assert "Could not fetch weather data" in caplog.text
 
 
-async def test_update_data_weather_unexpected_error_logs_debug_and_returns_empty_weather(
+async def test_unexpected_weather_error_propagates(
     coord: SunRiserCoordinator,
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
-
-    coord.config = dict(FAKE_CONFIG)
-    coord.data = {**FAKE_STATE, "ok": True, "weather": []}
     monkeypatch.setattr(
         coord, "async_get_weather", AsyncMock(side_effect=ValueError("boom"))
     )
-
-    with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
-        data = await coord._async_refresh_weather(dict(coord.data))
-
-    assert data["weather"] == []
-    assert "Unexpected error fetching weather data" in caplog.text
+    with pytest.raises(ValueError, match="boom"):
+        await coord._async_refresh_weather({"weather": []})
 
 
 # ---------------------------------------------------------------------------
