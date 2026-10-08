@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2.2.0-feature-weather-schedule-editor-beta.1] - 2026-10-08
 
 ### Added
 
@@ -10,6 +10,25 @@
 - Table-based curve editing with preview, Save/Discard, retained drafts on errors,
   shared-program warnings, and stale-edit checks before writes.
 - Offline browser tests for editor interaction and mobile layout in CI.
+
+### Install and validation
+
+- Enable beta versions in HACS, select this exact version, and restart Home
+  Assistant. Refresh the dashboard to load the updated Day Planner card.
+- Enable each optional Weather Profile select from the device's entity settings.
+  This beta edits existing profiles' assignments and existing schedules; create
+  profiles and programs in the controller interface.
+- Includes all changes from PR #15, based on stable v2.1.2. Stable v2.1.2 remains
+  available separately.
+- 549 mocked Python tests pass with 100% statement coverage, plus 11 frontend unit
+  tests and three Chromium browser tests. Strict types, formatting, documentation,
+  HACS, and Hassfest checks pass.
+- The implementation and validation were offline; no live HA or controller was
+  changed. Hardware validation remains outstanding. Check profile selection,
+  named weekly curves, Save/Discard, and persistence after restarting HA.
+- Saving a shared program affects every channel using it. A timeout can leave
+  the write outcome uncertain; reload current values before retrying. Revision
+  checks cannot make writes atomic against simultaneous vendor-interface edits.
 
 ## [2.1.2] - 2026-10-08
 
