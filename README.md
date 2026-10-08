@@ -23,7 +23,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the Python environment, Pylance setup
 
 ## License
 
-[GNU GPLv3](LICENSE)
+Copyright © 2026 Aedan Lawrence. Original contributions to this integration are licensed under [GNU GPLv3 or later](LICENSE). Third-party material retains its respective copyright and licence, as noted below.
 
 ## Attribution
 

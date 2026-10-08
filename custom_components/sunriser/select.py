@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Aedan Lawrence <aedan@mrinterbugs.uk>
 # HA entity mixins and dynamic properties override cached_property descriptors.
 # pyright: reportIncompatibleVariableOverride=false
 from __future__ import annotations
