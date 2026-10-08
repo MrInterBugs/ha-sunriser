@@ -92,6 +92,7 @@ async def test_invalid_selected_device_does_not_fall_back(
     "service,method,data,result,response",
     [
         ("backup", "async_get_backup", {}, b"backup", True),
+        ("resume_normal_operation", "async_resume_normal_operation", {}, None, False),
         (
             "restore",
             "async_restore",
@@ -148,3 +149,25 @@ async def test_each_service_targets_selected_controller(
         )
     getattr(first, method).assert_not_awaited()
     getattr(second, method).assert_awaited_once()
+
+
+async def test_resume_failure_and_ambiguous_target(
+    hass: HomeAssistant, controllers: Controllers
+) -> None:
+    first, second = controllers[0][1], controllers[1][1]
+    first.async_resume_normal_operation = AsyncMock()
+    second.async_resume_normal_operation = AsyncMock(side_effect=TimeoutError())
+    with pytest.raises(HomeAssistantError) as error:
+        await hass.services.async_call(
+            DOMAIN, "resume_normal_operation", {}, blocking=True
+        )
+    assert error.value.translation_key == "device_required"
+    with pytest.raises(HomeAssistantError, match="check controller state"):
+        await hass.services.async_call(
+            DOMAIN,
+            "resume_normal_operation",
+            {"device_id": controllers[1][2].id},
+            blocking=True,
+        )
+    as_async_mock(first.async_resume_normal_operation).assert_not_awaited()
+    as_async_mock(second.async_resume_normal_operation).assert_awaited_once()

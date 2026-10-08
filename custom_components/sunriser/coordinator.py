@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Any, TypedDict, cast
+from typing import Any, Literal, TypedDict, cast
 
 import aiohttp
 import msgpack
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import async_track_time_change
@@ -114,6 +116,72 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             ) >= (1, 6)
         except ValueError:
             return False
+
+    @property
+    def supports_maintenance_config(self) -> bool:
+        """The maintenance configuration contract was introduced in 1.006."""
+        # Same numeric release boundary as native DST; unknown versions fail closed.
+        return self.firmware_handles_dst
+
+    @property
+    def operating_mode(
+        self,
+    ) -> Literal["normal", "maintenance", "blackout", "time_lapse"] | None:
+        """Interpret reported state; absent mode fields are not proof of normality."""
+        state = self.data or {}
+        if state.get("service_mode") is None:
+            return None
+        if state["service_mode"]:
+            if state.get("blackout") is None:
+                return None
+            return "blackout" if state["blackout"] else "maintenance"
+        return "time_lapse" if state.get("timewarp") else "normal"
+
+    @property
+    def maintenance_ends_at(self) -> datetime | None:
+        """Estimate expiry from the firmware countdown at the last successful read."""
+        state = self.data or {}
+        remaining = state.get("service_left")
+        received_at = state.get("_state_received_at")
+        if (
+            not state.get("service_mode")
+            or not isinstance(received_at, datetime)
+            or not isinstance(remaining, (int, float))
+            or not math.isfinite(remaining)
+            or remaining <= 0
+        ):
+            return None
+        return received_at + timedelta(seconds=remaining)
+
+    async def async_set_maintenance_config(self, key: str, value: int | bool) -> None:
+        """Write one verified maintenance field, without replaying any state command."""
+        self._require_maintenance_support()
+        await self.async_set_config({key: value})
+
+    def _require_maintenance_support(self) -> None:
+        if not self.supports_maintenance_config:
+            raise HomeAssistantError(
+                "Maintenance configuration requires firmware 1.006 or later"
+            )
+
+    async def async_set_blackout(self, enabled: bool) -> None:
+        """Use the firmware's blackout command; it owns fades, exclusions and expiry."""
+        self._require_maintenance_support()
+        session = self._get_session()
+        async with session.put(
+            f"{self.base_url}/state",
+            data=msgpack.packb({"blackout": int(enabled)}, use_bin_type=True),
+            headers={"Content-Type": "application/x-msgpack"},
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as resp:
+            resp.raise_for_status()
+        await self.async_request_refresh()
+
+    async def async_resume_normal_operation(self) -> None:
+        """End maintenance/blackout; leave time-lapse and planner selection alone."""
+        self._require_maintenance_support()
+        await self.async_set_service_mode(False)
+        await self.async_request_refresh()
 
     # ------------------------------------------------------------------
     # Session
@@ -239,7 +307,8 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         """PUT /state — enable or disable maintenance mode.
 
         When enabled the device stores the current timestamp in service_mode
-        and freezes all PWM channels (except those with pwm#X#nomaint = true).
+        and applies configured maintenance levels on firmware 1.006+
+        (except channels with pwm#X#nomaint = true).
         When disabled it stores 0.
         """
         session = self._get_session()
@@ -331,7 +400,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             resp.raise_for_status()
 
     async def async_get_factory_backup(self) -> bytes:
-        """GET /factorybackup — download the factory default configuration as msgpack bytes."""
+        """GET /factorybackup — download configuration preserved by a factory reset."""
         session = self._get_session()
         async with session.get(
             f"{self.base_url}/factorybackup",
@@ -519,12 +588,16 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         """Read channel and sensor metadata in one request, then publish it."""
         pwm_count = self.config.get("pwm_count") or len(data.get("pwms", {})) or 8
         keys = list(self._BASE_CONFIG_KEYS)
+        if self.supports_maintenance_config:
+            keys.extend(("service_timeout", "service_value"))
         for channel in range(1, pwm_count + 1):
             keys.extend(
                 f"pwm#{channel}#{key}"
                 for key in ("name", "onoff", "max", "color", "manager", "fixed")
             )
             keys.append(f"dayplanner#marker#{channel}")
+            if self.supports_maintenance_config:
+                keys.extend((f"pwm#{channel}#service", f"pwm#{channel}#nomaint"))
         for rom in data.get("sensors", {}):
             keys.extend(
                 f"sensors#sensor#{rom}#{key}" for key in ("name", "unit", "unitcomma")
@@ -593,6 +666,10 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         self._consecutive_failures = 0
         self._last_state_refresh_succeeded = True
         data = dict(self.data or {})
+        # Keep the countdown and its timestamp in the same published snapshot.
+        data["_state_received_at"] = dt_util.utcnow()
+        for key in ("service_mode", "blackout", "service_left"):
+            data.pop(key, None)
         data["timewarp"] = 0  # reset before merge; device omits the key when inactive
         data.update(state)
 

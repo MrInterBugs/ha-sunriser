@@ -12,6 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import SunRiserCoordinator
+from .maintenance import setup_maintenance_entities
 
 PARALLEL_UPDATES = 1
 
@@ -22,6 +23,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunRiserCoordinator = entry.runtime_data
+    setup_maintenance_entities(hass, entry, async_add_entities, "button")
     async_add_entities([SunRiserRebootButton(coordinator, entry)])
 
 

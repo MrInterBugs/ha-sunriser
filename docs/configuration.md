@@ -69,3 +69,36 @@ channels:
 To find the device ID, select the controller in **Developer Tools → Actions** for a SunRiser action and switch to YAML to copy `data.device_id`.
 
 The card shows channels with stored day-planner markers. It does not show live PWM output, weather effects, or which week-planner program is currently active. Use the light and weather entities for live values. A schedule changed in the device web UI appears after a successful controller poll and the next card refresh.
+
+## Maintenance and blackout (firmware 1.006+)
+
+Blackout uses the controller's own fading and timeout. Channels marked
+**Maintenance Excluded** remain outside maintenance/blackout control; do not
+assume that blackout switches every output off.
+
+| Entity | Purpose |
+|---|---|
+| Blackout switch | Start/end blackout |
+| Existing Maintenance Mode switch | Start/end a maintenance session; remains **on during blackout** for compatibility |
+| Operating Mode sensor | Distinguishes normal, maintenance, blackout and time-lapse; missing state is unknown |
+| Maintenance Ends At sensor | Estimated expiry from the latest firmware countdown; unknown when inactive, indefinite, or not reported |
+| Resume Normal Operation button | End maintenance/blackout; does not stop time-lapse |
+| Maintenance Timeout number | Persistent timeout for both modes, 0–10,080 minutes; **0 means never** |
+| Per-channel Maintenance Level number | Dimmable channel's configured maintenance percentage, 0–100 |
+| Per-channel Maintenance Output switch | On/off channel's configured maintenance state, not its immediate output |
+| Per-channel Maintenance Excluded switch | Leave this channel outside maintenance/blackout control |
+
+Configuration numbers and switches are disabled by default. Enable them in the
+controller's entity settings. They appear only for configured channels, with a
+level number for dimmable channels and an output switch for on/off channels.
+Changing exclusions or levels preserves other settings and does not start a
+session; firmware may apply saved changes to an already running session.
+The timeout is persistent configuration, not a duration for one invocation.
+
+The controller owns expiration and output fades; these continue while HA is
+stopped. HA reads state after commands and during normal polling, including
+changes from the physical button. It never replays mode commands after restart.
+If a command times out, its outcome can be uncertain: check state before retrying.
+The estimated end time is anchored to a successful state read and is not moved
+forward by failed polls. Exact timing and timeout changes during a session need
+hardware beta validation.

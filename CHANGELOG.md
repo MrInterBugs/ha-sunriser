@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Add firmware 1.006+ blackout and resume controls, operating mode and estimated
+  maintenance end sensors, and optional maintenance timeout, level and exclusion
+  configuration entities.
+- Preserve the existing maintenance switch's session semantics during blackout.
+- Document the verified vendor maintenance protocol and remaining hardware checks.
+- Correct factory-reset backup descriptions.
+
 ## [2.0.0] - 2026-10-08
 
 ### Changed

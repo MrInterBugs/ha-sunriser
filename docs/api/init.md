@@ -23,7 +23,7 @@
 | `sunriser.set_dayplanner_schedule` | `pwm, markers` | — | Writes day planner schedule |
 | `sunriser.get_weekplanner_schedule` | `pwm` | `{pwm, name, color_id, schedule}` | Reads week planner schedule |
 | `sunriser.set_weekplanner_schedule` | `pwm, schedule` | — | Writes week planner schedule |
-| `sunriser.download_factory_backup` | — | `{path}` | Downloads factory default config |
+| `sunriser.download_factory_backup` | — | `{path}` | Downloads configuration preserved by a factory reset |
 | `sunriser.download_firmware` | — | `{path}` | Downloads firmware info |
 | `sunriser.download_bootload` | — | `{path}` | Downloads bootloader info |
 | `sunriser.factory_reset` | `confirm: true` | — | Resets all device config to factory defaults |

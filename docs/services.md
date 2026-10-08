@@ -118,3 +118,16 @@ data:
     - time: "22:00"
       percent: 0
 ```
+
+## Resume normal operation
+
+On firmware 1.006+, `sunriser.resume_normal_operation` ends maintenance or blackout.
+It leaves stored configuration and time-lapse untouched. Use the same controller
+selector as other SunRiser actions; select a controller explicitly when several
+are loaded. The **Resume Normal Operation** button performs the same action.
+
+```yaml
+action: sunriser.resume_normal_operation
+data:
+  device_id: YOUR_HOME_ASSISTANT_DEVICE_ID
+```

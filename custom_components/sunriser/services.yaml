@@ -197,7 +197,7 @@ set_weekplanner_schedule:
 download_factory_backup:
   name: Download Factory Backup
   description: >
-    Download the factory default configuration from the device and save it as a
+    Download the configuration preserved by a factory reset, when available, as a
     .msgpack file in your Home Assistant /config directory. Returns the saved
     file path.
   fields:
@@ -254,3 +254,17 @@ factory_reset:
       example: true
       selector:
         boolean: {}
+
+resume_normal_operation:
+  name: Resume Normal Operation
+  description: >
+    End maintenance or blackout on firmware 1.006 or later. The controller
+    resumes its configured output behaviour. Does not change planner selection,
+    stored levels, weather settings, or time-lapse mode.
+  fields:
+    device_id:
+      name: Controller
+      description: SunRiser controller. Required when more than one controller is loaded.
+      selector:
+        device:
+          integration: sunriser
