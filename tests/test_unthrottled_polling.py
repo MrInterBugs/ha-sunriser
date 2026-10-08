@@ -64,7 +64,9 @@ async def test_large_config_read_is_one_http_request(
         for channel in range(1, 11)
         for key in ("color", "name", "onoff", "manager", "fixed", "max")
     ]
-    expected = dict.fromkeys(keys, 1)
+    expected = {
+        key: "channel" if key.endswith(("#color", "#name")) else 1 for key in keys
+    }
     try:
         with aioresponses() as http:
             http.post(f"{coordinator.base_url}/", body=pack(expected))

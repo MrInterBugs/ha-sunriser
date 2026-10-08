@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Validate controller state, configuration, and weather responses before publishing
+  them. Invalid data preserves the last valid response; optional and unknown fields
+  remain supported. Treat truncated weather data as a failed read.
+
 ## [2.0.0] - 2026-10-08
 
 ### Changed
