@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## [2.1.0-feature-maintenance-blackout-beta.1] - 2026-10-08
+
+### Added
 
 - Add firmware 1.006+ blackout and resume controls, operating mode and estimated
   maintenance end sensors, and optional maintenance timeout, level and exclusion
@@ -8,6 +10,24 @@
 - Preserve the existing maintenance switch's session semantics during blackout.
 - Document the verified vendor maintenance protocol and remaining hardware checks.
 - Correct factory-reset backup descriptions.
+
+### Upgrade notes
+
+- Enable beta versions in HACS, select this release, and restart Home Assistant.
+- New maintenance and blackout controls require controller firmware 1.006 or newer.
+- Maintenance timeout, per-channel level, and exclusion configuration entities are
+  disabled by default; enable the ones you want from the device's entity list.
+- The existing maintenance switch stays on during blackout because the maintenance
+  session remains active. Use the operating mode sensor to distinguish the modes.
+- Maintenance expiry remains controlled by the firmware. The estimated end sensor
+  depends on the controller reporting a remaining duration.
+
+### Testing
+
+- 423 mocked Python tests pass with 100% statement coverage; eight frontend tests pass.
+- Strict Pyright, mypy, Black, and the strict documentation build pass.
+- Live controller testing is still needed for fades, exclusions, timeout expiry,
+  changes during an active session, physical-button interaction, and HA restarts.
 
 ## [2.0.0] - 2026-10-08
 
