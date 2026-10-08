@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2.1.1-fix-channel-entity-reconciliation-beta.1] - 2026-10-08
 
 ### Fixed
 
@@ -14,6 +14,16 @@
 - Keep legacy DST tracking disabled if its initial synchronisation write fails.
 - Prevent queued commands from reopening an unloaded coordinator's connection,
   stop pending refreshes on close, and cancel scheduled reboot tasks on unload.
+
+### Install and validation
+
+- Enable beta versions in HACS, select this exact version, and restart Home
+  Assistant. This prerelease includes all changes from PR #14; stable 2.1.1 remains
+  available separately.
+- 521 mocked Python tests pass with 100% statement coverage. Strict type,
+  formatting, documentation, frontend, HACS, and Hassfest checks pass.
+- The lifecycle audit was entirely offline. This build has not been deployed to
+  live Home Assistant or tested by changing controller outputs or configuration.
 
 ## [2.1.1] - 2026-10-08
 
