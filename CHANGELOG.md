@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.1.2] - 2026-10-08
+
+### Fixed
+
+- Remove obsolete PWM lights, switches, fixed-value numbers, and manager selects
+  when the controller reports fewer channels, including after integration reloads.
+  Preserve surviving entities and skip reconciliation after a failed refresh.
+- Allow sensor setup when a temperature probe has a null reading, then discover
+  it when readings return without creating duplicate entities.
+- Remove obsolete maintenance entities after offline configuration changes and
+  retain applicable entities and their settings across reloads.
+- Keep legacy DST tracking disabled if its initial synchronisation write fails.
+- Prevent queued commands from reopening an unloaded coordinator's connection,
+  stop pending refreshes on close, and cancel scheduled reboot tasks on unload.
+
+### Upgrade and validation
+
+- Update through HACS and restart Home Assistant. Beta versions are not required.
+- Includes all fixes from PR #14; no functional changes since the tested beta.
+- The beta was reported to work in live Home Assistant. Edge-case failures and
+  lifecycle behaviour were verified offline with mocked controller responses.
+- 521 Python tests pass with 100% statement coverage, and all eight validation
+  checks pass.
+
 ## [2.1.2-fix-channel-entity-reconciliation-beta.1] - 2026-10-08
 
 ### Fixed
