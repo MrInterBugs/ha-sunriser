@@ -1,0 +1,26 @@
+{
+  "include": [
+    "custom_components",
+    "tests",
+    "docs_macros.py",
+    "typings"
+  ],
+  "typeCheckingMode": "strict",
+  "pythonVersion": "3.14",
+  "venvPath": ".",
+  "venv": ".venv",
+  "reportUnnecessaryTypeIgnoreComment": "error",
+  "executionEnvironments": [
+    {
+      "root": "tests",
+      "reportPrivateUsage": false,
+      "reportMissingTypeStubs": false,
+      "extraPaths": [
+        "."
+      ]
+    },
+    {
+      "root": "."
+    }
+  ]
+}

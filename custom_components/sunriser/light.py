@@ -1,4 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Aedan Lawrence <aedan@mrinterbugs.uk>
+# HA entity mixins and dynamic properties override cached_property descriptors.
+# pyright: reportIncompatibleVariableOverride=false
 from __future__ import annotations
 
 from typing import Any, cast
@@ -52,7 +55,7 @@ async def async_setup_entry(
             if is_light and pwm_num not in _added:
                 _added.add(pwm_num)
                 new_entities.append(SunRiserLight(coordinator, entry, pwm_num))
-            elif not is_light and pwm_num in _added:
+            elif not is_light:
                 _added.discard(pwm_num)
                 uid = f"{entry.entry_id}_pwm_{pwm_num}"
                 eid = er.async_get_entity_id("light", DOMAIN, uid)

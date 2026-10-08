@@ -16,7 +16,7 @@ The flow tests connectivity before completing — raises an error if the device 
 | Field | Type | Default | Range / Format | Description |
 |---|---|---|---|---|
 | `scan_interval` | int | `{{ cfg.default_scan_interval }}` | {{ cfg.scan_interval_min }}–{{ cfg.scan_interval_max }} | Poll interval in seconds |
-| `scheduled_reboot` | bool | `true` | — | Enable a daily automatic reboot |
+| `scheduled_reboot` | bool | `false` | — | Enable a daily automatic reboot |
 | `reboot_time` | string | `{{ cfg.default_reboot_time }}` | HH:MM | Time of day to reboot the controller |
 
 Changing options triggers a full config entry reload.

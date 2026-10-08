@@ -6,6 +6,8 @@ One `NumberEntity` per active PWM channel, exposing `pwm#X#fixed` — the bright
 - Mode: slider
 - Writing updates `pwm#X#fixed` in device config via `PUT /`
 
+Entities are disabled by default. Enable them in HA entity settings. An acknowledged write updates the displayed value immediately; a failed write preserves the old value.
+
 ## Reference
 
 ::: custom_components.sunriser.number

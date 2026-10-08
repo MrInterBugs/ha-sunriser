@@ -20,7 +20,8 @@ htmlcov/
 .DS_Store
 
 # IDEs
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .idea/
 
 # Distribution / packaging

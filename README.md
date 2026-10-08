@@ -17,9 +17,13 @@ Connects HA to the controller over HTTP using the [MessagePack](https://msgpack.
 
 See the [installation docs](https://mrinterbugs.github.io/ha-sunriser/installation/) for the full walkthrough.
 
+## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the Python environment, Pylance setup, type checks and tests.
+
 ## License
 
-[GNU GPLv3](LICENSE)
+Copyright © 2026 Aedan Lawrence. Original contributions to this integration are licensed under [GNU GPLv3 or later](LICENSE). Third-party material retains its respective copyright and licence, as noted below.
 
 ## Attribution
 

@@ -2,9 +2,11 @@
 
 ## Requirements
 
-- Home Assistant 2024.1.0 or newer
-- SunRiser 8 or 10 on your local network
-- [HACS](https://hacs.xyz/) installed
+- Home Assistant with HACS installed. Automated integration tests target Home Assistant 2026.2.3; an older minimum version has not been verified.
+- SunRiser 8 or 10 reachable from Home Assistant on your local network
+- Controller firmware 1.006 for the 2.0 release; compatibility with older firmware is unverified.
+
+Install [HACS](https://hacs.xyz/) first if it is not already available.
 
 ## Install via HACS
 
@@ -15,11 +17,13 @@
 5. Search for **SunRiser** in HACS and click **Download**
 6. Restart Home Assistant
 
+To test a beta, enable **Show beta versions** in the repository download dialog and select the desired prerelease.
+
 ## Set up the integration
 
 1. Go to **Settings → Devices & Services → Add Integration**
 2. Search for **SunRiser**
-3. Enter your device's IP address or hostname (default hostname: `sunriser`)
+3. Enter your device's IP address or hostname (for example, `sunriser`, if it resolves on your network)
 4. Enter the port if you changed it from the default (default: `{{ cfg.default_port }}`)
 5. Click **Submit**
 
@@ -28,7 +32,7 @@ The integration will automatically detect all active PWM channels and temperatur
 ![SunRiser device page in Home Assistant](images/device_page.png)
 
 !!! note
-    Entities can take up to {{ cfg.init_minutes }} minutes to appear after first adding the device ({{ cfg.init_steps }} separate HTTP requests, one per poll interval). This is intentional — the SunRiser's WizFi360 Wi-Fi module can only handle one connection at a time, and the integration staggers its startup requests to avoid crashing the controller.
+    Entities are created during setup after state and configuration have loaded. Home Assistant retries setup if required reads fail.
 
 ## Automatic discovery
 

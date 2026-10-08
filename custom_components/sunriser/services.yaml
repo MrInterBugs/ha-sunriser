@@ -1,10 +1,18 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Aedan Lawrence <aedan@mrinterbugs.uk>
 backup:
   name: Download Backup
   description: >
     Download a complete backup of all device configuration and save it as a
     .msgpack file in your Home Assistant /config directory. Returns the saved
     file path so you can use it with the restore service later.
-  fields: {}
+  fields:
+    device_id:
+      name: Controller
+      description: SunRiser controller. Required when more than one controller is loaded.
+      selector:
+        device:
+          integration: sunriser
 
 restore:
   name: Restore Backup
@@ -13,13 +21,19 @@ restore:
     The device performs a deep restart after applying the config. Use the
     file path returned by the backup service.
   fields:
+    device_id:
+      name: Controller
+      description: SunRiser controller. Required when more than one controller is loaded.
+      selector:
+        device:
+          integration: sunriser
     file_path:
       name: File path
       description: >
         Absolute path to the .msgpack backup file
-        (e.g. /config/sunriser_backup_20260323_120000.msgpack).
+        Use the path returned by the backup action.
       required: true
-      example: /config/sunriser_backup_20260323_120000.msgpack
+      example: /config/REPLACE_WITH_BACKUP_FILENAME.msgpack
       selector:
         text: {}
 
@@ -28,22 +42,40 @@ get_errors:
   description: >
     Retrieve the device error log. Returns a dict with a "content" key
     containing the raw log text.
-  fields: {}
+  fields:
+    device_id:
+      name: Controller
+      description: SunRiser controller. Required when more than one controller is loaded.
+      selector:
+        device:
+          integration: sunriser
 
 get_log:
   name: Get Diagnostic Log
   description: >
     Retrieve the device diagnostic log. Returns a dict with a "content" key
     containing the raw log text.
-  fields: {}
+  fields:
+    device_id:
+      name: Controller
+      description: SunRiser controller. Required when more than one controller is loaded.
+      selector:
+        device:
+          integration: sunriser
 
 get_dayplanner_schedule:
   name: Get Day Planner Schedule
   description: >
-    Read the current day planner schedule for a PWM channel. Returns a dict
-    with "pwm" and "markers" keys. Each marker has "time" (HH:MM) and
+    Read the cached day planner schedule for a PWM channel. Returns "pwm",
+    "name", "color_id", and "markers". Each marker has "time" (HH:MM) and
     "percent" (0–100).
   fields:
+    device_id:
+      name: Controller
+      description: SunRiser controller. Required when more than one controller is loaded.
+      selector:
+        device:
+          integration: sunriser
     pwm:
       name: PWM channel
       description: PWM channel number (1–10).
@@ -61,6 +93,12 @@ set_dayplanner_schedule:
     Replace the day planner schedule for a PWM channel. The device will follow
     the new schedule from the next minute boundary. Provide at least one marker.
   fields:
+    device_id:
+      name: Controller
+      description: SunRiser controller. Required when more than one controller is loaded.
+      selector:
+        device:
+          integration: sunriser
     pwm:
       name: PWM channel
       description: PWM channel number (1–10).
@@ -74,8 +112,8 @@ set_dayplanner_schedule:
     markers:
       name: Markers
       description: >
-        List of schedule markers. Each marker needs "time" (HH:MM, 24-hour)
-        and "percent" (0–100). The device interpolates linearly between markers.
+        List of schedule markers. Each marker needs "time" (HH:MM; 24:00 is
+        accepted for end of day) and "percent" (integer, 0–100). The device interpolates linearly between markers.
       required: true
       example:
         - time: "06:00"
@@ -94,9 +132,15 @@ get_weekplanner_schedule:
   description: >
     Read the current week planner program assignment for a PWM channel. Returns
     a dict with "pwm", "name", "color_id", and "schedule" keys. The schedule maps
-    day names (sunday, monday, …, saturday, default) to program IDs (integers).
-    "default" is the fallback program used on days with no explicit assignment.
+    day names (sunday, monday, …, saturday, default) to program IDs (integers),
+    or null for unset assignments. "default" is the fallback program used on days with no explicit assignment.
   fields:
+    device_id:
+      name: Controller
+      description: SunRiser controller. Required when more than one controller is loaded.
+      selector:
+        device:
+          integration: sunriser
     pwm:
       name: PWM channel
       description: PWM channel number (1–10).
@@ -116,6 +160,12 @@ set_weekplanner_schedule:
     thursday, friday, saturday, default) to program IDs. Omitted days default
     to 0 (no program). "default" is the fallback used on unassigned days.
   fields:
+    device_id:
+      name: Controller
+      description: SunRiser controller. Required when more than one controller is loaded.
+      selector:
+        device:
+          integration: sunriser
     pwm:
       name: PWM channel
       description: PWM channel number (1–10).
@@ -150,21 +200,39 @@ download_factory_backup:
     Download the factory default configuration from the device and save it as a
     .msgpack file in your Home Assistant /config directory. Returns the saved
     file path.
-  fields: {}
+  fields:
+    device_id:
+      name: Controller
+      description: SunRiser controller. Required when more than one controller is loaded.
+      selector:
+        device:
+          integration: sunriser
 
 download_firmware:
   name: Download Firmware Info
   description: >
     Download the firmware info blob (GET /firmware.mp) from the device and save
     it as a .msgpack file in /config. Developer/diagnostic use only.
-  fields: {}
+  fields:
+    device_id:
+      name: Controller
+      description: SunRiser controller. Required when more than one controller is loaded.
+      selector:
+        device:
+          integration: sunriser
 
 download_bootload:
   name: Download Bootload Info
   description: >
     Download the bootload info blob (GET /bootload.mp) from the device and save
     it as a .msgpack file in /config. Developer/diagnostic use only.
-  fields: {}
+  fields:
+    device_id:
+      name: Controller
+      description: SunRiser controller. Required when more than one controller is loaded.
+      selector:
+        device:
+          integration: sunriser
 
 factory_reset:
   name: Factory Reset
@@ -173,6 +241,12 @@ factory_reset:
     irreversible — all PWM settings, schedules, and network config will be wiped.
     You must pass confirm: true to proceed.
   fields:
+    device_id:
+      name: Controller
+      description: SunRiser controller. Required when more than one controller is loaded.
+      selector:
+        device:
+          integration: sunriser
     confirm:
       name: Confirm
       description: Must be set to true to execute the reset.

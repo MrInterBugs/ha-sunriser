@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Aedan Lawrence <aedan@mrinterbugs.uk>
 DOMAIN = "sunriser"
 
 PLATFORMS = ["binary_sensor", "button", "light", "number", "select", "sensor", "switch"]

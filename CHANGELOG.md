@@ -1,5 +1,138 @@
 # Changelog
 
+## [2.0.0] - 2026-10-08
+
+### Changed
+
+- Promote the firmware 1.006 integration update to a stable release following real Home Assistant testing, including restarts, with no further crashes reported during that testing.
+- Simplify polling to consecutive state, weather, and configuration reads. Remove request splitting, staged startup, rotating polls, deferred metadata queues, forced connection closure, and artificial request pacing.
+- Load entities during setup and discover channel, probe, firmware, and weather configuration changes on subsequent polls. Keep configuration read/write ordering and the existing availability grace period.
+- Make scheduled daily reboot opt-in; retain explicitly configured reboot settings.
+- Add strict repository-wide Python type checks, frontend regression checks, editor setup, refreshed documentation, and copyright notices.
+
+### Fixed
+
+- Report running firmware correctly and stop legacy DST writes on firmware 1.006 and newer.
+- Route service calls to the selected controller and create unique backup/export files without overwriting existing files.
+- Update fixed-value and manager entities immediately after successful writes; preserve their old values after failed writes.
+- Recover correctly after failed setup or polling, clear stale offline repairs, and update dynamically discovered entities.
+- Preserve unassigned week-planner days and classify raw sensor readings correctly.
+- Prevent overlapping or stale Day Planner card responses, including when changing controllers or reconnecting.
+- Restore missing English UI labels and update reboot and recovery help text.
+
+### Upgrade notes
+
+- This release targets controller firmware 1.006. Compatibility with older firmware has not been verified for the simplified polling strategy.
+- The poll interval remains configurable and defaults to 30 seconds. Each poll now reads state, weather, and configuration.
+- Existing explicit scheduled-reboot settings remain effective; review them if you no longer need daily reboots.
+- With multiple loaded controllers, supply `device_id` in service calls and Day Planner cards.
+- Backup/export filenames include a controller identifier and unique suffix. Restore automations should use the returned `path` instead of constructing filenames.
+- Restart Home Assistant after updating through HACS.
+
+## [1.7.2-simplify-firmware-1006-requests-beta.3] - 2026-10-08
+
+### Changed
+
+- Add strict Python type checking across the integration, tests, and documentation hook, with a reproducible VS Code environment and CI check.
+- Type the coordinator's initial empty state correctly and expose shared coordinator fields through public names.
+- Refresh installation, configuration, service, and troubleshooting guides; add Day Planner card setup examples and remove obsolete firmware review notes.
+- Synchronize English UI text for reconfiguration, scheduled reboot options, and offline repairs. Describe daily reboot as optional and remove the automatic-recovery guarantee.
+
+### Testing
+
+- Intended for testing on controller firmware 1.006; retains beta.2 polling and control behaviour.
+- 390 mocked Python tests pass with 100% statement coverage; all eight frontend tests pass.
+- Strict Pyright, mypy, formatting, and documentation checks pass.
+
+## [1.7.2-simplify-firmware-1006-requests-beta.2] - 2026-10-08
+
+### Fixed
+
+- Publish acknowledged configuration changes to HA immediately so fixed-value sliders and manager selects do not display the old value until the next poll. Failed writes retain the previous value.
+- Report raw sensor readings without a temperature device class or invented temperature unit.
+- Clear controller-specific offline repairs after a successful reload and when removing the integration entry.
+- Preserve unassigned (`null`) week-planner days instead of raising an error while decoding them.
+- Keep Day Planner card responses tied to the selected controller, discard obsolete responses after reconfiguration/disconnection, and prevent overlapping refreshes. Refresh immediately on reconnect and apply changed refresh intervals safely.
+
+### Notes
+
+- Includes the request simplification from beta.1, which passed the user's initial real-HA smoke test. The fixes in this release still need hardware testing.
+- The missing HACS listing icon is an upstream HACS issue; the bundled SunRiser icon is already valid. The troubleshooting documentation now explains this limitation.
+
+### Validation
+
+- Regression tests reproduce the failures against the previous code and pass with these fixes.
+- 390 mocked Python tests pass with 100% statement coverage; eight card lifecycle tests pass in Node.
+- Black, strict mypy, and the strict documentation build pass.
+- These follow-up fixes have not been tested on a live controller.
+
+## [1.7.2-simplify-firmware-1006-requests-beta.1] - 2026-10-08
+
+### Changed
+
+- Remove configuration request splitting, staged startup, rotating state/weather polls, deferred metadata queues, and queued DST ticks. Each poll now fetches state, weather, and full channel/sensor configuration.
+- Allow normal HTTP connection reuse and remove the global request lock. Keep configuration read/write ordering and acknowledged-write caching.
+- Load entity platforms during setup; discover channel and sensor changes on the next successful poll. Preserve firmware reporting, native DST handling, availability grace, per-controller repairs, service routing, and export protections.
+- Reduce the coordinator from 1,028 to 702 lines.
+
+### Upgrade notes
+
+- This experimental release builds on `v1.7.2-1.006-beta.2` and is intended for testing with controller firmware 1.006.
+- Daily reboot now defaults to off. Existing explicit reboot settings remain effective; disable it in the integration options if you want to test without scheduled reboots.
+- The configured poll interval remains unchanged (30 seconds by default), but each poll now performs consecutive state, weather, and configuration reads.
+- With multiple loaded controllers, service calls and Day Planner cards still require `device_id`. Export automations should still use the returned `path`.
+- If the simplified request strategy causes controller instability, return to `v1.7.2-1.006-beta.2`.
+
+### Validation
+
+- 383 mocked tests pass with 100% statement coverage.
+- Black, strict mypy, and the strict documentation build pass.
+- No live controller validation has been performed for this change. Firmware 1.006 is assumed to tolerate larger requests and consecutive connections; controller stability and older firmware compatibility remain unverified.
+
+## [1.7.2-1.006-beta.2] - 2026-10-08
+
+### Fixed
+
+- Give every backup and firmware export a unique filename and create it exclusively, preventing silent overwrites across controllers or repeated calls.
+- Deduplicate manual and DHCP setup by endpoint, adopt MAC identity for discovered manual entries, and reject conflicting reconfiguration.
+- Preserve acknowledged configuration writes when an older, multi-tick refresh finishes; failed writes leave the cache unchanged.
+- Wait for sensor units and decimal scaling before creating new temperature entities or decoding readings.
+- Track offline repairs per controller, so another controller's recovery cannot clear the warning.
+- Reject invalid day-planner hours and minutes while retaining the `24:00` end-of-day marker.
+- Remove stale channel registry entries at startup as well as during live configuration changes.
+- Cancel scheduled reboot callbacks and close HTTP sessions when integration setup fails or is cancelled.
+- Keep unavailable entities unavailable until a state request succeeds; auxiliary refreshes cannot report a false recovery.
+- Poll state before retrying failed DST writes on older firmware, and cancel pending writes when DST Auto-Track is disabled.
+- Fetch channel types and names alongside activation changes so newly activated pumps are created as switches immediately.
+- Discover weather sensors after startup, including recovery from an initial weather request failure.
+- Route services to an explicitly selected controller with `device_id` when multiple controllers are loaded, and ignore unloaded entries. Single-controller calls remain compatible; the Day Planner card supports the same selection.
+
+### Upgrade notes
+
+- With multiple loaded controllers, service calls and Day Planner cards must specify `device_id`. Calls with one loaded controller remain compatible.
+- Backup and firmware exports now use unique filenames. Automations should use the returned `path` rather than constructing a filename.
+- Newly connected temperature sensors appear after their metadata is fetched at the next periodic configuration refresh, preventing unscaled readings.
+
+### Validation
+
+- 399 mocked tests pass with 100% statement coverage, including 61 regression cases added since beta.1.
+- Black, strict mypy, Hassfest, and the strict documentation build pass.
+- No live controller requests were made during beta.2 validation; hardware testing is still required before a stable release.
+
+## [1.7.2-1.006-beta.1] - 2026-10-08
+
+### Fixed
+
+- Report running `factory_version` in the firmware sensor and device info instead of the saved configuration version. Refresh it with the existing periodic configuration reads and update the HA device registry.
+- Retire DST Auto-Track and remove its registry entry on firmware 1.006 or newer, where DST is handled by the firmware. Prevent restored or queued HA DST writes; retain the switch for older firmware.
+- Retry failed startup configuration chunks instead of silently skipping their keys.
+- Publish a separate connectivity result after a transient failed poll without mutating the previous coordinator snapshot. Existing three-poll availability grace remains unchanged.
+
+### Validation
+
+- 338 mocked tests pass with 100% statement coverage, including DST cleanup at startup and after a firmware upgrade without reloading HA.
+- Integration formatting and strict type checks pass. Controller verification used read-only requests; real-device output tests were excluded.
+
 ## [1.7.1] - 2026-04-19
 
 ### Fixed

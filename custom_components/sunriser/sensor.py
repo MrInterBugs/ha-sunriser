@@ -1,4 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Aedan Lawrence <aedan@mrinterbugs.uk>
+# HA entity mixins and dynamic properties override cached_property descriptors.
+# pyright: reportIncompatibleVariableOverride=false
 from __future__ import annotations
 
 from datetime import timedelta
@@ -10,14 +13,12 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.const import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
 from .coordinator import SunRiserCoordinator
 
 PARALLEL_UPDATES = 0
@@ -44,27 +45,25 @@ async def async_setup_entry(
         ]
     )
 
-    # Weather channel sensors are fixed at setup time (weather list length
-    # is determined by pwm_count and doesn't change without a reload).
-    weather = coordinator.data.get("weather") or [] if coordinator.data else []
-    weather_entities: list[SunRiserWeatherChannelSensor] = [
-        SunRiserWeatherChannelSensor(coordinator, i + 1)
-        for i, ch in enumerate(weather)
-        if ch is not None
-    ]
-    if weather_entities:
-        async_add_entities(weather_entities)
-
-    # DS1820 temperature sensors: add at setup and dynamically as new ROMs appear.
+    # Discover weather channels and DS1820 ROMs on every update, including
+    # recovery after the optional initial weather request failed.
+    _added_weather_channels: set[int] = set()
     _added_roms: set[str] = set()
 
     @callback
-    def _check_ds1820_sensors() -> None:
+    def _check_sensors() -> None:
         if coordinator.data is None:
             return
-        new_entities: list[SunRiserTemperatureSensor] = []
-        for rom, reading in (coordinator.data.get("sensors") or {}).items():
-            if rom in _added_roms:
+        new_entities: list[SunRiserTemperatureSensor | SunRiserWeatherChannelSensor] = (
+            []
+        )
+        for channel, weather in enumerate(coordinator.data.get("weather") or [], 1):
+            if weather is not None and channel not in _added_weather_channels:
+                _added_weather_channels.add(channel)
+                new_entities.append(SunRiserWeatherChannelSensor(coordinator, channel))
+        sensors: dict[str, Any] = coordinator.data.get("sensors") or {}
+        for rom, reading in sensors.items():
+            if rom in _added_roms or not coordinator.sensor_config_loaded(rom):
                 continue
             device_type = reading[0]
             if device_type == _DS1820:
@@ -73,8 +72,8 @@ async def async_setup_entry(
         if new_entities:
             async_add_entities(new_entities)
 
-    _check_ds1820_sensors()
-    entry.async_on_unload(coordinator.async_add_listener(_check_ds1820_sensors))
+    _check_sensors()
+    entry.async_on_unload(coordinator.async_add_listener(_check_sensors))
 
 
 class SunRiserUptimeSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity):
@@ -90,7 +89,7 @@ class SunRiserUptimeSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity)
 
     def __init__(self, coordinator: SunRiserCoordinator) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator._entry_id}_uptime"
+        self._attr_unique_id = f"{coordinator.entry_id}_uptime"
         self._attr_device_info = coordinator.device_info
 
     @property
@@ -109,12 +108,12 @@ class SunRiserFirmwareSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntit
 
     def __init__(self, coordinator: SunRiserCoordinator) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator._entry_id}_firmware"
+        self._attr_unique_id = f"{coordinator.entry_id}_firmware"
         self._attr_device_info = coordinator.device_info
 
     @property
     def native_value(self) -> str | None:
-        return self.coordinator.config.get("save_version") or None
+        return self.coordinator.firmware_version
 
 
 class SunRiserHostnameSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity):
@@ -126,7 +125,7 @@ class SunRiserHostnameSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntit
 
     def __init__(self, coordinator: SunRiserCoordinator) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator._entry_id}_hostname"
+        self._attr_unique_id = f"{coordinator.entry_id}_hostname"
         self._attr_device_info = coordinator.device_info
 
     @property
@@ -138,9 +137,7 @@ class SunRiserTemperatureSensor(CoordinatorEntity[SunRiserCoordinator], SensorEn
     """DS1820 temperature sensor reported in /state."""
 
     _attr_has_entity_name = True
-    _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
 
     def __init__(
         self,
@@ -159,11 +156,17 @@ class SunRiserTemperatureSensor(CoordinatorEntity[SunRiserCoordinator], SensorEn
         return self.coordinator.sensor_value(self._rom)
 
     @property
-    def native_unit_of_measurement(self) -> str:
+    def device_class(self) -> SensorDeviceClass | None:
+        if self.coordinator.sensor_unit(self._rom) == _UNIT_CELSIUS:
+            return SensorDeviceClass.TEMPERATURE
+        return None
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
         # Sensors configured as raw (unit=0) have no meaningful HA unit.
         if self.coordinator.sensor_unit(self._rom) == _UNIT_CELSIUS:
             return UnitOfTemperature.CELSIUS
-        return "raw"
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -177,9 +180,8 @@ class SunRiserWeatherChannelSensor(
 ):
     """Weather simulation state for a single PWM channel.
 
-    State = weather_program_id (which program is running on this channel).
-    All other fields (clouds_state, rain ticks, moon state, etc.) are
-    exposed as extra state attributes.
+    State describes the active effect: thunder, rain, cloudy, moon, or clear.
+    Extra attributes include the program name, activity flags, and event times.
     """
 
     _attr_has_entity_name = True
@@ -188,14 +190,14 @@ class SunRiserWeatherChannelSensor(
     def __init__(self, coordinator: SunRiserCoordinator, channel: int) -> None:
         super().__init__(coordinator)
         self._channel = channel
-        self._attr_unique_id = f"{coordinator._entry_id}_weather_{channel}"
+        self._attr_unique_id = f"{coordinator.entry_id}_weather_{channel}"
         self._attr_translation_placeholders = {"channel": coordinator.pwm_name(channel)}
         self._attr_device_info = coordinator.device_info
 
     def _channel_data(self) -> dict[str, Any] | None:
         if self.coordinator.data is None:
             return None
-        weather = self.coordinator.data.get("weather") or []
+        weather: list[Any] = self.coordinator.data.get("weather") or []
         idx = self._channel - 1
         if idx >= len(weather):
             return None

@@ -1,58 +1,30 @@
 # SunRiser HA Integration
 
-A community-made Home Assistant custom integration for the **SunRiser 8/10** LED aquarium controller by [LEDaquaristik.de](https://ledaquaristik.de).
-
-This integration was reverse-engineered from the [open-source SunRiser firmware](https://github.com/LEDaquaristik/sunriser) and built by the community. It is not affiliated with or supported by LEDaquaristik.
+A community-made Home Assistant integration for the **SunRiser 8/10** LED aquarium controller by [LEDaquaristik](https://ledaquaristik.de). It communicates with the controller over your local network and is not affiliated with or supported by LEDaquaristik.
 
 ## Features
 
-- **Light** — Dimmable control (0–100%) for each PWM channel configured as a light
-- **Switch** — On/off control for PWM channels configured as on/off, plus a **Maintenance Mode** switch, a **Time-lapse** switch (runs the planner at accelerated speed for testing), and a **DST Auto-track** switch (keeps the device clock in sync with HA timezone DST changes)
-- **Select** — Per-channel manager selector (`none`, `dayplanner`, `weekplanner`, `fixed`) — shows and changes which planner controls each channel
-- **Number** — Per-channel fixed value slider (0–{{ cfg.pwm_max }}) used when the channel manager is set to `fixed`
-- **Sensor** — DS1820 temperature sensors; weather simulation state per channel; diagnostic sensors for Uptime, Firmware Version, and Hostname
-- **Binary Sensor** — Connectivity sensor that reports whether the device responded on the last poll cycle
-- **Button** — **Reboot** button to restart the device directly from HA
-- **Day Planner card** — built-in Lovelace card that renders all active PWM schedules as a 24-hour chart using the same LED colours as the device web UI; registered automatically, no manual setup required; schedule data is cached at startup so page loads never hit the device
+- **Lights and switches** — control active PWM channels and view their current output.
+- **Planner controls** — select each channel's manager (`none`, `dayplanner`, `weekplanner`, or `fixed`) and set its fixed output value.
+- **Sensors** — DS1820 readings, per-channel weather state, uptime, firmware version, hostname, and connectivity.
+- **Controller controls** — Maintenance Mode, Time-lapse, Reboot, and a legacy DST helper for firmware older than 1.006.
+- **Day Planner card** — display stored channel schedules as a 24-hour chart using the controller's LED colours.
+- **Actions** — back up and restore configuration, read logs, edit schedules, and download diagnostic files. Multiple controllers can be selected independently.
+- **Options** — polling every {{ cfg.default_scan_interval }} seconds by default, with an optional daily reboot that defaults to off.
 
 ![Example aquarium dashboard with Day Planner card](images/example_dashboard.png)
-- **Services** — Backup, restore, log retrieval, dayplanner/weekplanner read/write, and factory tools
-- **Options** — Configurable poll interval ({{ cfg.scan_interval_min }}–{{ cfg.scan_interval_max }} s, default {{ cfg.default_scan_interval }} s) and scheduled daily reboot (default {{ cfg.default_reboot_time }}) without re-adding the integration
-- Auto-discovery of PWM channels and temperature sensors from the device
-- "Visit device" link in the device page opens the SunRiser web UI directly from HA
 
-## Use cases
+## Get started
 
-### Tank temperature monitoring
+1. [Install the integration](installation.md) through HACS and connect your controller.
+2. [Configure entities and the Day Planner card](configuration.md).
+3. Use [service actions](services.md) for backups and schedules.
 
-Include the temperature on your aquarium dashboard alongside other tank sensors. Set an HA alert if the temperature drifts outside your safe range — useful as a backup check independent of any device-side alarms.
+Channel and probe changes are discovered during polling. Direct light and switch commands temporarily override the controller's program; see [manual control](troubleshooting.md#light-brightness-reverts-after-60-seconds) for persistent output settings.
 
-### Voice control via Alexa
+## Help and development
 
-Expose the **Maintenance Mode** switch to [Home Assistant Cloud](https://www.nabucasa.com/) (Nabu Casa), and Alexa will discover it as a smart home device. You can then say *"Alexa, turn on tank maintenance mode"* to pause the lighting program while you're working in the tank, and *"Alexa, turn off tank maintenance mode"* when you're done — no phone needed. Rename the entity in HA to something natural like "Tank Maintenance" so the voice command feels intuitive.
-
-### Current light state at a glance
-
-The light and switch entities reflect the device's live PWM values, so you can see exactly what each channel is doing right now from your HA dashboard — whether the device is running a dayplanner, a weekplanner, or a manual override.
-
-### Config backup before changes
-
-Before making changes to the device's schedule, call `sunriser.backup` from a HA script to snapshot the current config to your HA config directory. If something goes wrong, `sunriser.restore` sends the saved file back to the device.
-
-### Connectivity monitoring
-
-The binary sensor tracks whether the SunRiser responded on the last poll. Add it to a dashboard or use it in an HA notification automation so you know immediately if the controller has crashed or lost network — before your lighting program silently stops running.
-
-## Key facts
-
-- Protocol: MessagePack over HTTP/1.1 (no HTTP/2)
-- Config keys use `#` as separator, e.g. `pwm#1#color`
-- PWM range: 0–{{ cfg.pwm_max }} (mapped to HA brightness 0–255)
-- Direct state writes hold for ~1 minute before the device's own program resumes
-- Polling is staggered: one HTTP request per tick — required because the WizFi360 Wi-Fi module can only handle one connection at a time
-
-## Links
-
-- [GitHub repository](https://github.com/MrInterBugs/ha-sunriser)
+- [Troubleshooting](troubleshooting.md)
 - [Report an issue](https://github.com/MrInterBugs/ha-sunriser/issues)
-- [API Reference](api/index.md)
+- [API reference](api/index.md)
+- [Source and contribution instructions](https://github.com/MrInterBugs/ha-sunriser)

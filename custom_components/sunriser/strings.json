@@ -53,7 +53,7 @@
         },
         "data_description": {
           "scan_interval": "How often (in seconds) to poll the device for updated PWM and sensor values. Lower values give faster updates but increase load on the controller.",
-          "scheduled_reboot": "Automatically reboot the controller once a day to prevent firmware instability.",
+          "scheduled_reboot": "Optionally reboot the controller once a day. Disabled by default.",
           "reboot_time": "Time of day to reboot the controller (24-hour format, e.g. 04:00). The reboot happens silently — lights resume their program after the controller restarts."
         }
       }
@@ -112,10 +112,13 @@
   "issues": {
     "device_unreachable": {
       "title": "SunRiser device unreachable",
-      "description": "The SunRiser controller at **{host}** has been unreachable for multiple consecutive poll cycles.\n\nIf the device crashed, its built-in watchdog (dead man's switch) will restart it automatically — wait a minute and check whether it comes back on its own.\n\nIf it does not recover, check that the device is powered on and connected to your network. If the IP address has changed, use **Settings → Devices & Services → SunRiser → Reconfigure** to update it."
+      "description": "The SunRiser controller at **{host}** has been unreachable for multiple consecutive poll cycles.\n\nCheck that the device is powered on and reachable from Home Assistant. If the IP address has changed, use **Settings → Devices & Services → SunRiser → Reconfigure** to update it. The notification clears after a successful state poll."
     }
   },
   "exceptions": {
+    "device_required": {
+      "message": "Select a SunRiser controller using device_id when multiple controllers are loaded"
+    },
     "integration_not_loaded": {
       "message": "SunRiser integration not loaded"
     },

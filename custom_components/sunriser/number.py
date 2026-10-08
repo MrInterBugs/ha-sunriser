@@ -1,10 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Aedan Lawrence <aedan@mrinterbugs.uk>
+# HA entity mixins and dynamic properties override cached_property descriptors.
+# pyright: reportIncompatibleVariableOverride=false
 from __future__ import annotations
 
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
 from homeassistant.const import EntityCategory
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -32,7 +35,7 @@ async def async_setup_entry(
             if active and pwm_num not in _added:
                 _added.add(pwm_num)
                 new_entities.append(SunRiserPWMFixedNumber(coordinator, entry, pwm_num))
-            elif not active and pwm_num in _added:
+            elif not active:
                 _added.discard(pwm_num)
                 uid = f"{entry.entry_id}_pwm_{pwm_num}_fixed"
                 eid = er.async_get_entity_id("number", DOMAIN, uid)
@@ -79,4 +82,3 @@ class SunRiserPWMFixedNumber(CoordinatorEntity[SunRiserCoordinator], NumberEntit
         await self.coordinator.async_set_config(
             {f"pwm#{self._pwm_num}#fixed": int_value}
         )
-        self.coordinator.config[f"pwm#{self._pwm_num}#fixed"] = int_value

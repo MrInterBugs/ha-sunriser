@@ -1,9 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Aedan Lawrence <aedan@mrinterbugs.uk>
+# HA entity mixins and dynamic properties override cached_property descriptors.
+# pyright: reportIncompatibleVariableOverride=false
 from __future__ import annotations
 
-from homeassistant.components.switch import SwitchEntity, SwitchDeviceClass
+from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, STATE_ON
+from homeassistant.const import STATE_ON, EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -29,12 +32,28 @@ async def async_setup_entry(
         [
             SunRiserMaintenanceSwitch(coordinator, entry),
             SunRiserTimelapseSwitch(coordinator, entry),
-            SunRiserDSTAutoSwitch(coordinator, entry),
         ]
     )
 
+    if coordinator.firmware_handles_dst:
+        # Retire the old registry entry as well as suppressing its entity.
+        # This prevents an orphaned, unavailable configuration switch on upgrade.
+        eid = er.async_get_entity_id(
+            "switch", DOMAIN, f"{entry.entry_id}_dst_auto_track"
+        )
+        if eid:
+            er.async_remove(eid)
+    else:
+        async_add_entities([SunRiserDSTAutoSwitch(coordinator, entry)])
+
     @callback
     def _check_pwm_entities() -> None:
+        if coordinator.firmware_handles_dst:
+            eid = er.async_get_entity_id(
+                "switch", DOMAIN, f"{entry.entry_id}_dst_auto_track"
+            )
+            if eid:
+                er.async_remove(eid)
         new_entities: list[SunRiserSwitch] = []
         for pwm_num in range(1, coordinator.pwm_count + 1):
             is_switch = coordinator.pwm_is_onoff(
@@ -43,7 +62,7 @@ async def async_setup_entry(
             if is_switch and pwm_num not in _added:
                 _added.add(pwm_num)
                 new_entities.append(SunRiserSwitch(coordinator, entry, pwm_num))
-            elif not is_switch and pwm_num in _added:
+            elif not is_switch:
                 _added.discard(pwm_num)
                 uid = f"{entry.entry_id}_pwm_{pwm_num}"
                 eid = er.async_get_entity_id("switch", DOMAIN, uid)
@@ -159,16 +178,15 @@ class SunRiserDSTAutoSwitch(
         # The hass.data bridge in coordinator.__init__ already restores
         # _dst_auto_track on same-session reloads (options change, reconfigure).
         # Only fall back to the recorder when the bridge didn't supply the value
-        # (i.e. a true HA restart), to avoid a redundant PUT / that fires
-        # immediately after init and causes rapid back-to-back TCP connections.
-        if not self.coordinator._dst_auto_track:
+        # (i.e. a true HA restart).
+        if not self.coordinator.dst_auto_track:
             last_state = await self.async_get_last_state()
             if last_state is not None and last_state.state == STATE_ON:
                 await self.coordinator.async_set_dst_auto_track(True)
 
     @property
     def is_on(self) -> bool:
-        return self.coordinator._dst_auto_track
+        return self.coordinator.dst_auto_track
 
     async def async_turn_on(self, **kwargs: object) -> None:
         await self.coordinator.async_set_dst_auto_track(True)

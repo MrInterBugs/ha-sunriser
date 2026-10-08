@@ -1,10 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Aedan Lawrence <aedan@mrinterbugs.uk>
+# HA entity mixins and dynamic properties override cached_property descriptors.
+# pyright: reportIncompatibleVariableOverride=false
 from __future__ import annotations
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
 from homeassistant.const import EntityCategory
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -36,7 +39,7 @@ async def async_setup_entry(
                 new_entities.append(
                     SunRiserPWMManagerSelect(coordinator, entry, pwm_num)
                 )
-            elif not active and pwm_num in _added:
+            elif not active:
                 _added.discard(pwm_num)
                 uid = f"{entry.entry_id}_pwm_{pwm_num}_manager"
                 eid = er.async_get_entity_id("select", DOMAIN, uid)
@@ -78,4 +81,3 @@ class SunRiserPWMManagerSelect(CoordinatorEntity[SunRiserCoordinator], SelectEnt
     async def async_select_option(self, option: str) -> None:
         value = _MANAGER_TO_INT.get(option, 0)
         await self.coordinator.async_set_config({f"pwm#{self._pwm_num}#manager": value})
-        self.coordinator.config[f"pwm#{self._pwm_num}#manager"] = value

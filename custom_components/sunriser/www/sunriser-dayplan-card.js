@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 Aedan Lawrence <aedan@mrinterbugs.uk>
 //
 // SunRiser Day Planner Card
 //
 // Optional config:
 //   title: "My Aquarium"          # card title (default: "Day Planner")
 //   refresh_interval: 300         # seconds between refreshes (default: 300)
+//   device_id: "..."              # required with multiple loaded controllers
 //   channels:                     # override labels per PWM
 //     1: "4500K White"
 //     2: "Royal Blue"
@@ -256,10 +258,22 @@ class SunRiserDayplanCard extends LitElement {
     this._error = null;
     this._initialized = false;
     this._refreshTimer = null;
+    this._fetchId = 0;
   }
 
   setConfig(config) {
-    this._config = config || {};
+    this._config = { ...config };
+    this._fetchId++;
+    this._loading = false;
+    this._schedules = null;
+    this._error = null;
+    this._initialized = false;
+    this.requestUpdate();
+    if (this.isConnected) this._startRefreshTimer();
+    if (this._hass) {
+      this._initialized = true;
+      this._fetch();
+    }
   }
 
   set hass(hass) {
@@ -272,18 +286,34 @@ class SunRiserDayplanCard extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    const interval = (this._config?.refresh_interval ?? 300) * 1000;
-    this._refreshTimer = setInterval(() => this._fetch(), interval);
+    this._startRefreshTimer();
+    if (this._hass && !this._initialized) {
+      this._initialized = true;
+      this._fetch();
+    }
+  }
+
+  _startRefreshTimer() {
+    clearInterval(this._refreshTimer);
+    const seconds = Number(this._config?.refresh_interval ?? 300);
+    const interval = Number.isFinite(seconds) && seconds >= 1 ? seconds : 300;
+    this._refreshTimer = setInterval(() => this._fetch(), interval * 1000);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     clearInterval(this._refreshTimer);
     this._refreshTimer = null;
+    this._fetchId++;
+    this._loading = false;
+    this._initialized = false;
   }
 
   async _fetch() {
-    if (!this._hass) return;
+    if (!this._hass || this._loading) return;
+    const fetchId = ++this._fetchId;
+    const hass = this._hass;
+    const deviceId = this._config?.device_id;
     this._loading = true;
     this._error = null;
 
@@ -292,13 +322,17 @@ class SunRiserDayplanCard extends LitElement {
 
     for (let i = 1; i <= 10; i++) {
       try {
-        const result = await this._hass.connection.sendMessagePromise({
+        const result = await hass.connection.sendMessagePromise({
           type: "call_service",
           domain: "sunriser",
           service: "get_dayplanner_schedule",
-          service_data: { pwm: i },
+          service_data: {
+            pwm: i,
+            ...(deviceId ? { device_id: deviceId } : {}),
+          },
           return_response: true,
         });
+        if (fetchId !== this._fetchId) return;
         const resp = result?.response;
         const markers = resp?.markers;
         if (markers && markers.length > 0) {
@@ -310,6 +344,7 @@ class SunRiserDayplanCard extends LitElement {
           });
         }
       } catch (err) {
+        if (fetchId !== this._fetchId) return;
         if (!firstError) firstError = err;
         console.error(`[sunriser-dayplan-card] PWM ${i} failed:`, err);
       }

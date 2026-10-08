@@ -1,20 +1,23 @@
 """
 Standalone integration tests against a real SunRiser device.
 
-Run with:
-    pip install aiohttp msgpack pytest pytest-asyncio
-    pytest tests/test_device.py -v
+After installing requirements.txt into .venv, run explicitly with:
+    SUNRISER_HOST=<controller-ip> .venv/bin/pytest tests/test_device.py -v
+
+This suite includes configuration writes, output changes, and simulator reboots.
+It is excluded from normal unit-test runs.
 """
 
 import asyncio
+import os
+from collections.abc import AsyncIterator
+from typing import Any
 
-import pytest
-import pytest_asyncio
 import aiohttp
 import msgpack
+import pytest
+import pytest_asyncio
 import pytest_socket
-
-import os
 
 # Override with env vars to target the Docker simulator:
 #   SUNRISER_HOST=127.0.0.1 SUNRISER_PORT=9000 pytest tests/test_device.py -v -s
@@ -39,18 +42,20 @@ CONFIG_KEYS = [
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def inter_test_delay():
+async def inter_test_delay() -> AsyncIterator[None]:
     """2-second pause after every test to let the WizFi360 fully tear down the TCP session."""
     yield
     await asyncio.sleep(2)
 
 
 @pytest_asyncio.fixture
-async def session(socket_enabled):
+async def session(socket_enabled: None) -> AsyncIterator[aiohttp.ClientSession]:
     # pytest-homeassistant-custom-component keeps a host allowlist active even
     # when sockets are enabled, so standalone LAN tests must opt the target host
     # in explicitly.
-    pytest_socket.socket_allow_hosts([HOST, "127.0.0.1", "localhost"])
+    pytest_socket.socket_allow_hosts(  # pyright: ignore[reportUnknownMemberType]
+        [HOST, "127.0.0.1", "localhost"]
+    )
     # force_close=True because the device closes the TCP connection after each
     # response without sending Connection: close — aiohttp would otherwise try
     # to reuse the socket and get a ConnectionResetError on the next request.
@@ -65,7 +70,7 @@ async def session(socket_enabled):
 
 
 @pytest.mark.asyncio
-async def test_ping(session):
+async def test_ping(session: aiohttp.ClientSession) -> None:
     """GET /ok should return the text OK.
 
     Retries once — the device occasionally resets the TCP connection on the
@@ -89,7 +94,7 @@ async def test_ping(session):
 
 
 @pytest.mark.asyncio
-async def test_read_config(session):
+async def test_read_config(session: aiohttp.ClientSession) -> None:
     """POST / with a msgpack array of keys should return a msgpack hash."""
     body = msgpack.packb(CONFIG_KEYS, use_bin_type=True)
     async with session.post(
@@ -99,7 +104,9 @@ async def test_read_config(session):
         timeout=TIMEOUT,
     ) as resp:
         assert resp.status == 200, f"Expected 200, got {resp.status}"
-        result = msgpack.unpackb(await resp.read(), raw=False, strict_map_key=False)
+        result: dict[str, Any] = msgpack.unpackb(
+            await resp.read(), raw=False, strict_map_key=False
+        )
         assert isinstance(result, dict), f"Expected dict, got {type(result)}"
         print("\nConfig response:")
         for k, v in result.items():
@@ -117,11 +124,13 @@ async def test_read_config(session):
 
 
 @pytest.mark.asyncio
-async def test_read_state(session):
+async def test_read_state(session: aiohttp.ClientSession) -> None:
     """GET /state should return a msgpack hash with a pwms key."""
     async with session.get(f"{BASE_URL}/state", timeout=TIMEOUT) as resp:
         assert resp.status == 200, f"Expected 200, got {resp.status}"
-        result = msgpack.unpackb(await resp.read(), raw=False, strict_map_key=False)
+        result: dict[str, Any] = msgpack.unpackb(
+            await resp.read(), raw=False, strict_map_key=False
+        )
         assert isinstance(result, dict), f"Expected dict, got {type(result)}"
         print("\nState response:")
         for k, v in result.items():
@@ -136,7 +145,7 @@ async def test_read_state(session):
 
 
 @pytest.mark.asyncio
-async def test_read_pwm_config(session):
+async def test_read_pwm_config(session: aiohttp.ClientSession) -> None:
     """Read name, color, onoff, and max for all PWM channels in a single request.
 
     We request up to 10 channels (the max for SunRiser 10) to avoid needing
@@ -159,7 +168,9 @@ async def test_read_pwm_config(session):
         timeout=TIMEOUT,
     ) as resp:
         assert resp.status == 200
-        result = msgpack.unpackb(await resp.read(), raw=False, strict_map_key=False)
+        result: dict[str, Any] = msgpack.unpackb(
+            await resp.read(), raw=False, strict_map_key=False
+        )
 
     pwm_count = result.get("pwm_count") or 10
     print(f"\npwm_count: {pwm_count}")
@@ -176,7 +187,7 @@ async def test_read_pwm_config(session):
 
 
 @pytest.mark.asyncio
-async def test_read_pwm_manager(session):
+async def test_read_pwm_manager(session: aiohttp.ClientSession) -> None:
     """Read pwm#X#manager for all channels and verify values are 0–3 or None."""
     keys = ["pwm_count"] + [f"pwm#{i}#manager" for i in range(1, 11)]
     body = msgpack.packb(keys, use_bin_type=True)
@@ -187,7 +198,9 @@ async def test_read_pwm_manager(session):
         timeout=TIMEOUT,
     ) as resp:
         assert resp.status == 200, f"Expected 200, got {resp.status}"
-        result = msgpack.unpackb(await resp.read(), raw=False, strict_map_key=False)
+        result: dict[str, Any] = msgpack.unpackb(
+            await resp.read(), raw=False, strict_map_key=False
+        )
 
     pwm_count = result.get("pwm_count") or 10
     _MANAGER_NAMES = {0: "none", 1: "dayplanner", 2: "weekplanner", 3: "celestial"}
@@ -207,7 +220,7 @@ async def test_read_pwm_manager(session):
 
 
 @pytest.mark.asyncio
-async def test_read_dayplanner(session):
+async def test_read_dayplanner(session: aiohttp.ClientSession) -> None:
     """Read dayplanner#marker#X for all PWM channels and verify the format.
 
     Each value should be either None (no schedule) or a flat list of
@@ -222,13 +235,15 @@ async def test_read_dayplanner(session):
         timeout=TIMEOUT,
     ) as resp:
         assert resp.status == 200, f"Expected 200, got {resp.status}"
-        result = msgpack.unpackb(await resp.read(), raw=False, strict_map_key=False)
+        result: dict[str, Any] = msgpack.unpackb(
+            await resp.read(), raw=False, strict_map_key=False
+        )
 
     assert isinstance(result, dict), f"Expected dict, got {type(result)}"
     print("\nDayplanner schedules:")
     for i in range(1, 11):
         key = f"dayplanner#marker#{i}"
-        flat = result.get(key)
+        flat: list[Any] | None = result.get(key)
         if flat is None:
             print(f"  pwm#{i}: no schedule")
             continue
@@ -236,7 +251,7 @@ async def test_read_dayplanner(session):
             flat, list
         ), f"pwm#{i}: expected list, got {type(flat)}: {flat!r}"
         assert len(flat) % 2 == 0, f"pwm#{i}: flat list length {len(flat)} is not even"
-        markers = []
+        markers: list[str] = []
         for j in range(0, len(flat), 2):
             daymin = int(flat[j])
             percent = int(flat[j + 1])
@@ -252,7 +267,7 @@ async def test_read_dayplanner(session):
 
 
 @pytest.mark.asyncio
-async def test_read_weekplanner(session):
+async def test_read_weekplanner(session: aiohttp.ClientSession) -> None:
     """Read weekplanner#programs#X for all PWM channels and verify the format.
 
     Each value should be either None (no schedule set) or a list of exactly 8
@@ -267,7 +282,9 @@ async def test_read_weekplanner(session):
         timeout=TIMEOUT,
     ) as resp:
         assert resp.status == 200, f"Expected 200, got {resp.status}"
-        result = msgpack.unpackb(await resp.read(), raw=False, strict_map_key=False)
+        result: dict[str, Any] = msgpack.unpackb(
+            await resp.read(), raw=False, strict_map_key=False
+        )
 
     assert isinstance(result, dict), f"Expected dict, got {type(result)}"
     _DAY_NAMES = [
@@ -283,7 +300,7 @@ async def test_read_weekplanner(session):
     print("\nWeek planner schedules:")
     for i in range(1, 11):
         key = f"weekplanner#programs#{i}"
-        programs = result.get(key)
+        programs: list[Any] | None = result.get(key)
         if programs is None:
             print(f"  pwm#{i}: no week schedule")
             continue
@@ -311,7 +328,9 @@ _REAL_ONLY = pytest.mark.skipif(
 )
 
 
-async def _read_config(session, keys: list) -> dict:
+async def _read_config(
+    session: aiohttp.ClientSession, keys: list[str]
+) -> dict[str, Any]:
     await asyncio.sleep(2)
     body = msgpack.packb(keys, use_bin_type=True)
     async with session.post(
@@ -324,7 +343,7 @@ async def _read_config(session, keys: list) -> dict:
         return msgpack.unpackb(await resp.read(), raw=False, strict_map_key=False)
 
 
-async def _write_config(session, params: dict) -> None:
+async def _write_config(session: aiohttp.ClientSession, params: dict[str, Any]) -> None:
     await asyncio.sleep(2)
     body = msgpack.packb(params, use_bin_type=True)
     async with session.put(
@@ -338,7 +357,7 @@ async def _write_config(session, params: dict) -> None:
 
 @_REAL_ONLY
 @pytest.mark.asyncio
-async def test_write_dayplanner(session):
+async def test_write_dayplanner(session: aiohttp.ClientSession) -> None:
     """Write a test schedule to pwm#1, verify it, then restore the original.
 
     Uses pwm#1 — always restores via finally so the device is never left
@@ -389,7 +408,7 @@ async def test_write_dayplanner(session):
 
 @_REAL_ONLY
 @pytest.mark.asyncio
-async def test_write_weekplanner(session):
+async def test_write_weekplanner(session: aiohttp.ClientSession) -> None:
     """Write a test week schedule to pwm#1, verify it, then restore the original.
 
     Uses pwm#1 regardless of its current manager setting — the key can be written
@@ -432,7 +451,7 @@ async def test_write_weekplanner(session):
 
 @_REAL_ONLY
 @pytest.mark.asyncio
-async def test_write_pwm_manager(session):
+async def test_write_pwm_manager(session: aiohttp.ClientSession) -> None:
     """Write a different manager value to pwm#1, verify it, then restore the original.
 
     Uses pwm#1 — always restores via finally so the device is never left
@@ -478,7 +497,9 @@ async def test_write_pwm_manager(session):
 # ---------------------------------------------------------------------------
 
 
-async def _put_state(session, payload: dict) -> tuple[int, dict | str]:
+async def _put_state(
+    session: aiohttp.ClientSession, payload: dict[str, Any]
+) -> tuple[int, dict[str, Any] | str]:
     """PUT /state helper — returns (status_code, decoded_body)."""
     body = msgpack.packb(payload, use_bin_type=True)
     async with session.put(
@@ -495,14 +516,14 @@ async def _put_state(session, payload: dict) -> tuple[int, dict | str]:
         return resp.status, decoded
 
 
-async def _get_service_mode(session) -> object:
+async def _get_service_mode(session: aiohttp.ClientSession) -> object:
     async with session.get(f"{BASE_URL}/state", timeout=TIMEOUT) as resp:
         state = msgpack.unpackb(await resp.read(), raw=False, strict_map_key=False)
     return state.get("service_mode")
 
 
 @pytest.mark.asyncio
-async def test_maintenance_mode_integer(session):
+async def test_maintenance_mode_integer(session: aiohttp.ClientSession) -> None:
     """Enable maintenance mode with integer 1, disable with integer 0.
 
     The device initialises service_mode as integer 0 so it likely expects
@@ -543,7 +564,7 @@ async def test_maintenance_mode_integer(session):
 
 
 @pytest.mark.asyncio
-async def test_maintenance_mode_boolean(session):
+async def test_maintenance_mode_boolean(session: aiohttp.ClientSession) -> None:
     """Try enabling maintenance mode with msgpack boolean True.
 
     This may return 500 on real firmware — if so, use integers instead.
@@ -577,10 +598,12 @@ async def test_maintenance_mode_boolean(session):
 
 
 @pytest.mark.asyncio
-async def test_sensors_in_state(session):
+async def test_sensors_in_state(session: aiohttp.ClientSession) -> None:
     """Check if any temperature sensors are reported in state."""
     async with session.get(f"{BASE_URL}/state", timeout=TIMEOUT) as resp:
-        result = msgpack.unpackb(await resp.read(), raw=False, strict_map_key=False)
+        result: dict[str, Any] = msgpack.unpackb(
+            await resp.read(), raw=False, strict_map_key=False
+        )
 
     sensors = result.get("sensors", {})
     if sensors:
@@ -597,7 +620,7 @@ async def test_sensors_in_state(session):
 
 
 @pytest.mark.asyncio
-async def test_read_weather(session):
+async def test_read_weather(session: aiohttp.ClientSession) -> None:
     """GET /weather should return a msgpack stream whose first object is a list."""
     async with session.get(f"{BASE_URL}/weather", timeout=TIMEOUT) as resp:
         assert resp.status == 200, f"Expected 200, got {resp.status}"
@@ -605,7 +628,7 @@ async def test_read_weather(session):
 
     unpacker = msgpack.Unpacker(raw=False, strict_map_key=False)
     unpacker.feed(raw)
-    channels = next(iter(unpacker), None)
+    channels: list[dict[str, Any] | None] | None = next(iter(unpacker), None)
 
     assert isinstance(
         channels, list
@@ -616,14 +639,14 @@ async def test_read_weather(session):
 
 
 @pytest.mark.asyncio
-async def test_weather_channel_schema(session):
+async def test_weather_channel_schema(session: aiohttp.ClientSession) -> None:
     """Active weather channels must contain the expected keys."""
     async with session.get(f"{BASE_URL}/weather", timeout=TIMEOUT) as resp:
         raw = await resp.read()
 
     unpacker = msgpack.Unpacker(raw=False, strict_map_key=False)
     unpacker.feed(raw)
-    channels = next(iter(unpacker), None) or []
+    channels: list[dict[str, Any] | None] = next(iter(unpacker), None) or []
 
     active = [ch for ch in channels if ch is not None]
     if not active:
@@ -655,7 +678,7 @@ async def test_weather_channel_schema(session):
 
 
 @pytest.mark.asyncio
-async def test_get_factorybackup(session):
+async def test_get_factorybackup(session: aiohttp.ClientSession) -> None:
     """GET /factorybackup should return a msgpack dict of factory default config."""
     async with session.get(f"{BASE_URL}/factorybackup", timeout=TIMEOUT) as resp:
         if resp.status in (404, 500):
@@ -665,7 +688,7 @@ async def test_get_factorybackup(session):
         assert resp.status == 200, f"Expected 200, got {resp.status}"
         raw = await resp.read()
 
-    result = msgpack.unpackb(raw, raw=False, strict_map_key=False)
+    result: dict[str, Any] = msgpack.unpackb(raw, raw=False, strict_map_key=False)
     assert isinstance(result, dict), f"Expected dict, got {type(result)}: {result!r}"
     print(f"\nFactory backup: {len(result)} keys — {sorted(result.keys())[:10]}")
 
@@ -691,7 +714,7 @@ _SIM_ONLY = pytest.mark.skipif(
 
 @_SIM_ONLY
 @pytest.mark.asyncio
-async def test_get_firmware_mp(session):
+async def test_get_firmware_mp(session: aiohttp.ClientSession) -> None:
     """GET /firmware.mp should return a msgpack dict with firmware metadata.
 
     Simulator only — keep off the real device to avoid any risk of triggering
@@ -703,7 +726,7 @@ async def test_get_firmware_mp(session):
         assert resp.status == 200, f"Expected 200, got {resp.status}"
         raw = await resp.read()
 
-    result = msgpack.unpackb(raw, raw=False, strict_map_key=False)
+    result: dict[str, Any] = msgpack.unpackb(raw, raw=False, strict_map_key=False)
     assert isinstance(result, dict), f"Expected dict, got {type(result)}: {result!r}"
     print(f"\nFirmware info keys: {sorted(result.keys())}")
     for k, v in result.items():
@@ -712,7 +735,7 @@ async def test_get_firmware_mp(session):
 
 @_SIM_ONLY
 @pytest.mark.asyncio
-async def test_get_bootload_mp(session):
+async def test_get_bootload_mp(session: aiohttp.ClientSession) -> None:
     """GET /bootload.mp should return a msgpack payload (dict or list).
 
     Simulator only — keep off the real device to avoid any risk of triggering
@@ -730,7 +753,7 @@ async def test_get_bootload_mp(session):
 
 
 @pytest.mark.asyncio
-async def test_get_errors(session):
+async def test_get_errors(session: aiohttp.ClientSession) -> None:
     """GET /errors should respond with 200, or 404 if the simulator has no log files."""
     async with session.get(f"{BASE_URL}/errors", timeout=TIMEOUT) as resp:
         if resp.status == 404:
@@ -741,7 +764,7 @@ async def test_get_errors(session):
 
 
 @pytest.mark.asyncio
-async def test_get_log(session):
+async def test_get_log(session: aiohttp.ClientSession) -> None:
     """GET /log should respond with 200, or 404 if the simulator has no logfiles."""
     async with session.get(f"{BASE_URL}/log", timeout=TIMEOUT) as resp:
         if resp.status == 404:
@@ -753,13 +776,13 @@ async def test_get_log(session):
 
 @_SIM_ONLY
 @pytest.mark.asyncio
-async def test_backup(session):
+async def test_backup(session: aiohttp.ClientSession) -> None:
     """GET /backup should return a msgpack dict of all device config."""
     async with session.get(f"{BASE_URL}/backup", timeout=TIMEOUT) as resp:
         assert resp.status == 200, f"Expected 200, got {resp.status}"
         raw = await resp.read()
 
-    result = msgpack.unpackb(raw, raw=False, strict_map_key=False)
+    result: dict[str, Any] = msgpack.unpackb(raw, raw=False, strict_map_key=False)
     assert isinstance(result, dict), f"Expected dict, got {type(result)}: {result!r}"
     # A fresh simulator has an empty config dir, so the backup may be an empty dict.
     # The real device will have keys like "name", "hostname", etc.
@@ -768,7 +791,7 @@ async def test_backup(session):
 
 @_SIM_ONLY
 @pytest.mark.asyncio
-async def test_restore(session):
+async def test_restore(session: aiohttp.ClientSession) -> None:
     """PUT /restore: round-trip a backup back to the device.
 
     Downloads the current config via GET /backup, then sends it straight back
@@ -795,7 +818,7 @@ async def test_restore(session):
 
 @_SIM_ONLY
 @pytest.mark.asyncio
-async def test_reboot(session):
+async def test_reboot(session: aiohttp.ClientSession) -> None:
     """GET /reboot should return 200 and initiate a simulator restart.
 
     Intentionally last — the simulator restarts after this call so any test
