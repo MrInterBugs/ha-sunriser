@@ -29,7 +29,6 @@ from custom_components.sunriser.maintenance import (
     SunRiserMaintenanceEndSensor,
     SunRiserMaintenanceNumber,
     SunRiserOperatingModeSensor,
-    SunRiserResumeButton,
     setup_maintenance_entities,
 )
 from custom_components.sunriser.switch import SunRiserMaintenanceSwitch
@@ -96,7 +95,6 @@ async def test_unsupported_commands_fail_closed(
     device.config["factory_version"] = version
     for command in [
         device.async_set_blackout(True),
-        device.async_resume_normal_operation(),
         device.async_set_maintenance_config("service_timeout", 30),
     ]:
         with pytest.raises(HomeAssistantError, match="1.006"):
@@ -104,10 +102,13 @@ async def test_unsupported_commands_fail_closed(
     assert not SunRiserBlackoutSwitch(device).available
 
 
-async def test_resume_uses_single_stop_command(device: SunRiserCoordinator) -> None:
+async def test_maintenance_switch_stops_blackout(
+    device: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
+    device.data = dict(FIXTURE["states"]["blackout"])
     with aioresponses() as http:
         http.put(f"{device.base_url}/state", status=200)
-        await SunRiserResumeButton(device).async_press()
+        await SunRiserMaintenanceSwitch(device, mock_config_entry).async_turn_off()
         payload = msgpack.unpackb(
             http.requests[("PUT", URL(f"{device.base_url}/state"))][0].kwargs["data"],
             raw=False,
@@ -236,7 +237,7 @@ async def test_channel_switch_values(
 
 
 @pytest.mark.parametrize(
-    "platform,count", [("switch", 5), ("number", 3), ("sensor", 2), ("button", 1)]
+    "platform,count", [("switch", 5), ("number", 3), ("sensor", 2)]
 )
 async def test_dynamic_platform_discovery(
     hass: HomeAssistant,
@@ -348,7 +349,24 @@ async def test_ha_setup_reload_and_external_changes(
         assert state_of("switch", "blackout") == "on"
         assert state_of("switch", "maintenance") == "on"
         assert state_of("sensor", "operating_mode") == "blackout"
-        assert state_of("sensor", "maintenance_ends_at") != "unknown"
+        end_id = entity_id("sensor", "maintenance_ends_at")
+        end_entry = registry.async_get(end_id)
+        assert end_entry is not None
+        assert (
+            end_entry.disabled_by is entity_registry.RegistryEntryDisabler.INTEGRATION
+        )
+        assert hass.states.get(end_id) is None
+        assert not hass.services.has_service("sunriser", "resume_normal_operation")
+        assert (
+            registry.async_get_entity_id(
+                "button",
+                "sunriser",
+                f"{mock_config_entry.entry_id}_resume_normal_operation",
+            )
+            is None
+        )
+        # Explicitly enable the optional sensor; reload must preserve that choice.
+        registry.async_update_entity(end_id, disabled_by=None)
         timeout_entry = registry.async_get(entity_id("number", "maintenance_timeout"))
         assert timeout_entry is not None and timeout_entry.disabled_by is not None
         assert (
@@ -365,6 +383,7 @@ async def test_ha_setup_reload_and_external_changes(
         assert await hass.config_entries.async_reload(mock_config_entry.entry_id)
         await hass.async_block_till_done()
         assert state_of("sensor", "operating_mode") == "blackout"
+        assert state_of("sensor", "maintenance_ends_at") != "unknown"
         maintenance_command.assert_not_awaited()
         blackout_command.assert_not_awaited()
         coord: SunRiserCoordinator = mock_config_entry.runtime_data

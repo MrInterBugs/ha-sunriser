@@ -9,7 +9,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from homeassistant.components.button import ButtonEntity
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.components.switch import SwitchEntity
@@ -23,7 +22,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import SunRiserCoordinator
 
-MaintenancePlatform = Literal["switch", "number", "sensor", "button"]
+MaintenancePlatform = Literal["switch", "number", "sensor"]
 
 
 class MaintenanceEntity(CoordinatorEntity[SunRiserCoordinator]):
@@ -160,6 +159,7 @@ class SunRiserMaintenanceEndSensor(MaintenanceEntity, SensorEntity):
     """Estimated end of maintenance/blackout from the last reported countdown."""
 
     _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator: SunRiserCoordinator) -> None:
         super().__init__(coordinator, "maintenance_ends_at")
@@ -167,16 +167,6 @@ class SunRiserMaintenanceEndSensor(MaintenanceEntity, SensorEntity):
     @property
     def native_value(self) -> datetime | None:
         return self.coordinator.maintenance_ends_at
-
-
-class SunRiserResumeButton(MaintenanceEntity, ButtonEntity):
-    """End maintenance or blackout without changing stored plans or time-lapse."""
-
-    def __init__(self, coordinator: SunRiserCoordinator) -> None:
-        super().__init__(coordinator, "resume_normal_operation")
-
-    async def async_press(self) -> None:
-        await self.coordinator.async_resume_normal_operation()
 
 
 def setup_maintenance_entities(
@@ -205,8 +195,6 @@ def setup_maintenance_entities(
                         SunRiserMaintenanceEndSensor(coordinator),
                     ]
                 )
-            elif platform == "button":
-                candidates.append(SunRiserResumeButton(coordinator))
             if platform in ("number", "switch"):
                 for channel in range(1, coordinator.pwm_count + 1):
                     if coordinator.pwm_is_unused(channel):

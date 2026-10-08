@@ -81,19 +81,22 @@ assume that blackout switches every output off.
 | Blackout switch | Start/end blackout |
 | Existing Maintenance Mode switch | Start/end a maintenance session; remains **on during blackout** for compatibility |
 | Operating Mode sensor | Distinguishes normal, maintenance, blackout and time-lapse; missing state is unknown |
-| Maintenance Ends At sensor | Estimated expiry from the latest firmware countdown; unknown when inactive, indefinite, or not reported |
-| Resume Normal Operation button | End maintenance/blackout; does not stop time-lapse |
+| Maintenance Ends At sensor | Disabled by default; estimated expiry from the latest firmware countdown; unknown when inactive, indefinite, or not reported |
 | Maintenance Timeout number | Persistent timeout for both modes, 0–10,080 minutes; **0 means never** |
 | Per-channel Maintenance Level number | Dimmable channel's configured maintenance percentage, 0–100 |
 | Per-channel Maintenance Output switch | On/off channel's configured maintenance state, not its immediate output |
 | Per-channel Maintenance Excluded switch | Leave this channel outside maintenance/blackout control |
 
-Configuration numbers and switches are disabled by default. Enable them in the
-controller's entity settings. They appear only for configured channels, with a
-level number for dimmable channels and an output switch for on/off channels.
+Configuration numbers, configuration switches, and Maintenance Ends At are disabled
+by default. Enable them in the controller's entity settings. Existing enabled
+end-time sensors retain their setting after an update; disable yours there if unwanted.
+Channel controls appear only for configured channels, with a level number for
+dimmable channels and an output switch for on/off channels.
 Changing exclusions or levels preserves other settings and does not start a
 session; firmware may apply saved changes to an already running session.
-The timeout is persistent configuration, not a duration for one invocation.
+The timeout defaults to 1,440 minutes (24 hours). It is persistent configuration,
+not a duration for one invocation. Turn Maintenance Mode off to end either
+maintenance or blackout; no separate resume control is needed.
 
 The controller owns expiration and output fades; these continue while HA is
 stopped. HA reads state after commands and during normal polling, including

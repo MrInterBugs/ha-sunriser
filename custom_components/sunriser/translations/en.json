@@ -71,9 +71,6 @@
     "button": {
       "reboot": {
         "name": "Reboot"
-      },
-      "resume_normal_operation": {
-        "name": "Resume Normal Operation"
       }
     },
     "number": {

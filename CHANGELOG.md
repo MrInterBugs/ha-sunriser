@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Remove the redundant Resume Normal Operation button and action. Turn off the
+  Maintenance Mode switch to end maintenance or blackout. Remove the obsolete
+  button from the entity registry when upgrading from beta.1.
+- Disable Maintenance Ends At by default for newly discovered entities. Existing
+  enabled sensors remain enabled and can be disabled in the device entity settings.
+- Clarify that the default maintenance timeout is 24 hours and is configurable.
+
 ## [2.1.0-feature-maintenance-blackout-beta.1] - 2026-10-08
 
 ### Added

@@ -177,12 +177,6 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             resp.raise_for_status()
         await self.async_request_refresh()
 
-    async def async_resume_normal_operation(self) -> None:
-        """End maintenance/blackout; leave time-lapse and planner selection alone."""
-        self._require_maintenance_support()
-        await self.async_set_service_mode(False)
-        await self.async_request_refresh()
-
     # ------------------------------------------------------------------
     # Session
     # ------------------------------------------------------------------

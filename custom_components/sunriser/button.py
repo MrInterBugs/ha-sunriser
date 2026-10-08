@@ -8,11 +8,12 @@ from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .const import DOMAIN
 from .coordinator import SunRiserCoordinator
-from .maintenance import setup_maintenance_entities
 
 PARALLEL_UPDATES = 1
 
@@ -23,7 +24,13 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunRiserCoordinator = entry.runtime_data
-    setup_maintenance_entities(hass, entry, async_add_entities, "button")
+    # Remove the redundant button registered by the first maintenance beta.
+    registry = entity_registry.async_get(hass)
+    obsolete = registry.async_get_entity_id(
+        "button", DOMAIN, f"{entry.entry_id}_resume_normal_operation"
+    )
+    if obsolete:
+        registry.async_remove(obsolete)
     async_add_entities([SunRiserRebootButton(coordinator, entry)])
 
 

@@ -277,19 +277,6 @@ def _register_services(hass: HomeAssistant) -> None:
     if hass.services.has_service(DOMAIN, _SERVICE_BACKUP):
         return  # already registered (re-entrant safety)
 
-    async def handle_resume(call: ServiceCall) -> None:
-        coordinator = _get_coordinator(hass, call.data.get("device_id"))
-        try:
-            await coordinator.async_resume_normal_operation()
-        except (aiohttp.ClientError, TimeoutError) as err:
-            raise HomeAssistantError(
-                "Could not end maintenance/blackout; check controller state before retrying"
-            ) from err
-
-    hass.services.async_register(
-        DOMAIN, "resume_normal_operation", handle_resume, schema=_DEVICE_SCHEMA
-    )
-
     async def handle_backup(call: ServiceCall) -> ServiceResponse:
         coordinator = _get_coordinator(hass, call.data.get("device_id"))
         try:
