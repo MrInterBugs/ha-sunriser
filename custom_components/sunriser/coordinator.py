@@ -6,7 +6,7 @@ import asyncio
 import logging
 from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Any, TypedDict, cast
+from typing import Any, TypedDict
 
 import aiohttp
 import msgpack
@@ -23,6 +23,8 @@ from homeassistant.helpers.issue_registry import (
 )
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
+
+from .responses import decode_config, decode_state, decode_weather
 
 from .const import (
     COLOR_NAMES,
@@ -175,7 +177,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             timeout=aiohttp.ClientTimeout(total=10),
         ) as resp:
             resp.raise_for_status()
-            return cast(dict[str, Any], msgpack.unpackb(await resp.read(), raw=False))
+            return decode_config(await resp.read())
 
     async def async_set_config(self, params: dict[str, Any]) -> None:
         """PUT / — write config key/value pairs.
@@ -214,7 +216,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             timeout=aiohttp.ClientTimeout(total=10),
         ) as resp:
             resp.raise_for_status()
-            return cast(dict[str, Any], msgpack.unpackb(await resp.read(), raw=False))
+            return decode_state(await resp.read())
 
     async def async_get_weather(self) -> list[Any]:
         """GET /weather — returns per-channel weather simulation state.
@@ -231,9 +233,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             timeout=aiohttp.ClientTimeout(total=10),
         ) as resp:
             resp.raise_for_status()
-            unpacker = msgpack.Unpacker(raw=False)
-            unpacker.feed(await resp.read())
-            return next(iter(unpacker), None) or []
+            return decode_weather(await resp.read())
 
     async def async_set_service_mode(self, enabled: bool) -> None:
         """PUT /state — enable or disable maintenance mode.

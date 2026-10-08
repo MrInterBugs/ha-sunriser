@@ -334,14 +334,13 @@ async def test_async_get_weather_returns_first_msgpack_object(
     assert result == weather
 
 
-async def test_async_get_weather_returns_empty_list_for_empty_stream(
+async def test_async_get_weather_rejects_empty_stream(
     coord: SunRiserCoordinator,
 ) -> None:
     with aioresponses() as m:
         m.get(f"{BASE}/weather", body=b"")
-        result = await coord.async_get_weather()
-
-    assert result == []
+        with pytest.raises(ValueError, match="Malformed MessagePack"):
+            await coord.async_get_weather()
 
 
 async def test_update_data_weather_client_error_logs_debug_and_returns_empty_weather(
