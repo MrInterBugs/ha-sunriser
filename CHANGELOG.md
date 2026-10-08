@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Distinguish expected controller read failures from programming errors, retaining
+  tracebacks for unexpected failures. Warn once after repeated weather/configuration
+  read failures and log recovery, with independent read-freshness tracking.
+
 - Validate controller state, configuration, and weather responses before publishing
   them. Invalid data preserves the last valid response; optional and unknown fields
   remain supported. Treat truncated weather data as a failed read.

@@ -25,6 +25,7 @@ from tests.typing import as_async_mock, collect_entities, require_value
 async def test_offline_device_stays_unavailable_on_failed_config_tick(
     coordinator: SunRiserCoordinator,
 ) -> None:
+    coordinator.async_get_weather = AsyncMock(return_value=[])
     coordinator.async_get_state = AsyncMock(side_effect=aiohttp.ClientConnectionError())
     coordinator.async_get_config = AsyncMock(
         side_effect=aiohttp.ClientConnectionError()
