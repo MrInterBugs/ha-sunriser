@@ -9,6 +9,11 @@
   Preserve surviving entities and skip reconciliation after a failed refresh.
 - Allow sensor setup when a temperature probe has a null reading, then discover
   it when readings return without creating duplicate entities.
+- Remove obsolete maintenance entities after offline configuration changes and
+  retain applicable entities and their settings across reloads.
+- Keep legacy DST tracking disabled if its initial synchronisation write fails.
+- Prevent queued commands from reopening an unloaded coordinator's connection,
+  stop pending refreshes on close, and cancel scheduled reboot tasks on unload.
 
 ## [2.1.1] - 2026-10-08
 

@@ -86,6 +86,7 @@ async def test_reload_reconciles_only_owned_channels(
     entry.add_to_hass(hass)
     entry.runtime_data = coordinator
     coordinator.config["pwm_count"] = 2
+    coordinator.config["factory_version"] = "1.006"
     coordinator.config["pwm#1#onoff"] = onoff
     registry = entity_registry.async_get(hass)
     retained = registry.async_get_or_create(
@@ -99,12 +100,12 @@ async def test_reload_reconciles_only_owned_channels(
     obsolete = registry.async_get_or_create(
         platform, DOMAIN, f"{entry.entry_id}_pwm_4{suffix}", config_entry=entry
     )
-    # Related maintenance controls and unrelated entity platforms are not owned.
+    # Active maintenance controls and unrelated entity platforms are not owned.
     unrelated = [
         registry.async_get_or_create(
             platform,
             DOMAIN,
-            f"{entry.entry_id}_pwm_4_maintenance_level",
+            f"{entry.entry_id}_pwm_1_maintenance_level",
             config_entry=entry,
         ),
         registry.async_get_or_create(

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 from typing import Literal
 
 from homeassistant.components.number import NumberEntity, NumberMode
@@ -179,9 +180,26 @@ def setup_maintenance_entities(
     coordinator: SunRiserCoordinator = entry.runtime_data
     added: set[str] = set()
     registry = entity_registry.async_get(hass)
+    suffixes = {
+        "switch": r"blackout|pwm_[1-9][0-9]*_maintenance_(?:excluded|output)",
+        "number": r"maintenance_timeout|pwm_[1-9][0-9]*_maintenance_level",
+        "sensor": r"operating_mode|maintenance_ends_at",
+    }
+    pattern = re.compile(rf"{re.escape(entry.entry_id)}_(?:{suffixes[platform]})")
+    known = {
+        entity.unique_id
+        for entity in entity_registry.async_entries_for_config_entry(
+            registry, entry.entry_id
+        )
+        if entity.domain == platform
+        and entity.platform == DOMAIN
+        and pattern.fullmatch(entity.unique_id)
+    }
 
     @callback
     def reconcile() -> None:
+        if not coordinator.last_update_success:
+            return
         candidates: list[MaintenanceEntity] = []
         if coordinator.supports_maintenance_config:
             if platform == "switch":
@@ -217,11 +235,13 @@ def setup_maintenance_entities(
                             SunRiserMaintenanceNumber(coordinator, channel)
                         )
         current = {str(entity.unique_id) for entity in candidates}
-        for uid in added - current:
+        for uid in known - current:
             eid = registry.async_get_entity_id(platform, DOMAIN, uid)
             if eid:
                 registry.async_remove(eid)
         new = [entity for entity in candidates if str(entity.unique_id) not in added]
+        known.clear()
+        known.update(current)
         added.clear()
         added.update(current)
         if new:
