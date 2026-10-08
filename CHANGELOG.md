@@ -1,9 +1,18 @@
 # Changelog
 
-## Unreleased
+## [2.1.1] - 2026-10-08
+
+### Changed
 
 - Rename the default Blackout control label to Blackout Mode to match Maintenance
   Mode. Preserve the entity unique ID and control behaviour.
+- Refresh the README and installation guide for the HACS default catalogue,
+  current maintenance features, and firmware guidance. Label the older screenshot.
+
+### Upgrade notes
+
+- Update through HACS and restart Home Assistant to load the new default label.
+- No controller behaviour or configuration changes are included in this patch.
 
 ## [2.1.0] - 2026-10-08
 
