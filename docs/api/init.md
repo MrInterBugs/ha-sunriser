@@ -19,6 +19,7 @@
 | `sunriser.restore` | `file_path` | — | Restores config from a `.msgpack` file |
 | `sunriser.get_errors` | — | `{content}` | Retrieves device error log |
 | `sunriser.get_log` | — | `{content}` | Retrieves device diagnostic log |
+| `sunriser.get_planning` | — | `{channels, weekday}` | Reads selected daily/weekly curves and active program names for the read-only card |
 | `sunriser.get_dayplanner_schedule` | `pwm` | `{pwm, name, color_id, markers}` | Reads day planner schedule |
 | `sunriser.set_dayplanner_schedule` | `pwm, markers` | — | Writes day planner schedule |
 | `sunriser.get_weekplanner_schedule` | `pwm` | `{pwm, name, color_id, schedule}` | Reads week planner schedule |

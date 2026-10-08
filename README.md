@@ -11,6 +11,8 @@ The current release targets **controller firmware 1.006**; compatibility with ol
 - Assign existing weather profiles through optional per-channel selectors, and view daily and weekly curves together in the compact, read-only Day Planner card.
 - View the operating mode and optionally enable Maintenance Ends At. Maintenance configuration entities and the end-time sensor are disabled by default; enable them from the device's entity settings.
 
+The weather-profile selectors and weekly graph are available in the **2.2.0 beta**. To test them, enable beta versions in HACS and select `v2.2.0-feature-weather-schedule-editor-beta.2`, then restart HA and refresh the dashboard. See the [branch configuration guide](docs/configuration.md); the published documentation site follows stable `main`.
+
 See the [maintenance guide](https://mrinterbugs.github.io/ha-sunriser/configuration/#maintenance-and-blackout-firmware-1006) for details. Channels excluded from maintenance/blackout continue normal operation.
 
 **Full documentation:** [mrinterbugs.github.io/ha-sunriser](https://mrinterbugs.github.io/ha-sunriser/)

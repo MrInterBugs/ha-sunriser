@@ -44,8 +44,10 @@ See Home Assistant's [local brand-image documentation](https://developers.home-a
 
 If the card type is missing after installation or an update, reload the dashboard page. The browser must be able to reach `unpkg.com`, which supplies the card's Lit dependency. Check the browser console for a failed module load if it still does not appear.
 
-An empty chart means no day-planner markers were returned. Check that the controller has a day-planner schedule. If multiple controllers are loaded, set the card's `device_id`; see [card configuration](configuration.md#day-planner-card).
+An empty chart can mean that no configured channel has an active daily or weekly curve. Check the selected planner and its markers in the controller interface. Fixed and unassigned channels have no schedule curve. Weekly channels need a program for today or a fallback, plus valid controller timezone settings. Hover over the legend for planner/program details. If multiple controllers are loaded, set the card's `device_id`; see [card configuration](configuration.md#day-planner-card).
 
-## Missing manager or fixed-value controls
+The card is read-only. If editing controls from beta.1 remain visible after installing beta.2 or later, restart Home Assistant and hard-refresh the dashboard.
 
-Manager selects and Fixed Value sliders are disabled by default. Open the controller's entity list, choose the relevant entity, and enable it in the entity settings.
+## Missing manager, fixed-value, or weather-profile controls
+
+Manager selects, Fixed Value sliders, and Weather Profile selects are disabled by default. Weather Profile selects require firmware 1.006 or newer. Open the controller's entity list, choose the relevant entity, and enable it in the entity settings.

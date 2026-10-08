@@ -23,7 +23,7 @@ Changing any option reloads the integration automatically — no restart require
 
 Each poll reads state, weather, and configuration consecutively. Channel changes, new temperature probes, firmware changes, and weather program names are refreshed every {{ cfg.default_scan_interval }} seconds by default. New temperature sensors appear only after their names, units, and decimal scaling have loaded; failed metadata reads are retried on the next poll.
 
-The Day Planner card reads this configuration cache. Its separate display refresh interval does not change how often HA polls the controller.
+The Day Planner card requests a fresh read-only schedule snapshot on each card refresh, including program details needed for weekly curves. Its refresh interval controls these additional reads independently of the regular coordinator poll interval. It makes no controller writes.
 
 ## Entity types
 
@@ -31,7 +31,7 @@ The Day Planner card reads this configuration cache. Its separate display refres
 |---|---|---|
 | `light` | PWM channel with `pwm#X#onoff = false` (dimmable) | |
 | `switch` | PWM channel with `pwm#X#onoff = true` (on/off only) | Also creates Maintenance Mode and Time-lapse; DST Auto-Track is only created for firmware older than 1.006 |
-| `select` | Every active channel — controls the manager (`none` / `dayplanner` / `weekplanner` / `fixed`) | Disabled by default; enable in entity settings |
+| `select` | Every active channel — controls the manager (`none` / `dayplanner` / `weekplanner` / `fixed`); firmware 1.006+ also provides existing weather-profile assignment | Disabled by default; enable in entity settings |
 | `number` | Every active channel — sets the fixed brightness (0–{{ cfg.pwm_max }}) | Disabled by default; enable in entity settings |
 | `sensor` | Uptime, Firmware Version, and Hostname are always created; probes and weather channels are discovered from device data | Uptime is disabled by default; weather states are `clear`, `cloudy`, `rain`, `thunder`, or `moon` |
 | `binary_sensor` | Always — device connectivity (derived from last state poll) | |
@@ -52,7 +52,7 @@ refresh_interval: 300
 | Setting | Description | Default |
 |---|---|---|
 | `title` | Card heading | `Day Planner` |
-| `refresh_interval` | Seconds between display refreshes; at least 1 | `300` |
+| `refresh_interval` | Seconds between fresh schedule reads and graph updates; at least 1 | `300` |
 | `device_id` | HA device ID of the SunRiser controller; required when more than one is loaded | The only loaded controller |
 | `channels` | Map of PWM channel numbers to display labels | Controller channel names |
 
