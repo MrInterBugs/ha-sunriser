@@ -1,11 +1,18 @@
 # Changelog
 
-## Unreleased
+## [1.7.2-1.006-beta.1] - 2026-10-08
+
+### Fixed
 
 - Report running `factory_version` in the firmware sensor and device info instead of the saved configuration version. Refresh it with the existing periodic configuration reads and update the HA device registry.
 - Retire DST Auto-Track and remove its registry entry on firmware 1.006 or newer, where DST is handled by the firmware. Prevent restored or queued HA DST writes; retain the switch for older firmware.
 - Retry failed startup configuration chunks instead of silently skipping their keys.
 - Publish a separate connectivity result after a transient failed poll without mutating the previous coordinator snapshot. Existing three-poll availability grace remains unchanged.
+
+### Validation
+
+- 338 mocked tests pass with 100% statement coverage, including DST cleanup at startup and after a firmware upgrade without reloading HA.
+- Integration formatting and strict type checks pass. Controller verification used read-only requests; real-device output tests were excluded.
 
 ## [1.7.1] - 2026-04-19
 
