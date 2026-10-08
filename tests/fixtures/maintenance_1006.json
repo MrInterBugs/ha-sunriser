@@ -1,0 +1,19 @@
+{
+  "description": "Synthetic 1.006 protocol fixtures derived from the vendor web client; not hardware captures",
+  "config": {
+    "factory_version": "1.006",
+    "service_timeout": 30,
+    "service_value": 750,
+    "pwm#1#service": 65,
+    "pwm#1#nomaint": false,
+    "pwm#2#service": 0,
+    "pwm#2#nomaint": true
+  },
+  "states": {
+    "normal": {"service_mode": 0, "blackout": false, "timewarp": 0},
+    "maintenance": {"service_mode": 1791480000, "blackout": false, "service_left": 1800},
+    "blackout": {"service_mode": 1791480000, "blackout": true, "service_left": 900},
+    "indefinite": {"service_mode": 1791480000, "blackout": false, "service_left": 0},
+    "time_lapse": {"service_mode": 0, "blackout": false, "timewarp": 1}
+  }
+}

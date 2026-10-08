@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, PWM_MAX
 from .coordinator import SunRiserCoordinator
+from .maintenance import setup_maintenance_entities
 
 PARALLEL_UPDATES = 1
 
@@ -24,6 +25,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunRiserCoordinator = entry.runtime_data
+    setup_maintenance_entities(hass, entry, async_add_entities, "number")
     _added: set[int] = set()
     er = entity_registry.async_get(hass)
 

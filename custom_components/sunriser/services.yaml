@@ -197,7 +197,7 @@ set_weekplanner_schedule:
 download_factory_backup:
   name: Download Factory Backup
   description: >
-    Download the factory default configuration from the device and save it as a
+    Download the configuration preserved by a factory reset, when available, as a
     .msgpack file in your Home Assistant /config directory. Returns the saved
     file path.
   fields:

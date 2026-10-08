@@ -679,7 +679,7 @@ async def test_weather_channel_schema(session: aiohttp.ClientSession) -> None:
 
 @pytest.mark.asyncio
 async def test_get_factorybackup(session: aiohttp.ClientSession) -> None:
-    """GET /factorybackup should return a msgpack dict of factory default config."""
+    """GET /factorybackup should return configuration preserved at a factory reset."""
     async with session.get(f"{BASE_URL}/factorybackup", timeout=TIMEOUT) as resp:
         if resp.status in (404, 500):
             pytest.skip(

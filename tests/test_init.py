@@ -895,7 +895,7 @@ async def test_service_factory_backup_not_available(
     err = aiohttp.ClientResponseError(MagicMock(), (), status=500)
     coordinator.async_get_factory_backup = AsyncMock(side_effect=err)
 
-    with pytest.raises(HomeAssistantError, match="CFGBACK1"):
+    with pytest.raises(HomeAssistantError, match="No factory-reset backup"):
         await hass.services.async_call(
             DOMAIN, "download_factory_backup", {}, blocking=True, return_response=True
         )

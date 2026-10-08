@@ -54,7 +54,7 @@
         "data_description": {
           "scan_interval": "How often (in seconds) to poll the device for updated PWM and sensor values. Lower values give faster updates but increase load on the controller.",
           "scheduled_reboot": "Optionally reboot the controller once a day. Disabled by default.",
-          "reboot_time": "Time of day to reboot the controller (24-hour format, e.g. 04:00). The reboot happens silently — lights resume their program after the controller restarts."
+          "reboot_time": "Time of day to reboot the controller (24-hour format, e.g. 04:00). The reboot happens silently \u2014 lights resume their program after the controller restarts."
         }
       }
     },
@@ -76,6 +76,12 @@
     "number": {
       "fixed_value": {
         "name": "{channel} Fixed Value"
+      },
+      "maintenance_timeout": {
+        "name": "Maintenance Timeout"
+      },
+      "maintenance_level": {
+        "name": "{channel} Maintenance Level"
       }
     },
     "select": {
@@ -95,6 +101,18 @@
       },
       "weather_channel": {
         "name": "{channel} Weather"
+      },
+      "operating_mode": {
+        "name": "Operating Mode",
+        "state": {
+          "normal": "Normal",
+          "maintenance": "Maintenance",
+          "blackout": "Blackout",
+          "time_lapse": "Time-lapse"
+        }
+      },
+      "maintenance_ends_at": {
+        "name": "Maintenance Ends At"
       }
     },
     "switch": {
@@ -106,13 +124,22 @@
       },
       "dst_auto_track": {
         "name": "DST Auto-Track"
+      },
+      "blackout": {
+        "name": "Blackout"
+      },
+      "maintenance_excluded": {
+        "name": "{channel} Maintenance Excluded"
+      },
+      "maintenance_output": {
+        "name": "{channel} Maintenance Output"
       }
     }
   },
   "issues": {
     "device_unreachable": {
       "title": "SunRiser device unreachable",
-      "description": "The SunRiser controller at **{host}** has been unreachable for multiple consecutive poll cycles.\n\nCheck that the device is powered on and reachable from Home Assistant. If the IP address has changed, use **Settings → Devices & Services → SunRiser → Reconfigure** to update it. The notification clears after a successful state poll."
+      "description": "The SunRiser controller at **{host}** has been unreachable for multiple consecutive poll cycles.\n\nCheck that the device is powered on and reachable from Home Assistant. If the IP address has changed, use **Settings \u2192 Devices & Services \u2192 SunRiser \u2192 Reconfigure** to update it. The notification clears after a successful state poll."
     }
   },
   "exceptions": {
@@ -153,7 +180,7 @@
       "message": "Failed to update week planner: {error}"
     },
     "factory_backup_not_available": {
-      "message": "Factory backup is not available on this device. The CFGBACK1 directory only exists after a firmware-from-SD-card installation, which has not been performed on this unit."
+      "message": "No factory-reset backup is available on this controller."
     },
     "factory_backup_retrieve_failed": {
       "message": "Failed to retrieve factory backup from SunRiser: {error}"

@@ -1,5 +1,94 @@
 # Changelog
 
+## [2.1.0] - 2026-10-08
+
+### Added
+
+- Add firmware 1.006+ blackout and operating mode entities, optional maintenance
+  timeout, channel level/exclusion controls, and an optional estimated end sensor.
+- Keep Maintenance Mode on during blackout; turning it off ends either session.
+  Remove the redundant resume button/action from the initial maintenance beta.
+
+### Reliability
+
+- Validate controller responses before updating caches and preserve valid data on
+  malformed responses. Allow optional and unknown firmware fields.
+- Separate expected read failures from programming errors, retain tracebacks, and
+  report persistent weather/configuration failures and recovery without warning spam.
+- Correct factory-reset backup descriptions and expand troubleshooting guidance.
+
+### Upgrade and validation
+
+- Update through HACS and restart HA. Maintenance configuration and estimated-end
+  entities default to disabled; existing enabled entities retain their settings.
+- Replace the beta.1 resume action with `switch.turn_off` targeting Maintenance Mode.
+- 477 mocked Python tests pass with 100% statement coverage; eight frontend tests
+  and strict type, formatting, documentation, HACS, and Hassfest checks pass.
+- The reliability beta was reported to work in real HA. Additional live tests of
+  the combined build were not performed; physical transitions, exclusions, timeout
+  expiry, and restart behaviour remain unverified together on hardware.
+
+## [2.1.0-feature-maintenance-blackout-beta.3] - 2026-10-08
+
+- Combine maintenance/blackout controls with response validation and failure
+  handling from PRs #12 and #13 for integration testing before v2.1.0.
+- Preserve the existing optional-entity defaults and maintenance switch semantics.
+
+## [2.1.0-feature-maintenance-blackout-beta.2] - 2026-10-08
+
+### Changed
+
+- Remove the redundant Resume Normal Operation button and action. Turn off the
+  Maintenance Mode switch to end maintenance or blackout. Remove the obsolete
+  button from the entity registry when upgrading from beta.1.
+- Disable Maintenance Ends At by default for newly discovered entities. Existing
+  enabled sensors remain enabled and can be disabled in the device entity settings.
+- Clarify that the default maintenance timeout is 24 hours and is configurable.
+
+### Upgrade notes
+
+- Select beta.2 in HACS and restart Home Assistant. The obsolete resume button is
+  removed automatically. Existing Maintenance Ends At sensors stay enabled; disable
+  yours in the device's entity settings if unwanted.
+- Replace any beta.1 `sunriser.resume_normal_operation` actions with
+  `switch.turn_off` targeting the controller's Maintenance Mode switch.
+
+### Testing
+
+- 421 mocked Python tests pass with 100% statement coverage.
+- Strict Pyright, mypy, Black, and the strict documentation build pass.
+- Regression checks cover removing the obsolete button, stopping blackout using
+  Maintenance Mode, and preserving an explicitly enabled end-time sensor on reload.
+
+## [2.1.0-feature-maintenance-blackout-beta.1] - 2026-10-08
+
+### Added
+
+- Add firmware 1.006+ blackout and resume controls, operating mode and estimated
+  maintenance end sensors, and optional maintenance timeout, level and exclusion
+  configuration entities.
+- Preserve the existing maintenance switch's session semantics during blackout.
+- Document the verified vendor maintenance protocol and remaining hardware checks.
+- Correct factory-reset backup descriptions.
+
+### Upgrade notes
+
+- Enable beta versions in HACS, select this release, and restart Home Assistant.
+- New maintenance and blackout controls require controller firmware 1.006 or newer.
+- Maintenance timeout, per-channel level, and exclusion configuration entities are
+  disabled by default; enable the ones you want from the device's entity list.
+- The existing maintenance switch stays on during blackout because the maintenance
+  session remains active. Use the operating mode sensor to distinguish the modes.
+- Maintenance expiry remains controlled by the firmware. The estimated end sensor
+  depends on the controller reporting a remaining duration.
+
+### Testing
+
+- 423 mocked Python tests pass with 100% statement coverage; eight frontend tests pass.
+- Strict Pyright, mypy, Black, and the strict documentation build pass.
+- Live controller testing is still needed for fades, exclusions, timeout expiry,
+  changes during an active session, physical-button interaction, and HA restarts.
+
 ## [2.0.1-fix-report-controller-read-failures-beta.1] - 2026-10-08
 
 ### Changed

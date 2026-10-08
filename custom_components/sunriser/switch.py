@@ -15,6 +15,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, PWM_MAX
 from .coordinator import SunRiserCoordinator
+from .maintenance import setup_maintenance_entities
 
 PARALLEL_UPDATES = 1
 
@@ -25,6 +26,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunRiserCoordinator = entry.runtime_data
+    setup_maintenance_entities(hass, entry, async_add_entities, "switch")
     _added: set[int] = set()
     er = entity_registry.async_get(hass)
 
@@ -76,7 +78,7 @@ async def async_setup_entry(
 
 
 class SunRiserMaintenanceSwitch(CoordinatorEntity[SunRiserCoordinator], SwitchEntity):
-    """Maintenance mode switch — freezes all PWM channels on the device."""
+    """Maintenance session switch; also on during firmware blackout (legacy semantics)."""
 
     _attr_has_entity_name = True
     _attr_translation_key = "maintenance_mode"

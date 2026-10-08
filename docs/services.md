@@ -118,3 +118,9 @@ data:
     - time: "22:00"
       percent: 0
 ```
+
+## End maintenance or blackout
+
+Turn off the controller's **Maintenance Mode** switch to end either session.
+Automations can use `switch.turn_off` targeting that switch. This leaves stored
+configuration and time-lapse unchanged.

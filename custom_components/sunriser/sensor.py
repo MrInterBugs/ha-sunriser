@@ -20,6 +20,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .coordinator import SunRiserCoordinator
+from .maintenance import setup_maintenance_entities
 
 PARALLEL_UPDATES = 0
 
@@ -35,6 +36,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunRiserCoordinator = entry.runtime_data
+    setup_maintenance_entities(hass, entry, async_add_entities, "sensor")
 
     # Static diagnostic sensors — always present.
     async_add_entities(
