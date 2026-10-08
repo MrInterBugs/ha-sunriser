@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — firmware 1.006 request simplification
+
+- Remove configuration request splitting, staged startup, rotating state/weather polls, deferred metadata queues, and queued DST ticks. Each poll now fetches state, weather, and full channel/sensor configuration.
+- Allow normal HTTP connection reuse and remove the global request lock. Keep configuration read/write ordering and acknowledged-write caching.
+- Load entity platforms during setup; discover channel and sensor changes on the next successful poll. Preserve firmware reporting, native DST handling, availability grace, per-controller repairs, service routing, and export protections.
+- Make daily reboot opt-in. Explicit existing reboot settings remain effective.
+- Validation: 383 mocked tests pass with 100% statement coverage; Black, strict mypy, and the strict documentation build pass. Live-device tests were excluded.
+- Experimental: firmware 1.006 is assumed to tolerate larger requests and consecutive connections. No live controller validation has been performed for this change; older firmware compatibility is unverified.
+
 ## [1.7.2-1.006-beta.2] - 2026-10-08
 
 ### Fixed

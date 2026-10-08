@@ -21,32 +21,6 @@ def _pack(data):
     return msgpack.packb(data, use_bin_type=True)
 
 
-def _chunked_responses(
-    coord: SunRiserCoordinator,
-    keys: list[str],
-    values: dict[str, object],
-    max_body_bytes: int | None = None,
-) -> tuple[list[list[str]], list[dict[str, object]]]:
-    chunks = coord._chunk_config_keys(keys, max_body_bytes=max_body_bytes)
-    return chunks, [{k: values.get(k) for k in chunk} for chunk in chunks]
-
-
-def _pwm_refresh_keys(coord: SunRiserCoordinator) -> list[str]:
-    keys = ["factory_version"] + [
-        f"pwm#{i}#color" for i in range(1, coord.pwm_count + 1)
-    ]
-    for i in range(1, coord.pwm_count + 1):
-        keys.extend(
-            [
-                f"pwm#{i}#onoff",
-                f"pwm#{i}#name",
-                f"pwm#{i}#manager",
-                f"pwm#{i}#fixed",
-            ]
-        )
-    return keys
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -101,236 +75,15 @@ async def test_coordinator_init_ignores_other_hass_data_keys(hass, mock_config_e
 
 
 # ---------------------------------------------------------------------------
-# Init state machine (four ticks, one request each)
-# ---------------------------------------------------------------------------
-
-
-async def test_init_step_0_fetches_base_config(coord):
-    """Tick 0 fetches base config keys and advances _init_step to 1."""
-    base_resp = {
-        "hostname": "testunit",
-        "save_version": "1.005",
-        "factory_version": "1.005",
-        "model": "SunRiser 10",
-        "pwm_count": 4,
-        "name": "SunRiser",
-        "model_id": "sr10",
-    }
-    with aioresponses() as m:
-        m.post(f"{BASE}/", body=_pack(base_resp))
-        data = await coord._async_update_data()
-
-    assert coord.config["hostname"] == "testunit"
-    assert coord._init_step == 1
-    assert data == {}
-
-
-async def test_init_step_1_fetches_state(coord):
-    """Tick 1 fetches /state, derives pwm_count, stores sensor ROMs."""
-    coord._init_step = 1
-    coord.config["pwm_count"] = None
-
-    state = {
-        "pwms": {"1": 0, "2": 0},
-        "uptime": 10,
-        "service_mode": 0,
-        "sensors": {"AABBCC": [1, 200]},
-    }
-    with aioresponses() as m:
-        m.get(f"{BASE}/state", body=_pack(state))
-        data = await coord._async_update_data()
-
-    assert coord.config["pwm_count"] == 2
-    assert coord._pending_sensor_roms == ["AABBCC"]
-    assert coord._init_step == 2
-    assert data["uptime"] == 10
-    assert data["ok"] is True
-
-
-async def test_init_step_1_derives_pwm_count_from_state_when_config_is_none(coord):
-    """When pwm_count is None in config, derive it from len(state['pwms'])."""
-    coord._init_step = 1
-    state = {"pwms": {"1": 0, "2": 0, "3": 0}, "uptime": 1, "service_mode": 0}
-    with aioresponses() as m:
-        m.get(f"{BASE}/state", body=_pack(state))
-        await coord._async_update_data()
-
-    assert coord.config["pwm_count"] == 3
-
-
-async def test_init_step_2_fetches_pwm_and_sensor_config(coord):
-    """Tick 2 fetches PWM config one chunk per tick; single chunk case advances to step 3."""
-    coord._init_step = 2
-    coord.config["pwm_count"] = 1
-    coord._pending_sensor_roms = ["AABBCC"]
-    coord.data = {
-        "pwms": {"1": 0},
-        "uptime": 5,
-        "service_mode": 0,
-        "ok": True,
-        "weather": [],
-    }
-
-    pwm_sensor_resp = {
-        "pwm#1#name": None,
-        "pwm#1#onoff": False,
-        "pwm#1#max": None,
-        "pwm#1#color": "4500k",
-        "pwm#1#manager": 0,
-        "pwm#1#fixed": None,
-        "dayplanner#marker#1": None,
-        "sensors#sensor#AABBCC#name": "Tank Temp",
-        "sensors#sensor#AABBCC#unit": 1,
-        "sensors#sensor#AABBCC#unitcomma": 1,
-    }
-    with aioresponses() as m:
-        m.post(f"{BASE}/", body=_pack(pwm_sensor_resp))
-        await coord._async_update_data()
-
-    assert coord.config["pwm#1#color"] == "4500k"
-    assert coord.config["sensors#sensor#AABBCC#name"] == "Tank Temp"
-    assert coord._init_step == 3
-
-
-async def test_init_step_2_multi_chunk_drains_one_per_tick(coord):
-    """When PWM config spans multiple chunks, each tick drains exactly one request.
-
-    This verifies the one-request-per-tick contract during init: the WizFi360
-    needs a full scan interval between TCP connections or AT+IPD corruption occurs.
-    """
-    coord._init_step = 2
-    coord.config["pwm_count"] = 2
-    coord._pending_sensor_roms = []
-    coord.data = {"pwms": {"1": 0, "2": 0}, "uptime": 5, "ok": True, "weather": []}
-
-    # Force small chunks so 2 channels produce multiple POST requests.
-    coord._MAX_CONFIG_REQUEST_BODY_BYTES = 80
-
-    keys = []
-    for i in range(1, 3):
-        keys += [
-            f"pwm#{i}#name",
-            f"pwm#{i}#onoff",
-            f"pwm#{i}#max",
-            f"pwm#{i}#color",
-            f"pwm#{i}#manager",
-            f"pwm#{i}#fixed",
-            f"dayplanner#marker#{i}",
-        ]
-    chunks = coord._chunk_config_keys(keys)
-    assert (
-        len(chunks) > 1
-    ), "test requires multiple chunks — reduce _MAX_CONFIG_REQUEST_BODY_BYTES"
-
-    all_values = {
-        "pwm#1#name": None,
-        "pwm#1#onoff": False,
-        "pwm#1#max": None,
-        "pwm#1#color": "4500k",
-        "pwm#1#manager": 0,
-        "pwm#1#fixed": None,
-        "dayplanner#marker#1": None,
-        "pwm#2#name": None,
-        "pwm#2#onoff": False,
-        "pwm#2#max": None,
-        "pwm#2#color": "",
-        "pwm#2#manager": 0,
-        "pwm#2#fixed": None,
-        "dayplanner#marker#2": None,
-    }
-
-    with aioresponses() as m:
-        for chunk in chunks:
-            m.post(f"{BASE}/", body=_pack({k: all_values[k] for k in chunk}))
-
-        # All but the last chunk: stay at step 2, one request per tick.
-        for _ in range(len(chunks) - 1):
-            await coord._async_update_data()
-            assert coord._init_step == 2
-
-        # Final chunk: advance to step 3.
-        await coord._async_update_data()
-
-    assert coord._init_step == 3
-    assert coord.config["pwm#1#color"] == "4500k"
-    assert coord.config["pwm#2#color"] == ""
-
-
-async def test_init_step_3_fetches_weather(coord):
-    """Tick 3 fetches /weather and sets init_complete."""
-    coord._init_step = 3
-    coord.data = {"pwms": {"1": 0}, "uptime": 5, "ok": True, "weather": []}
-
-    weather = [{"weather_program_id": 2}]
-    with aioresponses() as m:
-        m.get(f"{BASE}/weather", body=_pack(weather))
-        data = await coord._async_update_data()
-
-    assert data["weather"] == weather
-    assert coord._init_step == 4
-    assert coord.init_complete is True
-
-
-async def test_init_step_3_weather_failure_still_completes_init(coord):
-    """Weather failure in tick 3 is graceful — init still completes."""
-    coord._init_step = 3
-    coord.data = {"pwms": {}, "uptime": 0, "ok": True, "weather": []}
-
-    with aioresponses() as m:
-        m.get(f"{BASE}/weather", exception=aiohttp.ClientConnectionError("down"))
-        data = await coord._async_update_data()
-
-    assert data["weather"] == []
-    assert coord._init_step == 4
-    assert coord.init_complete is True
-
-
-async def test_init_step_0_failure_raises_update_failed(coord):
-    """A network error during tick 0 raises UpdateFailed (not raw ClientError)."""
-    with aioresponses() as m:
-        m.post(f"{BASE}/", exception=aiohttp.ClientConnectionError("down"))
-        with pytest.raises(UpdateFailed, match="Error communicating"):
-            await coord._async_update_data()
-
-    assert coord._init_step == 0  # not advanced on failure
-
-
-async def test_init_step_1_failure_retries(coord):
-    """A network error during tick 1 raises UpdateFailed and step is not advanced."""
-    coord._init_step = 1
-    with aioresponses() as m:
-        m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("down"))
-        with pytest.raises(UpdateFailed):
-            await coord._async_update_data()
-
-    assert coord._init_step == 1  # not advanced
-
-
-async def test_init_complete_false_during_init(coord):
-    assert coord.init_complete is False
-
-
-async def test_init_complete_true_after_step_4(coord):
-    coord._init_step = 4
-    assert coord.init_complete is True
-
-
-async def test_async_load_device_config_makes_no_request(coord):
-    """async_load_device_config is a no-op; no HTTP request is made."""
-    await coord.async_load_device_config()  # would raise ConnectionError if a request were made
-
-
-# ---------------------------------------------------------------------------
 # _async_update_data
 # ---------------------------------------------------------------------------
 
 
 async def test_update_data_state_tick_resets_timewarp_when_absent(coord):
     """timewarp is reset to 0 each state tick so stale ON state doesn't linger."""
-    coord._init_step = 4
+
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True, "weather": [], "timewarp": 1}
-    coord._next_refresh_index = 0
 
     with aioresponses() as m:
         m.get(
@@ -341,205 +94,8 @@ async def test_update_data_state_tick_resets_timewarp_when_absent(coord):
     assert data["timewarp"] == 0
 
 
-async def test_update_data_state_tick(coord):
-    """State tick fetches /state, sets ok=True, advances round-robin index."""
-    coord._init_step = 4
-    coord.config = dict(FAKE_CONFIG)
-    coord.data = {**FAKE_STATE, "ok": True, "weather": []}
-    coord._next_refresh_index = 0
-
-    with aioresponses() as m:
-        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
-        data = await coord._async_update_data()
-
-    assert data["uptime"] == 12345
-    assert data["ok"] is True
-    assert coord._next_refresh_index == 1
-
-
-async def test_update_data_weather_tick(coord):
-    """Weather tick fetches /weather, preserves existing state, advances index."""
-    coord._init_step = 4
-    coord.config = dict(FAKE_CONFIG)
-    coord.data = {**FAKE_STATE, "ok": True, "weather": []}
-    coord._next_refresh_index = 4  # weather is index 4 in ("state"*4, "weather")
-
-    with aioresponses() as m:
-        m.get(f"{BASE}/weather", body=_pack([None, {"weather_program_id": 1}]))
-        data = await coord._async_update_data()
-
-    assert data["uptime"] == FAKE_STATE["uptime"]
-    assert data["weather"] == [None, {"weather_program_id": 1}]
-    assert coord._next_refresh_index == 0
-
-
-async def test_update_data_pwm_config_tick(coord):
-    """PWM config tick fetches color and details for all channels."""
-    coord._init_step = 4
-    coord.config = dict(FAKE_CONFIG)
-    coord.data = {**FAKE_STATE, "ok": True, "weather": []}
-    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
-
-    # pwm_count=4; channels 1,2,4 active (non-empty color), channel 3 unused.
-    # Even inactive channels need details in case they were just activated.
-    color_keys = [f"pwm#{i}#color" for i in range(1, 5)]
-    extra_keys = [
-        f"pwm#{i}#{k}"
-        for i in range(1, 5)
-        for k in ("onoff", "name", "manager", "fixed")
-    ]
-    fresh = {k: coord.config.get(k) for k in color_keys + extra_keys}
-
-    with aioresponses() as m:
-        m.post(f"{BASE}/", body=_pack(fresh))
-        data = await coord._async_update_data()
-
-    assert data["uptime"] == FAKE_STATE["uptime"]
-    assert coord._next_refresh_index == 0
-
-
-def test_chunk_config_keys_respects_body_limit(coord):
-    """Config key chunks stay within the configured msgpack body size limit."""
-    keys = [f"key#{i}" for i in range(30)]
-    limit = 70
-
-    chunks = coord._chunk_config_keys(keys, max_body_bytes=limit)
-
-    assert len(chunks) > 1
-    assert [key for chunk in chunks for key in chunk] == keys
-    assert all(len(_pack(chunk)) <= limit for chunk in chunks)
-
-
-def test_chunk_config_keys_empty_returns_no_chunks(coord):
-    """Empty key lists should not produce any request chunks."""
-    assert coord._chunk_config_keys([]) == []
-
-
-async def test_async_get_config_chunks_large_requests(coord):
-    """async_get_config splits requests when the msgpack body exceeds the limit."""
-    keys = [f"key#{i}" for i in range(30)]
-    limit = 70
-    expected = {k: f"val_{k}" for k in keys}
-    chunks, responses = _chunked_responses(coord, keys, expected, max_body_bytes=limit)
-    coord._MAX_CONFIG_REQUEST_BODY_BYTES = limit
-
-    with aioresponses() as m:
-        for response in responses:
-            m.post(f"{BASE}/", body=_pack(response))
-        result = await coord.async_get_config(keys)
-
-    assert result == expected
-    assert len(m.requests[("POST", URL(f"{BASE}/"))]) == len(chunks)
-    assert all(
-        len(req.kwargs["data"]) <= limit
-        for req in m.requests[("POST", URL(f"{BASE}/"))]
-    )
-
-
-async def test_update_data_pwm_config_tick_failure_returns_stale(coord, caplog):
-    """PWM config fetch failure logs a debug message and returns stale data."""
-    coord._init_step = 4
-    coord.config = dict(FAKE_CONFIG)
-    coord.data = {**FAKE_STATE, "ok": True, "weather": []}
-    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
-
-    with aioresponses() as m:
-        m.post(f"{BASE}/", exception=aiohttp.ClientConnectionError("down"))
-        with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
-            data = await coord._async_update_data()
-
-    assert data["uptime"] == FAKE_STATE["uptime"]
-    assert "Could not refresh PWM config" in caplog.text
-    assert coord._next_refresh_index == 0
-
-
-async def test_pwm_config_refresh_drains_one_chunk_per_tick(coord):
-    """When the key list exceeds the byte limit, each tick sends exactly one chunk."""
-    coord._init_step = 4
-    coord.data = {**FAKE_STATE, "ok": True, "weather": []}
-    limit = 250
-    coord._MAX_CONFIG_REQUEST_BODY_BYTES = limit
-    coord.config = {
-        **FAKE_CONFIG,
-        "pwm_count": 10,
-        **{f"pwm#{i}#color": "4500k" for i in range(1, 11)},
-        **{f"pwm#{i}#onoff": False for i in range(1, 11)},
-        **{f"pwm#{i}#name": None for i in range(1, 11)},
-        **{f"pwm#{i}#manager": 0 for i in range(1, 11)},
-        **{f"pwm#{i}#fixed": 0 for i in range(1, 11)},
-    }
-    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
-
-    keys = [f"pwm#{i}#color" for i in range(1, 11)]
-    keys += [
-        f"pwm#{i}#{k}"
-        for i in range(1, 11)
-        for k in ("onoff", "name", "manager", "fixed")
-    ]
-    chunks, responses = _chunked_responses(
-        coord, keys, coord.config, max_body_bytes=limit
-    )
-
-    assert len(chunks) > 1
-
-    for idx, response in enumerate(responses, start=1):
-        with aioresponses() as m:
-            m.post(f"{BASE}/", body=_pack(response))
-            data = await coord._async_update_data()
-
-        remaining = len(chunks) - idx
-        assert len(coord._pending_refresh_chunks) == remaining
-        if remaining:
-            assert data is coord.data  # no listener notification until final chunk
-
-    assert len(coord._pending_refresh_chunks) == 0
-    assert coord._next_refresh_index == 0  # state/weather not advanced during drain
-
-
-async def test_update_data_fetches_new_sensor_config(coord):
-    """New DS1820 ROMs are queued on the state tick and fetched on the next pwm_config tick."""
-    coord._init_step = 4
-    coord._next_refresh_index = 0
-    coord.config = dict(FAKE_CONFIG)
-    del coord.config["sensors#sensor#AABBCCDDEEFF#name"]
-
-    # State tick: new ROM queued, no second POST fired
-    with aioresponses() as m:
-        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
-        coord.data = await coord._async_update_data()
-
-    assert "sensors#sensor#AABBCCDDEEFF#name" in coord._pending_config_keys
-    assert "sensors#sensor#AABBCCDDEEFF#name" not in coord.config
-
-    # pwm_config tick(s): queued sensor keys are drained via PWM config POST chunks
-    pwm_keys = _pwm_refresh_keys(coord)
-    fresh = {k: coord.config.get(k) for k in pwm_keys}
-    fresh.update(
-        {
-            "sensors#sensor#AABBCCDDEEFF#name": "Water Temp",
-            "sensors#sensor#AABBCCDDEEFF#unit": 1,
-            "sensors#sensor#AABBCCDDEEFF#unitcomma": 1,
-        }
-    )
-    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
-    keys = pwm_keys + [
-        "sensors#sensor#AABBCCDDEEFF#name",
-        "sensors#sensor#AABBCCDDEEFF#unit",
-        "sensors#sensor#AABBCCDDEEFF#unitcomma",
-    ]
-    _, responses = _chunked_responses(coord, keys, fresh)
-    for response in responses:
-        with aioresponses() as m:
-            m.post(f"{BASE}/", body=_pack(response))
-            coord.data = await coord._async_update_data()
-
-    assert coord.config["sensors#sensor#AABBCCDDEEFF#name"] == "Water Temp"
-    assert "sensors#sensor#AABBCCDDEEFF#name" not in coord._pending_config_keys
-
-
 async def test_update_data_client_error_raises_update_failed(coord):
-    coord._init_step = 4
-    coord._next_refresh_index = 0
+
     with aioresponses() as m:
         m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("down"))
         with pytest.raises(UpdateFailed, match="Error communicating"):
@@ -547,8 +103,7 @@ async def test_update_data_client_error_raises_update_failed(coord):
 
 
 async def test_update_data_unexpected_error_raises_update_failed(coord):
-    coord._init_step = 4
-    coord._next_refresh_index = 0
+
     with aioresponses() as m:
         m.get(f"{BASE}/state", exception=ValueError("boom"))
         with pytest.raises(UpdateFailed, match="Error communicating"):
@@ -562,8 +117,7 @@ async def test_update_data_unexpected_error_raises_update_failed(coord):
 
 async def test_grace_period_returns_stale_data_on_first_failure(coord, caplog):
     """First failure with existing data should return stale data, not raise."""
-    coord._init_step = 4
-    coord._next_refresh_index = 0
+
     coord.data = dict(FAKE_STATE)
 
     with aioresponses() as m:
@@ -578,8 +132,7 @@ async def test_grace_period_returns_stale_data_on_first_failure(coord, caplog):
 
 async def test_grace_period_returns_stale_data_on_second_failure(coord):
     """Second consecutive failure should still return stale data."""
-    coord._init_step = 4
-    coord._next_refresh_index = 0
+
     coord.data = dict(FAKE_STATE)
     coord._consecutive_failures = 1
 
@@ -593,8 +146,7 @@ async def test_grace_period_returns_stale_data_on_second_failure(coord):
 
 async def test_grace_period_raises_on_third_failure(coord):
     """Third consecutive failure should raise UpdateFailed."""
-    coord._init_step = 4
-    coord._next_refresh_index = 0
+
     coord.data = dict(FAKE_STATE)
     coord._consecutive_failures = 2
 
@@ -608,8 +160,7 @@ async def test_grace_period_raises_on_third_failure(coord):
 
 async def test_grace_period_raises_immediately_with_no_prior_data(coord):
     """If there is no prior data, raise UpdateFailed immediately on any failure."""
-    coord._init_step = 4
-    coord._next_refresh_index = 0
+
     assert coord.data is None
 
     with aioresponses() as m:
@@ -620,13 +171,14 @@ async def test_grace_period_raises_immediately_with_no_prior_data(coord):
 
 async def test_grace_period_resets_on_success(coord):
     """A successful poll resets the consecutive failure counter."""
-    coord._init_step = 4
-    coord._next_refresh_index = 0
+
     coord.config = dict(FAKE_CONFIG)
     coord._consecutive_failures = 2
 
     with aioresponses() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        m.get(f"{BASE}/weather", body=_pack([]))
+        m.post(f"{BASE}/", body=_pack(FAKE_CONFIG))
         await coord._async_update_data()
 
     assert coord._consecutive_failures == 0
@@ -648,8 +200,7 @@ async def test_recovery_after_unavailable_logs_info(coord, caplog):
 
 async def test_repair_issue_created_at_failure_grace(coord):
     """A repair issue is created when failures reach _FAILURE_GRACE."""
-    coord._init_step = 4
-    coord._next_refresh_index = 0
+
     coord.data = dict(FAKE_STATE)
     coord._consecutive_failures = coord._FAILURE_GRACE - 1
 
@@ -671,8 +222,7 @@ async def test_repair_issue_created_at_failure_grace(coord):
 
 async def test_repair_issue_not_created_before_grace(coord):
     """No repair issue fires during the grace period (failures < _FAILURE_GRACE)."""
-    coord._init_step = 4
-    coord._next_refresh_index = 0
+
     coord.data = dict(FAKE_STATE)
     coord._consecutive_failures = 0
 
@@ -723,81 +273,17 @@ async def test_repair_issue_not_deleted_on_normal_recovery(coord):
     mock_delete.assert_not_called()
 
 
-async def test_update_data_sensor_config_fetch_error_logs_warning(coord, caplog):
-    """If the pwm_config POST fails, stale data is returned and debug is logged.
-
-    Keys are drained from _pending_config_keys at enqueue time (not after the
-    fetch), so they are not in the set after a failed refresh.  The next state
-    tick will re-queue them because the sensor name is still absent from config.
-    """
-    coord._init_step = 4
-    coord._next_refresh_index = 0
-    coord.config = dict(FAKE_CONFIG)
-    del coord.config["sensors#sensor#AABBCCDDEEFF#name"]
-
-    # State tick: queues the pending sensor keys, no POST
-    with aioresponses() as m:
-        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
-        data = await coord._async_update_data()
-
-    assert data["uptime"] == 12345
-    assert "sensors#sensor#AABBCCDDEEFF#name" in coord._pending_config_keys
-    coord.data = data  # simulate coordinator storing the result
-
-    # pwm_config tick: enqueue drains pending keys, then POST fails.
-    # Keys are no longer in _pending_config_keys (drained at enqueue).
-    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
-    with aioresponses() as m:
-        m.post(f"{BASE}/", exception=aiohttp.ClientConnectionError("down"))
-        with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
-            data = await coord._async_update_data()
-
-    assert data["uptime"] == 12345
-    assert "Could not refresh PWM config" in caplog.text
-    assert "sensors#sensor#AABBCCDDEEFF#name" not in coord._pending_config_keys
-
-
-async def test_update_data_round_robins_to_weather(coord):
-    coord._init_step = 4
-    coord.data = {**FAKE_STATE, "ok": True, "weather": [{"weather_program_id": 3}]}
-    coord._next_refresh_index = 4  # weather tick
-
-    with aioresponses() as m:
-        m.get(f"{BASE}/weather", body=_pack([None, {"weather_program_id": 5}]))
-        data = await coord._async_update_data()
-
-    assert data["ok"] is True  # preserved from stale data
-    assert data["weather"] == [None, {"weather_program_id": 5}]
-    assert data["uptime"] == FAKE_STATE["uptime"]
-    assert coord._next_refresh_index == 0
-
-
 async def test_update_data_weather_failure_keeps_stale_weather(coord, caplog):
-    coord._init_step = 4
+
     coord.data = {**FAKE_STATE, "weather": [{"weather_program_id": 3}]}
-    coord._next_refresh_index = 4  # weather tick
 
     with aioresponses() as m:
         m.get(f"{BASE}/weather", exception=aiohttp.ClientConnectionError("down"))
         with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
-            data = await coord._async_update_data()
+            data = await coord._async_refresh_weather(dict(coord.data))
 
     assert data["weather"] == [{"weather_program_id": 3}]
     assert "Could not fetch weather data" in caplog.text
-
-
-async def test_state_failure_does_not_advance_round_robin(coord):
-    coord._init_step = 4
-    coord.data = dict(FAKE_STATE)
-    coord._next_refresh_index = 0
-    coord._consecutive_failures = 1
-
-    with aioresponses() as m:
-        m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("blip"))
-        data = await coord._async_update_data()
-
-    assert data is not coord.data
-    assert coord._next_refresh_index == 0
 
 
 async def test_async_get_weather_returns_first_msgpack_object(coord):
@@ -822,15 +308,14 @@ async def test_async_get_weather_returns_empty_list_for_empty_stream(coord):
 async def test_update_data_weather_client_error_logs_debug_and_returns_empty_weather(
     coord, caplog
 ):
-    coord._init_step = 4
-    coord._next_refresh_index = 4  # weather tick
+
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True, "weather": []}
 
     with aioresponses() as m:
         m.get(f"{BASE}/weather", exception=aiohttp.ClientConnectionError("down"))
         with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
-            data = await coord._async_update_data()
+            data = await coord._async_refresh_weather(dict(coord.data))
 
     assert data["weather"] == []
     assert "Could not fetch weather data" in caplog.text
@@ -839,8 +324,7 @@ async def test_update_data_weather_client_error_logs_debug_and_returns_empty_wea
 async def test_update_data_weather_unexpected_error_logs_debug_and_returns_empty_weather(
     coord, monkeypatch, caplog
 ):
-    coord._init_step = 4
-    coord._next_refresh_index = 4  # weather tick
+
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True, "weather": []}
     monkeypatch.setattr(
@@ -848,7 +332,7 @@ async def test_update_data_weather_unexpected_error_logs_debug_and_returns_empty
     )
 
     with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
-        data = await coord._async_update_data()
+        data = await coord._async_refresh_weather(dict(coord.data))
 
     assert data["weather"] == []
     assert "Unexpected error fetching weather data" in caplog.text
@@ -998,38 +482,6 @@ def test_weather_program_name_returns_name_when_loaded(coordinator):
     assert coordinator.weather_program_name(1) == "Reef Day"
 
 
-async def test_update_data_fetches_new_weather_program_names(coord):
-    """New weather program IDs are queued on the weather tick and fetched on the next pwm_config tick."""
-    coord._init_step = 4
-    coord.config = dict(FAKE_CONFIG)
-    coord.data = {**FAKE_STATE, "ok": True}
-    coord._next_refresh_index = 4  # weather tick
-    weather = [{"weather_program_id": 7}]
-
-    # Weather tick: new program ID queued, no second POST fired
-    with aioresponses() as m:
-        m.get(f"{BASE}/weather", body=_pack(weather))
-        await coord._async_update_data()
-
-    assert "weather#setup#7#name" in coord._pending_config_keys
-    assert "weather#setup#7#name" not in coord.config
-
-    # pwm_config tick(s): queued key is drained via PWM config POST chunks
-    pwm_keys = _pwm_refresh_keys(coord)
-    fresh = {k: coord.config.get(k) for k in pwm_keys}
-    fresh["weather#setup#7#name"] = "Storm Program"
-    coord._ticks_since_pwm_refresh = coord._PWM_CONFIG_INTERVAL
-    keys = pwm_keys + ["weather#setup#7#name"]
-    _, responses = _chunked_responses(coord, keys, fresh)
-    for response in responses:
-        with aioresponses() as m:
-            m.post(f"{BASE}/", body=_pack(response))
-            await coord._async_update_data()
-
-    assert coord.config["weather#setup#7#name"] == "Storm Program"
-    assert "weather#setup#7#name" not in coord._pending_config_keys
-
-
 def test_sensor_value_raw_unit(coordinator):
     coordinator.config["sensors#sensor#AABBCCDDEEFF#unitcomma"] = 0
     val = coordinator.sensor_value("AABBCCDDEEFF")
@@ -1119,115 +571,8 @@ async def test_async_set_dst_auto_track_false_does_not_sync(coordinator):
 
 
 # ---------------------------------------------------------------------------
-# _check_dst_changed
-# ---------------------------------------------------------------------------
-
-
-def test_check_dst_changed_sets_pending_when_dst_changes(coordinator):
-    """When DST status differs from last known, _dst_sync_pending is set."""
-    from unittest.mock import patch
-    import datetime
-
-    coordinator._dst_auto_track = True
-    coordinator._last_known_dst = False  # was non-DST
-
-    with patch("custom_components.sunriser.coordinator.dt_util.now") as mock_now:
-        mock_now.return_value.dst.return_value = datetime.timedelta(hours=1)  # now DST
-        coordinator._check_dst_changed()
-
-    assert coordinator._dst_sync_pending is True
-
-
-def test_check_dst_changed_no_change_leaves_pending_false(coordinator):
-    """When DST status is unchanged, _dst_sync_pending stays False."""
-    from unittest.mock import patch
-    import datetime
-
-    coordinator._dst_auto_track = True
-    coordinator._last_known_dst = True  # already DST
-
-    with patch("custom_components.sunriser.coordinator.dt_util.now") as mock_now:
-        mock_now.return_value.dst.return_value = datetime.timedelta(
-            hours=1
-        )  # still DST
-        coordinator._check_dst_changed()
-
-    assert coordinator._dst_sync_pending is False
-
-
-def test_check_dst_changed_disabled_is_noop(coordinator):
-    """When _dst_auto_track is False, _check_dst_changed does nothing."""
-    coordinator._dst_auto_track = False
-    coordinator._dst_sync_pending = False
-    coordinator._check_dst_changed()
-    assert coordinator._dst_sync_pending is False
-
-
-# ---------------------------------------------------------------------------
-# _async_do_dst_sync
-# ---------------------------------------------------------------------------
-
-
-async def test_async_do_dst_sync_success(coordinator):
-    """Successful DST sync updates config and clears _dst_sync_pending."""
-    coordinator._dst_auto_track = True
-    from unittest.mock import patch
-    import datetime
-
-    coordinator.data = dict(FAKE_STATE)
-    coordinator._dst_sync_pending = False
-
-    with patch("custom_components.sunriser.coordinator.dt_util.now") as mock_now:
-        mock_now.return_value.dst.return_value = datetime.timedelta(hours=1)
-        result = await coordinator._async_do_dst_sync()
-
-    coordinator.async_set_config.assert_awaited_once_with({"summertime": 1})
-    assert coordinator.config["summertime"] == 1
-    assert coordinator._last_known_dst is True
-    assert coordinator._dst_sync_pending is False
-    assert result["uptime"] == FAKE_STATE["uptime"]
-
-
-async def test_async_do_dst_sync_failure_retries(coordinator, caplog):
-    """If async_set_config raises ClientError, log a warning and re-queue the sync."""
-    coordinator._dst_auto_track = True
-    import aiohttp
-    from unittest.mock import patch
-    import datetime
-    import logging
-
-    coordinator.data = dict(FAKE_STATE)
-    coordinator.async_set_config.side_effect = aiohttp.ClientConnectionError("down")
-
-    with patch("custom_components.sunriser.coordinator.dt_util.now") as mock_now:
-        mock_now.return_value.dst.return_value = datetime.timedelta(hours=1)
-        with caplog.at_level(logging.WARNING, logger="custom_components.sunriser"):
-            result = await coordinator._async_do_dst_sync()
-
-    assert "Could not sync DST to device" in caplog.text
-    assert coordinator._dst_sync_pending is True  # queued for retry
-    assert result["uptime"] == FAKE_STATE["uptime"]
-
-
-# ---------------------------------------------------------------------------
 # _async_update_data — DST sync pending branch
 # ---------------------------------------------------------------------------
-
-
-async def test_update_data_dst_sync_pending_replaces_tick(coordinator):
-    """When _dst_sync_pending is True, _async_update_data calls _async_do_dst_sync."""
-    from unittest.mock import patch, AsyncMock as _AsyncMock
-
-    coordinator._dst_sync_pending = True
-    coordinator.data = dict(FAKE_STATE)
-
-    mock_dst_sync = _AsyncMock(return_value=dict(FAKE_STATE))
-    with patch.object(coordinator, "_async_do_dst_sync", mock_dst_sync):
-        result = await coordinator._async_update_data()
-
-    mock_dst_sync.assert_awaited_once()
-    assert coordinator._dst_sync_pending is False  # cleared before call
-    assert result["uptime"] == FAKE_STATE["uptime"]
 
 
 def test_pwm_count_fallback(coordinator):
@@ -1354,49 +699,27 @@ async def test_async_check_ok_returns_false_on_error(coord):
 
 async def test_update_data_includes_ok_true(coord):
     """_async_update_data stores ok=True when state fetch succeeds."""
-    coord._init_step = 4
-    coord._next_refresh_index = 0
+
     coord.config = dict(FAKE_CONFIG)
     with aioresponses() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
+        m.get(f"{BASE}/weather", body=_pack([]))
+        m.post(f"{BASE}/", body=_pack(FAKE_CONFIG))
         data = await coord._async_update_data()
     assert data["ok"] is True
 
 
 async def test_update_data_ok_false_when_state_fails_within_grace(coord):
     """ok=False when the state fetch fails but stale data is returned within the grace period."""
-    coord._init_step = 4
+
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True}
-    coord._next_refresh_index = 0
+
     coord._consecutive_failures = 1
     with aioresponses() as m:
         m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("down"))
         data = await coord._async_update_data()
     assert data["ok"] is False
-
-
-async def test_update_data_ok_preserved_on_weather_tick(coord):
-    """ok is carried over from stale data on a weather-only tick."""
-    coord._init_step = 4
-    coord.config = dict(FAKE_CONFIG)
-    coord.data = {**FAKE_STATE, "ok": True}
-    coord._next_refresh_index = 4  # weather tick
-    with aioresponses() as m:
-        m.get(f"{BASE}/weather", body=_pack([]))
-        data = await coord._async_update_data()
-    assert data["ok"] is True
-    assert data["uptime"] == 12345
-
-
-async def test_init_step_1_sets_ok_true(coord):
-    """State fetch in init tick 1 sets ok=True in the returned data."""
-    coord._init_step = 1
-    with aioresponses() as m:
-        m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
-        data = await coord._async_update_data()
-    assert data["ok"] is True
-    assert data["uptime"] == FAKE_STATE["uptime"]
 
 
 # ---------------------------------------------------------------------------

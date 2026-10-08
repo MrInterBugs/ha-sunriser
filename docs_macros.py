@@ -26,18 +26,6 @@ def _parse_int(name: str, text: str, default: int) -> int:
     return int(m.group(1)) if m else default
 
 
-def _format_duration(seconds: int) -> str:
-    """Return a human-readable duration string, switching to minutes when < 1 hour."""
-    if seconds < 3600:
-        mins = seconds // 60
-        return f"~{mins} minute{'s' if mins != 1 else ''}"
-    total_hours = seconds / 3600
-    if total_hours == int(total_hours):
-        h = int(total_hours)
-        return f"~{h} hour{'s' if h != 1 else ''}"
-    return f"~{total_hours:.1f} hours"
-
-
 def define_env(env):
     const = _load_const()
 
@@ -45,19 +33,8 @@ def define_env(env):
         _ROOT / "custom_components" / "sunriser" / "coordinator.py"
     ).read_text()
 
-    pwm_config_interval = _parse_int("_PWM_CONFIG_INTERVAL", coord_text, 240)
     failure_grace = _parse_int("_FAILURE_GRACE", coord_text, 3)
-    # init_steps: how many ticks before entities appear (_init_step >= N)
-    m = re.search(r"return self\._init_step >= (\d+)", coord_text)
-    init_steps = int(m.group(1)) if m else 4
-
-    # Weather poll interval: length of _REFRESH_SEQUENCE tuple
-    m = re.search(r"_REFRESH_SEQUENCE\s*=\s*\(([^)]+)\)", coord_text)
-    weather_interval_ticks = len(m.group(1).split(",")) if m else 5
-
     scan_interval = const.DEFAULT_SCAN_INTERVAL
-    init_minutes = round(init_steps * scan_interval / 60)
-    weather_interval_mins = weather_interval_ticks * scan_interval / 60
 
     services_path = _ROOT / "custom_components" / "sunriser" / "services.yaml"
     with open(services_path) as f:
@@ -70,13 +47,7 @@ def define_env(env):
         "scan_interval_min": 5,
         "scan_interval_max": 3600,
         "pwm_max": const.PWM_MAX,
-        "init_steps": init_steps,
-        "init_minutes": init_minutes,
-        "pwm_config_interval": pwm_config_interval,
-        "pwm_config_duration": _format_duration(pwm_config_interval * scan_interval),
         "failure_grace": failure_grace,
-        "weather_interval_ticks": weather_interval_ticks,
-        "weather_interval_mins": weather_interval_mins,
     }
 
     @env.macro

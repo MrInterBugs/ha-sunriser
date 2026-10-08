@@ -2,8 +2,7 @@
 
 ## Known limitations
 
-!!! warning
-    Do not use the SunRiser web interface while this integration is running. The device has limited capacity for concurrent connections, and accessing the web UI at the same time as the integration polls the device can cause the controller to crash. Recovery requires either a manual power cycle or waiting for the device's watchdog (dead man's switch) to restart it automatically.
+This experimental branch removes the request splitting, spacing, and forced connection closure previously used to work around controller instability. The assumption that firmware 1.006 resolves these limitations still needs hardware testing, including concurrent web UI use. If the controller resets or becomes unreachable, compare with the parent `fix/ha-firmware-1006` branch and record the firmware version and device logs.
 
 ## Cannot connect to the device
 
@@ -15,15 +14,13 @@ Check that the SunRiser is on the same network as HA and is reachable. Open `htt
 
 **Symptom:** The device is found but no light, switch, number, or select entities are created.
 
-This is expected — entities can take up to {{ cfg.init_minutes }} minutes to appear when first adding the device ({{ cfg.init_steps }} startup requests, one per poll interval), because the integration staggers its startup requests to avoid overwhelming the SunRiser's single-connection Wi-Fi module.
-
-If entities still don't appear after a few minutes, check that each active PWM channel has a `color` field set in the device config. An empty `color` means the channel is physically unused and the integration will not create an entity for it. Log into the SunRiser web UI, assign a colour to each active channel, and reload the integration. Channels are picked up automatically on the next coordinator poll.
+Entities are created as part of successful setup. Check the HA logs for failed state or configuration reads if setup is retrying. Each active PWM channel must have a `color` field set in the device configuration; an empty `color` means the channel is unused. Assign a colour in the device web UI and the integration will discover the channel on the next successful poll.
 
 ## State values stop updating
 
 **Symptom:** Entity states are stale or show as unavailable.
 
-Check the poll interval under **Settings → Devices & Services → SunRiser → Configure** — a very long interval means infrequent updates. Confirm nothing is blocking HTTP between HA and the device. Avoid using the SunRiser web UI simultaneously with the integration (see [Known limitations](#known-limitations) above).
+Check the poll interval under **Settings → Devices & Services → SunRiser → Configure** — a very long interval means infrequent updates. Confirm nothing is blocking HTTP between HA and the device. See [Known limitations](#known-limitations) if the controller resets.
 
 ## Light brightness reverts after ~60 seconds
 

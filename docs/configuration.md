@@ -14,14 +14,16 @@ After setup, go to **Settings → Devices & Services → SunRiser → Configure*
 | Option | Description | Range / Format | Default |
 |--------|-------------|----------------|---------|
 | Poll interval | How often HA fetches the device state | {{ cfg.scan_interval_min }}–{{ cfg.scan_interval_max }} s | {{ cfg.default_scan_interval }} s |
-| Scheduled daily reboot | Automatically reboot the controller once a day to prevent firmware instability | on / off | on |
+| Scheduled daily reboot | Optionally reboot the controller once a day | on / off | off |
 | Scheduled reboot time | Time of day to reboot (24-hour format) | HH:MM | {{ cfg.default_reboot_time }} |
 
 Changing any option reloads the integration automatically — no restart required.
 
 ## How polling works
 
-Polling is staggered: one HTTP request per tick. The sequence is `state × 4 → weather`, then repeats. `/state` is fetched every tick; `/weather` is fetched once every 5 ticks (~2.5 min at the default interval). This is required because the SunRiser's WizFi360 Wi-Fi module can only handle one connection at a time, and `/weather` involves an SD card write on the device. PWM config is re-read every {{ cfg.pwm_config_duration }} (every {{ cfg.pwm_config_interval }} ticks); new temperature sensors are discovered during state polling and appear after their names, units, and decimal scaling have been loaded by the configuration refresh. This needs no reload, but can take until the next periodic configuration refresh; unscaled readings are not published in the meantime.
+Each poll reads state, weather, and configuration consecutively. Channel changes, new temperature probes, firmware changes, and weather program names are refreshed every {{ cfg.default_scan_interval }} seconds by default. New temperature sensors appear only after their names, units, and decimal scaling have loaded; failed metadata reads are retried on the next poll.
+
+The former request splitting and pacing workarounds have been removed on this experimental branch for firmware 1.006 testing. Controller stability and compatibility with older firmware still need hardware validation. An existing explicit daily reboot setting is preserved; an absent setting now defaults to off.
 
 ## Entity types
 

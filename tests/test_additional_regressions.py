@@ -106,24 +106,6 @@ def test_schedule_rejects_invalid_clock_times(invalid_time):
         )
 
 
-async def test_refresh_does_not_undo_newer_successful_config_write(
-    coordinator, mock_config_entry
-):
-    key = "pwm#1#manager"
-    coordinator._pending_refresh_chunks = [[key], ["pwm#2#manager"]]
-    coordinator._async_get_config_raw = AsyncMock(
-        side_effect=[{key: 1}, {"pwm#2#manager": 0}]
-    )
-    await coordinator._async_drain_one_refresh_chunk()
-    select = SunRiserPWMManagerSelect(coordinator, mock_config_entry, 1)
-    await select.async_select_option("fixed")
-    assert coordinator.config[key] == 3
-    await coordinator._async_drain_one_refresh_chunk()
-    assert (
-        coordinator.config[key] == 3
-    ), "An older read undid a successful newer write in HA cache"
-
-
 async def test_new_temperature_is_not_published_without_scaling_metadata(
     hass, coordinator, mock_config_entry
 ):
@@ -135,8 +117,13 @@ async def test_new_temperature_is_not_published_without_scaling_metadata(
     coordinator.async_get_state = AsyncMock(
         return_value={**coordinator.data, "sensors": {"NEW_ROM": [1, 251]}}
     )
+    coordinator.async_get_weather = AsyncMock(return_value=[])
+    coordinator.async_get_config = AsyncMock(side_effect=TimeoutError())
     await coordinator.async_refresh()
-    assert "sensors#sensor#NEW_ROM#unitcomma" in coordinator._pending_config_keys
+    assert (
+        "sensors#sensor#NEW_ROM#unitcomma"
+        in coordinator.async_get_config.await_args.args[0]
+    )
     assert not any(
         isinstance(e, SunRiserTemperatureSensor) and e._rom == "NEW_ROM" for e in added
     )
@@ -146,11 +133,8 @@ async def test_new_temperature_is_not_published_without_scaling_metadata(
         "sensors#sensor#NEW_ROM#unit": 1,
         "sensors#sensor#NEW_ROM#unitcomma": 1,
     }
-    coordinator._pending_refresh_chunks = [list(metadata)]
-    coordinator._async_get_config_raw = AsyncMock(return_value=metadata)
-    coordinator.async_set_updated_data(
-        await coordinator._async_drain_one_refresh_chunk()
-    )
+    coordinator.async_get_config = AsyncMock(return_value=metadata)
+    await coordinator.async_refresh()
     new = next(
         e
         for e in added
@@ -168,7 +152,7 @@ async def test_one_controller_recovery_does_not_clear_other_controller_issue(
 
     first, second = controllers[0][1], controllers[1][1]
     for coord in (first, second):
-        coord._init_step = 4
+
         coord.data = {"uptime": 10}
         coord.async_get_state = AsyncMock(side_effect=aiohttp.ClientConnectionError())
         for _ in range(3):
@@ -208,38 +192,6 @@ async def test_startup_retires_previously_registered_inactive_channel(
     assert (
         registry.async_get(old.entity_id) is None
     ), "An inactive channel left a stale registered entity after reload"
-
-
-@pytest.mark.parametrize("status", [200, 500])
-async def test_config_write_cache_ordering_uses_real_http_writer(
-    coordinator, mock_config_entry, status
-):
-    import aiohttp
-    from aioresponses import aioresponses
-    from custom_components.sunriser.coordinator import SunRiserCoordinator
-
-    key = "pwm#1#manager"
-    coordinator.async_set_config = SunRiserCoordinator.async_set_config.__get__(
-        coordinator
-    )
-    coordinator._pending_refresh_chunks = [[key], ["pwm#2#manager"]]
-    coordinator._async_get_config_raw = AsyncMock(
-        side_effect=[{key: 1}, {"pwm#2#manager": 0}]
-    )
-    await coordinator._async_drain_one_refresh_chunk()
-    entity = SunRiserPWMManagerSelect(coordinator, mock_config_entry, 1)
-    try:
-        with aioresponses() as mocked:
-            mocked.put(f"{coordinator.base_url}/", status=status)
-            if status == 200:
-                await entity.async_select_option("fixed")
-            else:
-                with pytest.raises(aiohttp.ClientResponseError):
-                    await entity.async_select_option("fixed")
-        await coordinator._async_drain_one_refresh_chunk()
-        assert coordinator.config[key] == (3 if status == 200 else 1)
-    finally:
-        await coordinator.async_close()
 
 
 async def test_repeated_exports_same_controller_same_second_are_distinct(

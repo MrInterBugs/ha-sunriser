@@ -39,13 +39,11 @@ async def test_native_dst_never_writes_summertime(coordinator):
     coordinator.config["factory_version"] = "1.006"
     coordinator.async_set_config = AsyncMock()
     coordinator._dst_auto_track = True
-    coordinator._dst_sync_pending = True
+
     await coordinator.async_set_dst_auto_track(True)
-    coordinator._check_dst_changed()
-    await coordinator._async_do_dst_sync()
+    await coordinator._async_sync_dst()
     coordinator.async_set_config.assert_not_awaited()
     assert not coordinator._dst_auto_track
-    assert not coordinator._dst_sync_pending
 
 
 async def test_native_dst_removes_old_entity(hass, coordinator, mock_config_entry):
@@ -77,15 +75,14 @@ async def test_startup_clears_restored_dst_tracking(hass, mock_config_entry):
         return_value={"factory_version": "1.006", "save_version": "1.005"}
     )
     coordinator.async_set_config = AsyncMock()
-    coordinator._dst_sync_pending = True
+
     try:
         assert coordinator._dst_auto_track
-        await coordinator._async_update_data()
+        await coordinator.async_load_device_config()
 
-        assert coordinator._init_step == 1
         assert coordinator.firmware_version == "1.006"
         assert not coordinator._dst_auto_track
-        assert not coordinator._dst_sync_pending
+
         coordinator.async_get_config.assert_awaited_once_with(
             coordinator._BASE_CONFIG_KEYS
         )
@@ -121,39 +118,37 @@ async def test_firmware_upgrade_retires_dst_entity_without_reload(
     assert registry.async_get(old.entity_id) is not None
 
     coordinator._dst_auto_track = True
-    coordinator._dst_sync_pending = True
-    coordinator._pending_refresh_chunks = [["factory_version"]]
-    coordinator._async_get_config_raw = AsyncMock(
-        return_value={"factory_version": "1.006"}
-    )
-    data = await coordinator._async_drain_one_refresh_chunk()
-    coordinator.async_set_updated_data(data)
+
+    coordinator.async_get_config = AsyncMock(return_value={"factory_version": "1.006"})
+    await coordinator._async_refresh_config(coordinator.data)
+    coordinator.async_set_updated_data(dict(coordinator.data))
 
     assert registry.async_get(old.entity_id) is None
     assert registry.async_get(maintenance.entity_id) is not None
     assert not coordinator._dst_auto_track
-    assert not coordinator._dst_sync_pending
+
     coordinator.async_set_config.assert_not_awaited()
 
 
-async def test_failed_init_chunk_is_retried(coordinator):
-    coordinator._init_step = 2
-    coordinator._pending_refresh_chunks = [["pwm#1#name"], ["pwm#2#name"]]
-    coordinator._async_get_config_raw = AsyncMock(
+async def test_failed_initial_config_is_retried_in_full(coordinator):
+    coordinator.data = None
+    coordinator.async_get_state = AsyncMock(return_value={"pwms": {"1": 0, "2": 0}})
+    coordinator.async_get_weather = AsyncMock(return_value=[])
+    coordinator.async_get_config = AsyncMock(
         side_effect=[
             aiohttp.ClientConnectionError(),
-            {"pwm#1#name": "Light"},
-            {"pwm#2#name": "Pump"},
+            {"pwm#1#name": "Light", "pwm#2#name": "Pump"},
         ]
     )
     with pytest.raises(UpdateFailed):
         await coordinator._async_update_data()
-    assert coordinator._pending_refresh_chunks[0] == ["pwm#1#name"]
-    await coordinator._async_update_data()
     await coordinator._async_update_data()
     assert coordinator.config["pwm#1#name"] == "Light"
     assert coordinator.config["pwm#2#name"] == "Pump"
-    assert coordinator._init_step == 3
+    assert (
+        coordinator.async_get_config.await_args_list[0]
+        == coordinator.async_get_config.await_args_list[1]
+    )
 
 
 async def test_refresh_updates_registered_firmware(
@@ -164,18 +159,15 @@ async def test_refresh_updates_registered_firmware(
     device = registry.async_get_or_create(
         config_entry_id=mock_config_entry.entry_id, **coordinator.device_info
     )
-    coordinator._pending_refresh_chunks = [["factory_version"]]
-    coordinator._async_get_config_raw = AsyncMock(
-        return_value={"factory_version": "1.006"}
-    )
+    coordinator.async_get_config = AsyncMock(return_value={"factory_version": "1.006"})
     coordinator._dst_auto_track = True
-    await coordinator._async_drain_one_refresh_chunk()
+    await coordinator._async_refresh_config(coordinator.data)
     assert registry.async_get(device.id).sw_version == "1.006"
     assert not coordinator._dst_auto_track
 
 
 async def test_failed_poll_does_not_mutate_published_data(coordinator):
-    coordinator._init_step = 4
+
     coordinator.data = {"ok": True, "uptime": 100}
     coordinator.async_get_state = AsyncMock(side_effect=aiohttp.ClientConnectionError())
     result = await coordinator._async_update_data()

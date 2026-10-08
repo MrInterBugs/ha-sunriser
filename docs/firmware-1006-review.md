@@ -2,6 +2,8 @@
 
 Reviewed from `main` on 2026-10-08. Changes are confined to the HA integration.
 
+This records the original beta.1/beta.2 review. The experimental `simplify/firmware-1006-requests` branch subsequently removes the splitting and scheduling described below and makes daily reboot opt-in. See [Coordinator](api/coordinator.md) for current behavior; the earlier hardware observations do not validate the simplified request strategy.
+
 ## Read-only controller evidence
 
 Two serialized requests to the real controller returned:

@@ -112,7 +112,7 @@ def coordinator(hass, mock_config_entry):
     coord = SunRiserCoordinator(hass, mock_config_entry)
     coord.config = dict(FAKE_CONFIG)
     coord.data = dict(FAKE_STATE)
-    coord._init_step = 4  # skip init state machine in unit tests
+
     coord.async_set_pwms = AsyncMock()
     coord.async_set_service_mode = AsyncMock()
     coord.async_request_refresh = AsyncMock()

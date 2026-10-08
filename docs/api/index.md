@@ -31,4 +31,4 @@ GET  /reboot    →  reboots device
 DELETE /        →  factory reset
 ```
 
-All requests use `Content-Type: application/x-msgpack` and must go over HTTP/1.1 with `Connection: close` to avoid the WizFi360 keep-alive bug.
+MessagePack request bodies use `Content-Type: application/x-msgpack`. This experimental branch uses normal HTTP connection reuse rather than forcing `Connection: close`; controller compatibility remains subject to firmware 1.006 hardware validation.

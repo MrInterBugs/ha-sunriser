@@ -15,19 +15,18 @@ from custom_components.sunriser.sensor import (
 
 async def test_offline_device_stays_unavailable_on_failed_config_tick(coordinator):
     coordinator.async_get_state = AsyncMock(side_effect=aiohttp.ClientConnectionError())
-    coordinator._async_get_config_raw = AsyncMock(
+    coordinator.async_get_config = AsyncMock(
         side_effect=aiohttp.ClientConnectionError()
     )
     for _ in range(3):
         await coordinator.async_refresh()
     assert coordinator.last_update_success is False
-    coordinator._ticks_since_pwm_refresh = coordinator._PWM_CONFIG_INTERVAL - 1
     await coordinator.async_refresh()
     assert coordinator._consecutive_failures == 4
     assert (
         coordinator.last_update_success is False
     ), "Failed config tick falsely restores availability"
-    coordinator._async_get_config_raw.assert_not_awaited()
+    coordinator.async_get_config.assert_not_awaited()
     coordinator.async_get_state = AsyncMock(return_value={"uptime": 42})
     await coordinator.async_refresh()
     assert coordinator.last_update_success is True
@@ -35,9 +34,11 @@ async def test_offline_device_stays_unavailable_on_failed_config_tick(coordinato
 
 
 async def test_failed_dst_write_does_not_starve_state_polls(coordinator):
+    coordinator.async_get_config = AsyncMock(return_value={})
+    coordinator.async_get_weather = AsyncMock(return_value=[])
     coordinator.config["factory_version"] = "1.005"
     coordinator._dst_auto_track = True
-    coordinator._dst_sync_pending = True
+
     coordinator.async_set_config = AsyncMock(
         side_effect=aiohttp.ClientConnectionError()
     )
@@ -54,20 +55,24 @@ async def test_failed_dst_write_does_not_starve_state_polls(coordinator):
 
 
 async def test_dst_retry_observes_offline_controller(coordinator):
+    coordinator.async_get_config = AsyncMock(return_value={})
+    coordinator.async_get_weather = AsyncMock(return_value=[])
     coordinator._dst_auto_track = True
-    coordinator._dst_sync_pending = True
+
     coordinator.async_set_config = AsyncMock(side_effect=TimeoutError())
     coordinator.async_get_state = AsyncMock(side_effect=aiohttp.ClientConnectionError())
     for _ in range(4):
         await coordinator.async_refresh()
-    coordinator.async_set_config.assert_awaited_once()
-    assert coordinator.async_get_state.await_count == 3
+    coordinator.async_set_config.assert_not_awaited()
+    assert coordinator.async_get_state.await_count == 4
     assert coordinator.last_update_success is False
 
 
 async def test_dst_retry_clears_after_success(coordinator):
+    coordinator.async_get_config = AsyncMock(return_value={})
+    coordinator.async_get_weather = AsyncMock(return_value=[])
     coordinator._dst_auto_track = True
-    coordinator._dst_sync_pending = True
+
     coordinator.async_set_config = AsyncMock(
         side_effect=[aiohttp.ClientConnectionError(), None]
     )
@@ -75,20 +80,16 @@ async def test_dst_retry_clears_after_success(coordinator):
     for _ in range(3):
         await coordinator.async_refresh()
     assert coordinator.async_set_config.await_count == 2
-    coordinator.async_get_state.assert_awaited_once()
-    assert not coordinator._dst_retry_needs_state
-    assert not coordinator._dst_sync_pending
+    assert coordinator.async_get_state.await_count == 3
+
     assert coordinator._last_known_dst is not None
 
 
 async def test_stale_dst_retry_after_disable_does_not_write(coordinator):
     coordinator._dst_auto_track = False
-    coordinator._dst_sync_pending = True
-    coordinator._dst_retry_needs_state = True
-    await coordinator._async_do_dst_sync()
+
+    await coordinator._async_sync_dst()
     coordinator.async_set_config.assert_not_awaited()
-    assert not coordinator._dst_sync_pending
-    assert not coordinator._dst_retry_needs_state
 
 
 @pytest.mark.parametrize(
@@ -102,6 +103,10 @@ async def test_setup_failure_closes_session_and_reboot_callback(
     from custom_components.sunriser import async_setup_entry
     from homeassistant.exceptions import ConfigEntryNotReady
 
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_config_entry, options={"scheduled_reboot": True}
+    )
     cancel = MagicMock()
     created = []
 
@@ -124,8 +129,10 @@ async def test_setup_failure_closes_session_and_reboot_callback(
 
 
 async def test_disabling_dst_cancels_pending_write(coordinator):
+    coordinator.async_get_config = AsyncMock(return_value={})
+    coordinator.async_get_weather = AsyncMock(return_value=[])
     coordinator._dst_auto_track = True
-    coordinator._dst_sync_pending = True
+
     coordinator.async_get_state = AsyncMock(return_value={"uptime": 12346})
     await coordinator.async_set_dst_auto_track(False)
     await coordinator._async_update_data()
@@ -133,8 +140,11 @@ async def test_disabling_dst_cancels_pending_write(coordinator):
 
 
 async def test_failed_setup_cancels_daily_reboot(hass, mock_config_entry):
-    cancel = MagicMock()
     mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_config_entry, options={"scheduled_reboot": True}
+    )
+    cancel = MagicMock()
     with (
         patch(
             "custom_components.sunriser.coordinator.async_track_time_change",
@@ -166,11 +176,9 @@ async def test_newly_active_channel_uses_current_type(
     async def read(keys):
         return {key: remote.get(key) for key in keys}
 
-    coordinator._async_get_config_raw = AsyncMock(side_effect=read)
-    coordinator._enqueue_pwm_refresh()
-    while coordinator._pending_refresh_chunks:
-        data = await coordinator._async_drain_one_refresh_chunk()
-        coordinator.async_set_updated_data(data)
+    coordinator.async_get_config = AsyncMock(side_effect=read)
+    await coordinator._async_refresh_config(coordinator.data)
+    coordinator.async_set_updated_data(dict(coordinator.data))
     assert not any(e._pwm_num == 3 for e in added)
     assert coordinator.config["pwm#3#name"] == "New pump"
     assert coordinator.pwm_is_onoff(3)

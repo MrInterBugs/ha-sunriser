@@ -179,30 +179,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             raise ConfigEntryNotReady(f"Unexpected error: {err}") from err
 
         await coordinator.async_config_entry_first_refresh()
+        entry.runtime_data = coordinator
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
         ready = True
     finally:
         if not ready:
             await coordinator.async_close()
-
-    entry.runtime_data = coordinator
-
-    # Platform setup is deferred until all four init ticks complete so that
-    # coordinator.config has PWM names, colors, and weather data before any
-    # entity is created.  Each init tick makes exactly one HTTP request so the
-    # WizFi360 has a full poll interval between connections.
-    _platforms_loaded = False
-
-    @callback
-    def _on_coordinator_update() -> None:
-        nonlocal _platforms_loaded
-        if _platforms_loaded or not coordinator.init_complete:
-            return
-        _platforms_loaded = True
-        hass.async_create_task(
-            hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-        )
-
-    entry.async_on_unload(coordinator.async_add_listener(_on_coordinator_update))
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
 

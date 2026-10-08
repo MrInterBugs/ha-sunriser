@@ -260,7 +260,7 @@ class SunRiserOptionsFlow(OptionsFlow):
         current_interval = self._entry.options.get(
             CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
         )
-        current_reboot_enabled = self._entry.options.get(CONF_SCHEDULED_REBOOT, True)
+        current_reboot_enabled = self._entry.options.get(CONF_SCHEDULED_REBOOT, False)
         current_reboot_time = self._entry.options.get(
             CONF_REBOOT_TIME, DEFAULT_REBOOT_TIME
         )

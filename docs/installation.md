@@ -28,7 +28,8 @@ The integration will automatically detect all active PWM channels and temperatur
 ![SunRiser device page in Home Assistant](images/device_page.png)
 
 !!! note
-    Entities can take up to {{ cfg.init_minutes }} minutes to appear after first adding the device ({{ cfg.init_steps }} separate HTTP requests, one per poll interval). This is intentional — the SunRiser's WizFi360 Wi-Fi module can only handle one connection at a time, and the integration staggers its startup requests to avoid crashing the controller.
+    Entities are created during setup after state and configuration have loaded. There is no intentional delay between startup requests. Home Assistant retries setup if required reads fail.
+
 
 ## Automatic discovery
 

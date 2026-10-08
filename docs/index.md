@@ -17,7 +17,7 @@ This integration was reverse-engineered from the [open-source SunRiser firmware]
 
 ![Example aquarium dashboard with Day Planner card](images/example_dashboard.png)
 - **Services** — Backup, restore, log retrieval, dayplanner/weekplanner read/write, and factory tools
-- **Options** — Configurable poll interval ({{ cfg.scan_interval_min }}–{{ cfg.scan_interval_max }} s, default {{ cfg.default_scan_interval }} s) and scheduled daily reboot (default {{ cfg.default_reboot_time }}) without re-adding the integration
+- **Options** — Configurable poll interval ({{ cfg.scan_interval_min }}–{{ cfg.scan_interval_max }} s, default {{ cfg.default_scan_interval }} s) and optional scheduled daily reboot (off by default; time {{ cfg.default_reboot_time }}) without re-adding the integration
 - Auto-discovery of PWM channels and temperature sensors from the device
 - "Visit device" link in the device page opens the SunRiser web UI directly from HA
 
@@ -49,7 +49,7 @@ The binary sensor tracks whether the SunRiser responded on the last poll. Add it
 - Config keys use `#` as separator, e.g. `pwm#1#color`
 - PWM range: 0–{{ cfg.pwm_max }} (mapped to HA brightness 0–255)
 - Direct state writes hold for ~1 minute before the device's own program resumes
-- Polling is staggered: one HTTP request per tick — required because the WizFi360 Wi-Fi module can only handle one connection at a time
+- Each poll reads state, weather, and configuration without artificial spacing; this experimental firmware 1.006 strategy still needs hardware validation
 
 ## Links
 
