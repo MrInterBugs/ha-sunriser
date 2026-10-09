@@ -35,7 +35,8 @@ def test_malformed_wire_data(decode: Callable[[bytes], Any], body: bytes) -> Non
         (decode_state, {"blackout": "off"}),
         (decode_state, {"pwms": []}),
         (decode_state, {"pwms": {"0": 1}}),
-        (decode_state, {"pwms": {"1": 1001}}),
+        (decode_state, {"pwms": {"1": 1025}}),
+        (decode_state, {"pwms": {"1": -1}}),
         (decode_state, {"pwms": {"1": 10, 1: 20}}),
         (decode_state, {"sensors": []}),
         (decode_state, {"sensors": {"probe": [1]}}),
@@ -103,6 +104,28 @@ async def test_invalid_state_keeps_snapshot_then_recovers(
         assert await coordinator._async_refresh_state() == before
         assert coordinator.data == before
         assert (await coordinator._async_refresh_state())["uptime"] == 100
+    await coordinator.async_close()
+
+
+async def test_1024_readback_recovers_controller_availability(
+    coordinator: SunRiserCoordinator,
+) -> None:
+    """One channel above the command maximum must not reject all live state."""
+    coordinator._consecutive_failures = coordinator._FAILURE_GRACE
+    state = {
+        **FAKE_STATE,
+        "pwms": {"1": 262, "2": 499, "5": 1024, "9": 1024},
+    }
+    with aioresponses() as http:
+        http.get(f"{coordinator.base_url}/state", body=msgpack.packb(state))
+        http.get(f"{coordinator.base_url}/weather", body=msgpack.packb([]))
+        http.post(f"{coordinator.base_url}/", body=msgpack.packb(FAKE_CONFIG))
+        await coordinator.async_refresh()
+    assert coordinator.last_update_success
+    assert coordinator.data is not None
+    assert coordinator.data["pwms"] == state["pwms"]
+    assert coordinator.data["ok"] is True
+    assert coordinator._consecutive_failures == 0
     await coordinator.async_close()
 
 

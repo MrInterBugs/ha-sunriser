@@ -68,12 +68,13 @@ def test_brightness_nonzero(
     assert light.brightness > 0
 
 
-def test_brightness_max_at_pwm_1000(
+def test_brightness_max_at_full_output_readback(
     coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
 ) -> None:
-    coordinator.data = {**FAKE_STATE, "pwms": {"1": 1000}}
     light = _make_light(coordinator, mock_config_entry, pwm_num=1)
-    assert light.brightness == 255
+    for value in (1000, 1024):
+        coordinator.data = {**FAKE_STATE, "pwms": {"1": value}}
+        assert light.brightness == 255
 
 
 def test_brightness_zero_at_pwm_zero(
