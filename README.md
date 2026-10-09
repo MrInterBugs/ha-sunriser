@@ -11,11 +11,13 @@ The current release targets **controller firmware 1.006**; compatibility with ol
 - Assign existing weather profiles through optional per-channel selectors, and view daily and weekly curves together in the compact, read-only Day Planner card.
 - View the operating mode and optionally enable Maintenance Ends At. Maintenance configuration entities and the end-time sensor are disabled by default; enable them from the device's entity settings.
 
-See the [configuration guide](docs/configuration.md) for weather-profile selectors and the read-only daily/weekly schedule graph.
+See the [configuration guide](https://mrinterbugs.github.io/ha-sunriser/configuration/) for weather-profile selectors and the read-only daily/weekly schedule graph.
 
 See the [maintenance guide](https://mrinterbugs.github.io/ha-sunriser/configuration/#maintenance-and-blackout-firmware-1006) for details. Channels excluded from maintenance/blackout continue normal operation.
 
 **Full documentation:** [mrinterbugs.github.io/ha-sunriser](https://mrinterbugs.github.io/ha-sunriser/)
+
+Use the [service action guide](https://mrinterbugs.github.io/ha-sunriser/services/) for backups, schedules, and diagnostics, or the [troubleshooting guide](https://mrinterbugs.github.io/ha-sunriser/troubleshooting/) for connection and setup issues.
 
 ![Earlier SunRiser device page on firmware 1.005](docs/images/device_page.png)
 
@@ -36,7 +38,7 @@ See the [installation docs](https://mrinterbugs.github.io/ha-sunriser/installati
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the Python environment, Pylance setup, type checks and tests.
+See the [API reference](https://mrinterbugs.github.io/ha-sunriser/api/) for integration internals and the [contribution guide](CONTRIBUTING.md) for the Python environment, Pylance setup, type checks and tests.
 
 ## License
 
