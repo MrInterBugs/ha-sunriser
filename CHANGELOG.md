@@ -1,11 +1,20 @@
 # Changelog
 
-## [Unreleased]
+## [2.2.2] - 2026-10-09
 
 ### Changed
 
 - Rename the default Time-lapse switch label to Time Lapse Mode, matching
   Maintenance Mode and Blackout Mode. Preserve its unique ID and behavior.
+- Link README guides to the published documentation site and update control
+  names in the documentation.
+
+### Upgrade
+
+- Update through HACS and restart Home Assistant to load the new default label.
+  Custom entity names remain unchanged.
+- Includes the PWM readback fix from 2.2.1. No controller behavior or polling
+  changes are introduced by this release.
 
 ## [2.2.1] - 2026-10-09
 
