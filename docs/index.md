@@ -7,7 +7,7 @@ A community-made Home Assistant integration for the **SunRiser 8/10** LED aquari
 - **Lights and switches** — control active PWM channels and view their current output.
 - **Planner controls** — select each channel's manager (`none`, `dayplanner`, `weekplanner`, or `fixed`) and set its fixed output value.
 - **Sensors** — DS1820 readings, per-channel weather state, uptime, firmware version, hostname, and connectivity.
-- **Controller controls** — Maintenance Mode, Blackout Mode, Time-lapse, and Reboot. Firmware 1.006+ handles DST itself.
+- **Controller controls** — Maintenance Mode, Blackout Mode, Time Lapse Mode, and Reboot. Firmware 1.006+ handles DST itself.
 - **Maintenance settings** — optional timeout, per-channel levels and exclusions, plus operating mode and an optional estimated end time. Configuration entities and the end-time sensor are disabled by default; see [maintenance and blackout](configuration.md#maintenance-and-blackout-firmware-1006).
 - **Day Planner card** — a compact, read-only 24-hour chart of selected daily and weekly curves using the controller's LED colours. Edit schedules in the controller interface.
 - **Weather profiles** — optional per-channel selectors assign existing profiles or None; detailed weather settings remain in the controller interface.

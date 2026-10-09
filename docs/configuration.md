@@ -30,7 +30,7 @@ The Day Planner card requests a fresh read-only schedule snapshot on each card r
 | Platform | Created when | Notes |
 |---|---|---|
 | `light` | PWM channel with `pwm#X#onoff = false` (dimmable) | |
-| `switch` | PWM channel with `pwm#X#onoff = true` (on/off only) | Also creates Maintenance Mode and Time-lapse; DST Auto-Track is only created for firmware older than 1.006 |
+| `switch` | PWM channel with `pwm#X#onoff = true` (on/off only) | Also creates Maintenance Mode and Time Lapse Mode; DST Auto-Track is only created for firmware older than 1.006 |
 | `select` | Every active channel — controls the manager (`none` / `dayplanner` / `weekplanner` / `fixed`); firmware 1.006+ also provides existing weather-profile assignment | Disabled by default; enable in entity settings |
 | `number` | Every active channel — sets the fixed brightness (0–{{ cfg.pwm_max }}) | Disabled by default; enable in entity settings |
 | `sensor` | Uptime, Firmware Version, and Hostname are always created; probes and weather channels are discovered from device data | Uptime is disabled by default; weather states are `clear`, `cloudy`, `rain`, `thunder`, or `moon` |

@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Rename the default Time-lapse switch label to Time Lapse Mode, matching
+  Maintenance Mode and Blackout Mode. Preserve its unique ID and behavior.
+
 ## [2.2.1] - 2026-10-09
 
 ### Fixed
