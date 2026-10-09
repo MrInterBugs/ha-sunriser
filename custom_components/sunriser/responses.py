@@ -80,8 +80,10 @@ def decode_state(body: bytes) -> dict[str, Any]:
             if str(key) in normalized:
                 raise InvalidResponse("Duplicate PWM channel identifier")
             _number(value, f"pwms.{key}")
-            if not 0 <= value <= 1000:
-                raise InvalidResponse("PWM value must be between 0 and 1000")
+            # Firmware 1.006 can report 1024, observed on a running controller.
+            # Readback is distinct from the 0–1000 command/brightness scale.
+            if not 0 <= value <= 1024:
+                raise InvalidResponse("PWM readback must be between 0 and 1024")
             normalized[str(key)] = value
         state["pwms"] = normalized
     if "sensors" in state:

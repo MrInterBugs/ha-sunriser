@@ -21,7 +21,7 @@ PARALLEL_UPDATES = 1
 
 
 # Linear scale: device 0–1000 ↔ HA 0–255
-# Endpoints are exact: only PWM 1000 maps to HA 255, and only HA 255 maps to PWM 1000.
+# Readback at/above 1000 maps to HA 255; HA 255 writes the command maximum 1000.
 def _to_ha_brightness(pwm_value: int) -> int:
     if pwm_value <= 0:
         return 0

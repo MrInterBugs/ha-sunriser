@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.2.1] - 2026-10-09
+
+### Fixed
+
+- Accept PWM readback values up to 1024, observed on firmware 1.006. The previous
+  1000 limit rejected the entire state response and marked all entities
+  unavailable after repeated polls, even while the controller kept operating.
+- Keep the outgoing 0–1000 command scale unchanged; full-output readback displays
+  as maximum brightness in Home Assistant.
+
+### Upgrade
+
+- Update through HACS and restart Home Assistant. If you disabled the integration
+  while investigating unavailable entities, re-enable it after the update.
+- This corrects state validation. Separately observed HTTP connection resets
+  remain unexplained and are not claimed to be fixed by this release.
+
 ## [2.2.0] - 2026-10-08
 
 ### Added
