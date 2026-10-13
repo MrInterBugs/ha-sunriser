@@ -75,7 +75,9 @@ async def test_large_config_read_is_one_http_request(
             assert len(requests) == 1
             assert msgpack.unpackb(requests[0].kwargs["data"], raw=False) == keys
             assert len(requests[0].kwargs["data"]) > 250
-        assert not require_value(coordinator._get_session().connector).force_close
+        connector = require_value(coordinator._get_session().connector)
+        assert connector.force_close
+        assert connector.limit == 1
     finally:
         await coordinator.async_close()
 

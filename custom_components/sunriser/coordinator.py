@@ -74,7 +74,8 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         self._session: aiohttp.ClientSession | None = None
         self._closed = False
         # Serialize config reads through cache publication with config writes.
-        # Other HTTP requests need no artificial spacing or global lock.
+        # Other HTTP requests need no artificial spacing or global lock; the
+        # session's connector sends them one at a time.
         self._config_lock = asyncio.Lock()
         self._last_state_refresh_succeeded = False
         self._last_successful_read: dict[str, datetime] = {}
@@ -192,7 +193,12 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         if self._closed:
             raise HomeAssistantError("SunRiser coordinator is closed")
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
+            # The controller serves one WiFi connection at a time. Send
+            # "Connection: close" so each response frees it, and queue requests
+            # through a single connection instead of opening a second one.
+            self._session = aiohttp.ClientSession(
+                connector=aiohttp.TCPConnector(force_close=True, limit=1)
+            )
         return self._session
 
     async def async_close(self) -> None:

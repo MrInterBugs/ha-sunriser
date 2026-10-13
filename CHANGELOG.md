@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Send `Connection: close` on every controller request and queue requests
+  through a single connection. The SunRiser 10 serves one WiFi connection at a
+  time and firmware 1.006 keeps it open after a response, so a reused
+  connection held the controller's only slot until its 10-second idle timeout.
+  Each poll now makes three short connections instead of reusing one.
+- Not yet validated on a live controller.
+
 ## [2.2.2] - 2026-10-09
 
 ### Changed
