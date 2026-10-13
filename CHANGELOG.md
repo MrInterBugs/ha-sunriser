@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2.2.3] - 2026-10-13
 
 ### Changed
 
@@ -9,7 +9,13 @@
   time and firmware 1.006 keeps it open after a response, so a reused
   connection held the controller's only slot until its 10-second idle timeout.
   Each poll now makes three short connections instead of reusing one.
-- Not yet validated on a live controller.
+
+### Upgrade
+
+- Update through HACS and restart Home Assistant. No entities, options, or
+  services change.
+- This release has not been validated on a live controller. If entities become
+  unavailable or the controller resets more often, return to 2.2.2.
 
 ## [2.2.2] - 2026-10-09
 
