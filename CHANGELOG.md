@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- The default poll interval is now 60 seconds (was 30). Existing installs that
+  saved a polling interval in the options keep their value.
+- The integration icon now matches the sun-over-horizon mark used by the
+  modern web app.
+
 ## [2.2.3] - 2026-10-13
 
 ### Changed
