@@ -34,12 +34,6 @@ If resets persist, include the integration version, controller firmware version,
 
 This is expected device behaviour. A direct PWM write from HA overrides the running program for approximately one minute, after which the device's own dayplanner or weekplanner schedule resumes. For persistent output, enable the channel's **Manager** select and **Fixed Value** number in its entity settings. Set Manager to `fixed` and choose a Fixed Value between 0 and {{ cfg.pwm_max }}. Switch back to `dayplanner` or `weekplanner` to resume a schedule.
 
-## Icon missing only in HACS
-
-Home Assistant 2026.3 and later can load the bundled SunRiser icon from the integration's `brand/` directory. HACS versions affected by [issue #5171](https://github.com/hacs/integration/issues/5171) use an external image service, so the HACS listing can show “icon not available” even when the icon appears correctly in HA. Check that issue for the HACS fix; this does not affect controller operation.
-
-See Home Assistant's [local brand-image documentation](https://developers.home-assistant.io/docs/core/integration/brand_images/) for version support.
-
 ## Day Planner card is missing or empty
 
 If the card type is missing after installation or an update, reload the dashboard page. The browser must be able to reach `unpkg.com`, which supplies the card's Lit dependency. Check the browser console for a failed module load if it still does not appear.

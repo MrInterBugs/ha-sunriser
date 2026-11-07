@@ -25,14 +25,12 @@ Use the [service action guide](https://mrinterbugs.github.io/ha-sunriser/service
 
 ## Quick install
 
-SunRiser is included in the HACS default catalogue.
+SunRiser is in the Home Assistant Marketplace (Home Assistant 2026.11 or newer).
 
-1. Open **HACS** in Home Assistant
-2. Search for **SunRiser**, open its page, and click **Download**
-3. Restart Home Assistant
-4. Go to **Settings → Devices & Services → Add Integration** and search for **SunRiser**
+1. Go to **Settings > Marketplace** and search for **SunRiser**
+2. Open its page and select **Install**; the SunRiser setup starts straight away
 
-For an existing installation, download the [latest stable release](https://github.com/MrInterBugs/ha-sunriser/releases/latest) through HACS, restart Home Assistant, and refresh the dashboard. See the [changelog](CHANGELOG.md) for upgrade notes.
+For an existing installation, update to the [latest stable release](https://github.com/MrInterBugs/ha-sunriser/releases/latest) from **Settings > Updates**, restart Home Assistant, and refresh the dashboard. See the [changelog](CHANGELOG.md) for upgrade notes.
 
 See the [installation docs](https://mrinterbugs.github.io/ha-sunriser/installation/) for the full walkthrough.
 
