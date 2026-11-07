@@ -1117,7 +1117,8 @@ async def test_async_close_cancels_scheduled_reboot(hass: HomeAssistant) -> None
     coord = SunRiserCoordinator(hass, entry)
     assert coord._scheduled_reboot_cancel is not None
 
-    cancel_mock = MagicMock()
+    # Wrap the real cancel so the scheduled timer is still removed.
+    cancel_mock = MagicMock(side_effect=coord._scheduled_reboot_cancel)
     coord._scheduled_reboot_cancel = cancel_mock
 
     await coord.async_close()
