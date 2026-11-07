@@ -180,6 +180,9 @@ async def test_one_controller_recovery_does_not_clear_other_controller_issue(
         for _ in range(3):
             await coord.async_refresh()
     first.async_get_state = AsyncMock(return_value={"uptime": 20})
+    # The recovered poll also reads weather and configuration; keep it offline.
+    first.async_get_weather = AsyncMock(return_value=[])
+    first.async_get_config = AsyncMock(return_value={})
     await first.async_refresh()
     assert second._consecutive_failures == 3
     issues = issue_registry.async_get(hass).issues
