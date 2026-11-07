@@ -16,7 +16,7 @@ Updates appear under **Settings > Updates**. After an update, restart Home Assis
 
 ## Set up the integration
 
-1. Go to **Settings → Devices & Services → Add Integration**
+1. Go to **Settings -> Devices & Services -> Add Integration**
 2. Search for **SunRiser**
 3. Enter your device's IP address or hostname (for example, `sunriser`, if it resolves on your network)
 4. Enter the port if you changed it from the default (default: `{{ cfg.default_port }}`)
@@ -33,15 +33,15 @@ The integration will automatically detect all active PWM channels and temperatur
 
 ## Automatic discovery
 
-The integration can discover SunRiser devices automatically via DHCP. When a device with a hostname matching `sunriser*` joins your network, Home Assistant will prompt you to set it up. You can also initiate setup manually via **Settings → Devices & Services → Add Integration → SunRiser**.
+The integration can discover SunRiser devices automatically via DHCP. When a device with a hostname matching `sunriser*` joins your network, Home Assistant will prompt you to set it up. You can also initiate setup manually via **Settings -> Devices & Services -> Add Integration -> SunRiser**.
 
 ## Update the host or port
 
-If your device's IP address changes, go to **Settings → Devices & Services → SunRiser → three-dot menu → Reconfigure**. You can update the host and port without removing the integration — all automations and entity history are preserved.
+If your device's IP address changes, go to **Settings -> Devices & Services -> SunRiser -> three-dot menu -> Reconfigure**. You can update the host and port without removing the integration - all automations and entity history are preserved.
 
 ## Remove the integration
 
-1. Go to **Settings → Devices & Services**
+1. Go to **Settings -> Devices & Services**
 2. Find the **SunRiser** integration and click the three-dot menu
 3. Select **Delete**
 4. In **Settings > Marketplace**, open the **Installed** tab and uninstall **SunRiser**

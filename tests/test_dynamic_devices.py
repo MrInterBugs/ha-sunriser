@@ -324,7 +324,7 @@ async def test_select_stale_entity_removed_when_channel_deactivated(
 
 
 # ---------------------------------------------------------------------------
-# sensor.py — DS1820 dynamic discovery
+# sensor.py - DS1820 dynamic discovery
 # ---------------------------------------------------------------------------
 
 

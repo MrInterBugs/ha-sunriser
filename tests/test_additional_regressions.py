@@ -9,6 +9,7 @@ import aiohttp
 import pytest
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant, ServiceResponse
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import issue_registry
@@ -163,7 +164,7 @@ async def test_new_temperature_is_not_published_without_scaling_metadata(
         if isinstance(e, SunRiserTemperatureSensor) and e._rom == "NEW_ROM"
     )
     assert new.native_value == 25.1
-    assert new.native_unit_of_measurement == "°C"
+    assert new.native_unit_of_measurement == UnitOfTemperature.CELSIUS
     assert new.name == "New probe"
 
 

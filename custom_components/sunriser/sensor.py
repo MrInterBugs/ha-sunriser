@@ -38,7 +38,7 @@ async def async_setup_entry(
     coordinator: SunRiserCoordinator = entry.runtime_data
     setup_maintenance_entities(hass, entry, async_add_entities, "sensor")
 
-    # Static diagnostic sensors — always present.
+    # Static diagnostic sensors - always present.
     async_add_entities(
         [
             SunRiserUptimeSensor(coordinator),
@@ -90,7 +90,7 @@ class SunRiserUptimeSensor(CoordinatorEntity[SunRiserCoordinator], SensorEntity)
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = "s"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    # Changes every poll — creates many state changes; disabled by default.
+    # Changes every poll - creates many state changes; disabled by default.
     _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator: SunRiserCoordinator) -> None:
@@ -176,7 +176,7 @@ class SunRiserTemperatureSensor(CoordinatorEntity[SunRiserCoordinator], SensorEn
 
 
 # ---------------------------------------------------------------------------
-# Weather simulation sensors (GET /weather — API still under development)
+# Weather simulation sensors (GET /weather - API still under development)
 # One entity per PWM channel that has a weather program assigned.
 # ---------------------------------------------------------------------------
 
@@ -224,7 +224,7 @@ class SunRiserWeatherChannelSensor(
             return "moon"
         return "clear"
 
-    # Maps raw tick field → (output attribute name, zero-value label)
+    # Maps raw tick field -> (output attribute name, zero-value label)
     _TICK_FIELDS: dict[str, tuple[str, str]] = {
         "clouds_next_state_tick": ("clouds_next_change_at", "no clouds today"),
         "rain_next_tick": ("rain_next_at", "no rain today"),
@@ -281,7 +281,7 @@ class SunRiserWeatherChannelSensor(
         )
 
         # Convenience booleans: only included when the firmware reports that
-        # subsystem as configured (absent fields → not in this program).
+        # subsystem as configured (absent fields -> not in this program).
         for state_key, attr_name in self._ACTIVE_STATE_FIELDS.items():
             if state_key in ch:
                 result[attr_name] = bool(ch[state_key])

@@ -14,7 +14,7 @@ from tests.conftest import ENTRY_ID
 from tests.typing import as_async_mock, collect_entities
 
 # ---------------------------------------------------------------------------
-# async_setup_entry — entity creation
+# async_setup_entry - entity creation
 # ---------------------------------------------------------------------------
 
 
@@ -66,7 +66,7 @@ def _make_select(
 def test_current_option_dayplanner(
     coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
 ) -> None:
-    """pwm1 has manager=1 → 'dayplanner'."""
+    """pwm1 has manager=1 -> 'dayplanner'."""
     sel = _make_select(coordinator, mock_config_entry, pwm_num=1)
     assert sel.current_option == "dayplanner"
 
@@ -74,7 +74,7 @@ def test_current_option_dayplanner(
 def test_current_option_none(
     coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
 ) -> None:
-    """pwm2 has manager=0 → 'none'."""
+    """pwm2 has manager=0 -> 'none'."""
     sel = _make_select(coordinator, mock_config_entry, pwm_num=2)
     assert sel.current_option == "none"
 
@@ -82,7 +82,7 @@ def test_current_option_none(
 def test_current_option_weekplanner(
     coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
 ) -> None:
-    """pwm4 has manager=2 → 'weekplanner'."""
+    """pwm4 has manager=2 -> 'weekplanner'."""
     sel = _make_select(coordinator, mock_config_entry, pwm_num=4)
     assert sel.current_option == "weekplanner"
 

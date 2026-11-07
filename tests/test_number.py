@@ -14,7 +14,7 @@ from tests.conftest import ENTRY_ID
 from tests.typing import as_async_mock, collect_entities
 
 # ---------------------------------------------------------------------------
-# async_setup_entry — entity creation
+# async_setup_entry - entity creation
 # ---------------------------------------------------------------------------
 
 
@@ -67,7 +67,7 @@ def _make_number(
 def test_native_value_returns_configured_fixed(
     coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
 ) -> None:
-    """pwm1 has fixed=500 → native_value should be 500.0."""
+    """pwm1 has fixed=500 -> native_value should be 500.0."""
     num = _make_number(coordinator, mock_config_entry, pwm_num=1)
     assert num.native_value == 500.0
 
@@ -75,7 +75,7 @@ def test_native_value_returns_configured_fixed(
 def test_native_value_none_defaults_to_zero(
     coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
 ) -> None:
-    """pwm2 has fixed=None → native_value should be 0.0."""
+    """pwm2 has fixed=None -> native_value should be 0.0."""
     num = _make_number(coordinator, mock_config_entry, pwm_num=2)
     assert num.native_value == 0.0
 
@@ -83,7 +83,7 @@ def test_native_value_none_defaults_to_zero(
 def test_native_value_zero(
     coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
 ) -> None:
-    """pwm4 has fixed=0 → native_value should be 0.0."""
+    """pwm4 has fixed=0 -> native_value should be 0.0."""
     num = _make_number(coordinator, mock_config_entry, pwm_num=4)
     assert num.native_value == 0.0
 

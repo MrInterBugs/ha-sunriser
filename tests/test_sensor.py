@@ -21,7 +21,7 @@ from tests.conftest import ENTRY_ID, FAKE_STATE
 from tests.typing import collect_entities, require_value
 
 # ---------------------------------------------------------------------------
-# async_setup_entry — entity creation
+# async_setup_entry - entity creation
 # ---------------------------------------------------------------------------
 
 
@@ -404,7 +404,7 @@ def test_weather_channel_unique_id(coordinator: SunRiserCoordinator) -> None:
 
 def test_weather_channel_name(coordinator: SunRiserCoordinator) -> None:
     # Channel name is passed as a translation placeholder so HA can localise the suffix.
-    # FAKE_CONFIG has pwm#2#color = "pump" → COLOR_NAMES maps "pump" to "Mini Pump".
+    # FAKE_CONFIG has pwm#2#color = "pump" -> COLOR_NAMES maps "pump" to "Mini Pump".
     sensor = _make_weather_channel_sensor(coordinator, channel=2)
     assert sensor._attr_translation_key == "weather_channel"
     assert sensor._attr_translation_placeholders == {"channel": "Mini Pump"}
@@ -413,7 +413,7 @@ def test_weather_channel_name(coordinator: SunRiserCoordinator) -> None:
 def test_weather_channel_attributes_rename_passthrough(
     coordinator: SunRiserCoordinator,
 ) -> None:
-    # cloudticks → cloud_ticks and rainmins → rain_duration_mins are renamed.
+    # cloudticks -> cloud_ticks and rainmins -> rain_duration_mins are renamed.
     coordinator.data = {
         **FAKE_STATE,
         "weather": [{"weather_program_id": 1, "cloudticks": 5000, "rainmins": 10}],

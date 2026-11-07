@@ -48,7 +48,7 @@ See the [API reference](https://mrinterbugs.github.io/ha-sunriser/api/) for inte
 
 ## License
 
-Copyright © 2026 Aedan Lawrence. Original contributions to this integration are licensed under [GNU GPLv3 or later](LICENSE). Third-party material retains its respective copyright and licence, as noted below.
+Copyright (c) 2026 Aedan Lawrence. Original contributions to this integration are licensed under [GNU GPLv3 or later](LICENSE). Third-party material retains its respective copyright and licence, as noted below.
 
 ## Attribution
 

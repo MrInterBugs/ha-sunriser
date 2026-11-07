@@ -14,10 +14,10 @@ These use `EntityCategory.DIAGNOSTIC`.
 
 ## DS1820 temperature sensors (dynamic)
 
-One sensor per ROM address found in `GET /state → sensors`. New probes are added without a reload once their names, units, and decimal scaling have been loaded.
+One sensor per ROM address found in `GET /state -> sensors`. New probes are added without a reload once their names, units, and decimal scaling have been loaded.
 
 - Name comes from `sensors#sensor#{rom}#name`
-- Unit: `sensors#sensor#{rom}#unit` (0 = raw, 1 = °C). Raw readings have no HA unit or temperature device class; Celsius readings use both.
+- Unit: `sensors#sensor#{rom}#unit` (0 = raw, 1 = degrees Celsius). Raw readings have no HA unit or temperature device class; Celsius readings use both.
 - Decimal places: `sensors#sensor#{rom}#unitcomma`
 
 ## Weather simulation sensors (dynamic)

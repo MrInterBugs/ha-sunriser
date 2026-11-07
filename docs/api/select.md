@@ -1,6 +1,6 @@
 # Select
 
-One `SelectEntity` per active PWM channel, exposing `pwm#X#manager` — the scheduling mode for that channel.
+One `SelectEntity` per active PWM channel, exposing `pwm#X#manager` - the scheduling mode for that channel.
 
 ## Options
 

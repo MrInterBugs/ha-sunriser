@@ -14,7 +14,7 @@
 import { LitElement, html, css } from "https://unpkg.com/lit@3/index.js?module";
 import { unsafeSVG } from "https://unpkg.com/lit@3/directives/unsafe-svg.js?module";
 
-// LED colour map — sourced from sunriser_colors_config.js, matching the colours
+// LED colour map - sourced from sunriser_colors_config.js, matching the colours
 // used by the firmware's own dayplanner UI.  Very pale colours (e.g. 6500K sky
 // white) are intentionally kept as-is so the chart matches the device UI; they
 // show well on dark HA themes.  The FALLBACK_PALETTE is used for unrecognised
@@ -56,9 +56,9 @@ function channelColor(colorId, fallbackIdx) {
   return LED_COLORS[colorId] ?? FALLBACK_PALETTE[fallbackIdx % FALLBACK_PALETTE.length];
 }
 
-// ── SVG layout constants ──────────────────────────────────────────────────────
-// X axis: 0–1440 SVG units = 0–24h (1 unit per minute)
-// Y axis: 0–100 SVG units = 100%–0% (inverted: top of chart = full brightness)
+// -- SVG layout constants ------------------------------------------------------
+// X axis: 0-1440 SVG units = 0-24h (1 unit per minute)
+// Y axis: 0-100 SVG units = 100%-0% (inverted: top of chart = full brightness)
 const SVG_W = 1440;
 const SVG_H = 100;
 // ViewBox matches the data range exactly so 100% touches the top edge.
@@ -101,7 +101,7 @@ function buildChannelPath(markers) {
 function buildSVGContent(schedules) {
   const parts = [];
 
-  // ── Grid ──────────────────────────────────────────────────────────────────
+  // -- Grid ------------------------------------------------------------------
   // Use style attribute so CSS variables resolve inside the shadow DOM.
   const gridStyle =
     'style="stroke: var(--divider-color, #CCD7E2)" stroke-width="0.5" stroke-dasharray="2,2"';
@@ -119,7 +119,7 @@ function buildSVGContent(schedules) {
     );
   }
 
-  // ── Per-channel paths then dots (dots on top) ─────────────────────────────
+  // -- Per-channel paths then dots (dots on top) -----------------------------
   const dotLayers = [];
   schedules.forEach(({ markers, color_id }, idx) => {
     const color = channelColor(color_id, idx);
@@ -150,7 +150,7 @@ function buildSVGContent(schedules) {
   return parts.join("\n");
 }
 
-// ── Custom element ────────────────────────────────────────────────────────────
+// -- Custom element ------------------------------------------------------------
 
 class SunRiserDayplanCard extends LitElement {
   static properties = {
@@ -333,7 +333,7 @@ class SunRiserDayplanCard extends LitElement {
 
   _renderBody() {
     if (this._loading && !this._schedules) {
-      return html`<div class="state">Loading schedules…</div>`;
+      return html`<div class="state">Loading schedules...</div>`;
     }
     if (this._error) {
       return html`
@@ -351,7 +351,7 @@ class SunRiserDayplanCard extends LitElement {
       const color = channelColor(color_id, idx);
       const label = this._config?.channels?.[pwm] ?? name;
       const mode = manager === 1 ? "Daily planner" : manager === 2
-        ? (this._weekday === null ? "Weekly planner — controller timezone unavailable" : `Weekly planner — ${program_name || "no available program today"}`)
+        ? (this._weekday === null ? "Weekly planner - controller timezone unavailable" : `Weekly planner - ${program_name || "no available program today"}`)
         : manager === 3 ? `Fixed output: ${fixed / 10}%` : "No planner";
       return html`
         <span class="legend-item" title=${`${label}: ${mode}`} aria-label=${`${label}: ${mode}`}>

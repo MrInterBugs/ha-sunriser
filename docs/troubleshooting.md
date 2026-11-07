@@ -4,7 +4,7 @@
 
 **Symptom:** Integration setup fails or the connectivity binary sensor stays `Off`.
 
-Check that the SunRiser is on the same network as HA and is reachable from HA. Open `http://<host>:<port>/` in a browser — you should see the device web UI. Ensure no firewall or VLAN is blocking the configured HTTP port (default {{ cfg.default_port }}) between HA and the device.
+Check that the SunRiser is on the same network as HA and is reachable from HA. Open `http://<host>:<port>/` in a browser - you should see the device web UI. Ensure no firewall or VLAN is blocking the configured HTTP port (default {{ cfg.default_port }}) between HA and the device.
 
 ## No entities appear after setup
 
@@ -16,7 +16,7 @@ Entities are created as part of successful setup. Check the HA logs for failed s
 
 **Symptom:** Entity states are stale or show as unavailable.
 
-Check the poll interval under **Settings → Devices & Services → SunRiser → Configure** — a very long interval means infrequent updates. Confirm nothing is blocking HTTP between HA and the device. The connectivity sensor turns off after the first failed state poll. Other entities retain their last values until {{ cfg.failure_grace }} consecutive state failures make the controller unavailable. A successful state poll restores availability and clears the repair notification.
+Check the poll interval under **Settings -> Devices & Services -> SunRiser -> Configure** - a very long interval means infrequent updates. Confirm nothing is blocking HTTP between HA and the device. The connectivity sensor turns off after the first failed state poll. Other entities retain their last values until {{ cfg.failure_grace }} consecutive state failures make the controller unavailable. A successful state poll restores availability and clears the repair notification.
 
 State, configuration, and weather reads can fail independently. After three
 consecutive weather or configuration failures, the integration logs one warning
