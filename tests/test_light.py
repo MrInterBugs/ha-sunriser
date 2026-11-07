@@ -85,6 +85,34 @@ def test_brightness_zero_at_pwm_zero(
     assert light.brightness == 0
 
 
+def test_brightness_on_planner_scale(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
+    """Issue #17: readback 675 is the planner's 94 %, not 67 %."""
+    coordinator.data = {**FAKE_STATE, "pwms": {"1": 675}}
+    light = _make_light(coordinator, mock_config_entry, pwm_num=1)
+    assert light.brightness == 240  # 94 % of 255
+    assert light.extra_state_attributes == {"raw_value": 675}
+
+
+def test_brightness_uses_oldfade_curve(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
+    coordinator.config["oldfade"] = True
+    coordinator.data = {**FAKE_STATE, "pwms": {"1": 660}}
+    light = _make_light(coordinator, mock_config_entry, pwm_num=1)
+    assert light.brightness == 240  # 94 % on the original curve, no extra step
+
+
+def test_brightness_at_channel_max(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
+    coordinator.config["pwm#1#max"] = 500
+    coordinator.data = {**FAKE_STATE, "pwms": {"1": 500}}
+    light = _make_light(coordinator, mock_config_entry, pwm_num=1)
+    assert light.brightness == 227  # 89 %, the highest planner percent below 500
+
+
 def test_unique_id(
     coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
 ) -> None:
@@ -114,6 +142,36 @@ async def test_turn_on_sends_brightness(
     call_args = require_value(as_async_mock(coordinator.async_set_pwms).call_args)[0][0]
     assert "1" in call_args
     assert 0 < call_args["1"] < 1000
+
+
+async def test_turn_on_sends_planner_value(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
+    """50 % drives what the day planner drives at 50 % (37 plus its step)."""
+    light = _make_light(coordinator, mock_config_entry, pwm_num=1)
+    await light.async_turn_on(**{ATTR_BRIGHTNESS: 128})
+    call_args = require_value(as_async_mock(coordinator.async_set_pwms).call_args)[0][0]
+    assert call_args == {"1": 38}
+
+
+async def test_turn_on_fixed_mode_leaves_step_to_controller(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
+    coordinator.config["pwm#1#manager"] = 3
+    light = _make_light(coordinator, mock_config_entry, pwm_num=1)
+    await light.async_turn_on(**{ATTR_BRIGHTNESS: 128})
+    call_args = require_value(as_async_mock(coordinator.async_set_pwms).call_args)[0][0]
+    assert call_args == {"1": 37}
+
+
+async def test_turn_on_oldfade(
+    coordinator: SunRiserCoordinator, mock_config_entry: MockConfigEntry
+) -> None:
+    coordinator.config["oldfade"] = True
+    light = _make_light(coordinator, mock_config_entry, pwm_num=1)
+    await light.async_turn_on(**{ATTR_BRIGHTNESS: 128})
+    call_args = require_value(as_async_mock(coordinator.async_set_pwms).call_args)[0][0]
+    assert call_args == {"1": 31}
 
 
 async def test_turn_on_defaults_to_full_brightness(

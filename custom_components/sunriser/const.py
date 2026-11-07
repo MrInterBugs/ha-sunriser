@@ -14,6 +14,7 @@ MANAGER_OPTIONS: dict[int, str] = {
     2: "weekplanner",
     3: "fixed",
 }
+MANAGER_FIXED = 3
 
 DEFAULT_PORT = 80
 DEFAULT_SCAN_INTERVAL = 60

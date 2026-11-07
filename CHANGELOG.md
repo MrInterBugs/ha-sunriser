@@ -4,10 +4,22 @@
 
 ### Changed
 
+- **Breaking:** light brightness now uses the day planner's percent scale
+  instead of a linear share of the raw PWM value (#17). A channel the planner
+  runs at 94 % now shows 94 % (it showed 67 %), and setting a brightness
+  writes the value the planner would drive at that percent. The raw readback
+  is the new `raw_value` attribute.
 - The default poll interval is now 60 seconds (was 30). Existing installs that
   saved a polling interval in the options keep their value.
 - The integration icon now matches the sun-over-horizon mark used by the
   modern web app.
+
+### Upgrade
+
+- Automations and scenes that set a light's brightness now mean a planner
+  percent: `brightness: 128` (50 %) previously sent a PWM value of 502 and now
+  sends 38. Review brightness values in automations, scripts and scenes; to
+  keep an output, pick the planner percent that matches it.
 
 ## [2.2.3] - 2026-10-13
 
