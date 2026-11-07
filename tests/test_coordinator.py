@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Unit tests for SunRiserCoordinator — HTTP calls mocked via aioresponses."""
+"""Unit tests for SunRiserCoordinator - HTTP calls mocked via aioresponses."""
 
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -45,7 +45,7 @@ async def coord(
 
 
 # ---------------------------------------------------------------------------
-# hass.data bridge — DST auto-track survives same-session reloads
+# hass.data bridge - DST auto-track survives same-session reloads
 # ---------------------------------------------------------------------------
 
 
@@ -131,7 +131,7 @@ async def test_update_data_unexpected_error_is_not_a_communication_failure(
 
 
 # ---------------------------------------------------------------------------
-# Grace period — stale data returned for transient failures
+# Grace period - stale data returned for transient failures
 # ---------------------------------------------------------------------------
 
 
@@ -391,7 +391,7 @@ async def test_async_set_config(coord: SunRiserCoordinator) -> None:
 
 
 async def test_async_set_service_mode_on(coord: SunRiserCoordinator) -> None:
-    """service_mode must be integer 1, not boolean True — device returns 500 for booleans."""
+    """service_mode must be integer 1, not boolean True - device returns 500 for booleans."""
     with aioresponses() as m:
         m.put(f"{BASE}/state", status=200)
         await coord.async_set_service_mode(True)
@@ -437,7 +437,7 @@ def test_pwm_name_uses_color(coordinator: SunRiserCoordinator) -> None:
 
 
 def test_pwm_name_falls_back_to_pwm_number(coordinator: SunRiserCoordinator) -> None:
-    # pwm#3 has empty color → no name in COLOR_NAMES
+    # pwm#3 has empty color -> no name in COLOR_NAMES
     coordinator.config["pwm#3#color"] = "nonexistent_id"
     assert "3" in coordinator.pwm_name(3)
 
@@ -547,7 +547,7 @@ def test_pwm_count_property(coordinator: SunRiserCoordinator) -> None:
 
 
 async def test_async_set_timewarp_on(coord: SunRiserCoordinator) -> None:
-    """timewarp=1 (integer) must be sent — boolean True would cause a 500."""
+    """timewarp=1 (integer) must be sent - boolean True would cause a 500."""
     with aioresponses() as m:
         m.put(f"{BASE}/state", status=200)
         await coord.async_set_timewarp(True)
@@ -560,7 +560,7 @@ async def test_async_set_timewarp_on(coord: SunRiserCoordinator) -> None:
 
 
 async def test_async_set_timewarp_off(coord: SunRiserCoordinator) -> None:
-    """timewarp=0 (integer) must be sent — boolean False would cause a 500."""
+    """timewarp=0 (integer) must be sent - boolean False would cause a 500."""
     with aioresponses() as m:
         m.put(f"{BASE}/state", status=200)
         await coord.async_set_timewarp(False)
@@ -625,7 +625,7 @@ async def test_async_set_dst_auto_track_false_does_not_sync(
 
 
 # ---------------------------------------------------------------------------
-# _async_update_data — DST sync pending branch
+# _async_update_data - DST sync pending branch
 # ---------------------------------------------------------------------------
 
 
@@ -686,7 +686,7 @@ async def test_async_get_dayplanner_parses_flat_array(
     coord: SunRiserCoordinator,
 ) -> None:
     """Flat [daymin, percent, ...] array in config cache is converted to sorted marker dicts."""
-    # 08:00 → 480 mins, 20:30 → 1230 mins
+    # 08:00 -> 480 mins, 20:30 -> 1230 mins
     coord.config["dayplanner#marker#1"] = [1230, 75, 480, 50]
     result = await coord.async_get_dayplanner(1)
 

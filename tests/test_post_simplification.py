@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 import aiohttp
 import pytest
 from aioresponses import aioresponses
+from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry, issue_registry
 from homeassistant.helpers.issue_registry import IssueSeverity
@@ -125,7 +126,7 @@ async def test_raw_sensor_is_not_advertised_as_temperature(
         require_value(hass.states.get(require_value(eid))).attributes[
             "unit_of_measurement"
         ]
-        == "°C"
+        == UnitOfTemperature.CELSIUS
     )
 
 

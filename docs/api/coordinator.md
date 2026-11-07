@@ -6,9 +6,9 @@ The `SunRiserCoordinator` owns the HTTP session, maintains the device configurat
 
 Every poll performs these requests sequentially, without artificial delays:
 
-1. `GET /state` — current channel values, uptime, and temperature readings.
-2. `GET /weather` — current weather simulation state.
-3. `POST /` — firmware identity, channel configuration, sensor metadata, and weather program names in a single MessagePack request.
+1. `GET /state` - current channel values, uptime, and temperature readings.
+2. `GET /weather` - current weather simulation state.
+3. `POST /` - firmware identity, channel configuration, sensor metadata, and weather program names in a single MessagePack request.
 
 The configured poll interval defaults to {{ cfg.default_scan_interval }} seconds. The HTTP session reuses connections. Configuration reads through cache publication and configuration writes share a lock to preserve ordering; unrelated requests are not globally serialized. Successful configuration writes update the cache and notify entity listeners immediately.
 

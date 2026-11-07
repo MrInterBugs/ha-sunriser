@@ -20,7 +20,7 @@ from .discovery import pwm_entity_reconciler
 PARALLEL_UPDATES = 1
 
 
-# Linear scale: device 0–1000 ↔ HA 0–255
+# Linear scale: device 0-1000 <-> HA 0-255
 # Readback at/above 1000 maps to HA 255; HA 255 writes the command maximum 1000.
 def _to_ha_brightness(pwm_value: int) -> int:
     if pwm_value <= 0:

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Unit tests for the PWM ↔ HA brightness conversion functions."""
+"""Unit tests for the PWM <-> HA brightness conversion functions."""
 
 from custom_components.sunriser.light import _to_device_brightness, _to_ha_brightness
 
@@ -23,7 +23,7 @@ class TestToHaBrightness:
         """Values strictly between 0 and 1000 must map strictly between 1 and 254."""
         for pwm in [1, 100, 500, 999]:
             result = _to_ha_brightness(pwm)
-            assert 1 <= result <= 254, f"pwm={pwm} → {result}"
+            assert 1 <= result <= 254, f"pwm={pwm} -> {result}"
 
     def test_monotone(self) -> None:
         """Higher PWM must give higher (or equal) HA brightness."""

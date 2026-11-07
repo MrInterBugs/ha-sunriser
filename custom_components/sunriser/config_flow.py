@@ -201,7 +201,7 @@ class SunRiserConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
             return self.async_abort(reason="already_configured")
 
-        # New device — test connectivity then confirm with user.
+        # New device - test connectivity then confirm with user.
         error = await _test_connection(discovery_info.ip, DEFAULT_PORT)
         if error:
             return self.async_abort(reason=error)

@@ -40,7 +40,7 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(  # pyright: ignore[reportUnk
 
 _CARD_URL = "/sunriser/sunriser-dayplan-card.js"
 _CARD_PATH = pathlib.Path(__file__).parent / "www" / "sunriser-dayplan-card.js"
-_CARD_VERSION = "1.5.1"
+_CARD_VERSION = "1.5.2"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -612,7 +612,7 @@ def _register_services(hass: HomeAssistant) -> None:
                 translation_key="factory_reset_failed",
                 translation_placeholders={"error": str(err)},
             ) from err
-        _LOGGER.warning("SunRiser factory reset triggered — all config wiped")
+        _LOGGER.warning("SunRiser factory reset triggered - all config wiped")
 
     hass.services.async_register(
         DOMAIN,

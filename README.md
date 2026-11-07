@@ -30,7 +30,7 @@ SunRiser is included in the HACS default catalogue.
 1. Open **HACS** in Home Assistant
 2. Search for **SunRiser**, open its page, and click **Download**
 3. Restart Home Assistant
-4. Go to **Settings → Devices & Services → Add Integration** and search for **SunRiser**
+4. Go to **Settings -> Devices & Services -> Add Integration** and search for **SunRiser**
 
 For an existing installation, download the [latest stable release](https://github.com/MrInterBugs/ha-sunriser/releases/latest) through HACS, restart Home Assistant, and refresh the dashboard. See the [changelog](CHANGELOG.md) for upgrade notes.
 
@@ -42,7 +42,7 @@ See the [API reference](https://mrinterbugs.github.io/ha-sunriser/api/) for inte
 
 ## License
 
-Copyright © 2026 Aedan Lawrence. Original contributions to this integration are licensed under [GNU GPLv3 or later](LICENSE). Third-party material retains its respective copyright and licence, as noted below.
+Copyright (c) 2026 Aedan Lawrence. Original contributions to this integration are licensed under [GNU GPLv3 or later](LICENSE). Third-party material retains its respective copyright and licence, as noted below.
 
 ## Attribution
 

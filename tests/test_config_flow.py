@@ -122,7 +122,7 @@ async def test_test_connection_unknown_error() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Config flow — async_step_user
+# Config flow - async_step_user
 # ---------------------------------------------------------------------------
 
 

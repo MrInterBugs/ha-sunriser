@@ -12,7 +12,7 @@ from tests.conftest import ENTRY_ID, FAKE_STATE
 from tests.typing import as_async_mock, collect_entities, require_value
 
 # ---------------------------------------------------------------------------
-# async_setup_entry — entity filtering
+# async_setup_entry - entity filtering
 # ---------------------------------------------------------------------------
 
 
@@ -28,7 +28,7 @@ async def test_setup_creates_lights_for_dimmable_channels(
     await async_setup_entry(hass, mock_config_entry, collect_entities(added))
 
     # pwm1 = "TROPIC 4500K" (dimmable), pwm4 = "SKY 6500K" (dimmable)
-    # pwm2 = on/off switch → excluded, pwm3 = unused → excluded
+    # pwm2 = on/off switch -> excluded, pwm3 = unused -> excluded
     assert len(added) == 2
     assert all(isinstance(e, SunRiserLight) for e in added)
 
@@ -124,7 +124,7 @@ async def test_turn_on_defaults_to_full_brightness(
 
     as_async_mock(coordinator.async_set_pwms).assert_awaited_once()
     call_args = require_value(as_async_mock(coordinator.async_set_pwms).call_args)[0][0]
-    assert call_args["1"] == 1000  # 255 → 1000
+    assert call_args["1"] == 1000  # 255 -> 1000
 
 
 async def test_turn_off_sends_zero(

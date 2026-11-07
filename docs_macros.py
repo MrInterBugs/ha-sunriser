@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""MkDocs macros hook — exposes integration data to doc templates."""
+"""MkDocs macros hook - exposes integration data to doc templates."""
 
 import importlib.util
 import re

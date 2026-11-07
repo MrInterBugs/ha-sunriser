@@ -4,9 +4,9 @@ DOMAIN = "sunriser"
 
 PLATFORMS = ["binary_sensor", "button", "light", "number", "select", "sensor", "switch"]
 
-# pwm#X#manager values → human-readable option labels
+# pwm#X#manager values -> human-readable option labels
 # Confirmed from real device web UI (Kein Verlauf / Tagesplanung / Wochenplanung
-# / Fester Wert). config_def.json labels 3 as "celestial" but that is wrong —
+# / Fester Wert). config_def.json labels 3 as "celestial" but that is wrong -
 # the device shows "fixed value" and pwm#X#fixed is the companion config key.
 MANAGER_OPTIONS: dict[int, str] = {
     0: "none",
@@ -23,10 +23,10 @@ CONF_SCHEDULED_REBOOT = "scheduled_reboot"
 CONF_REBOOT_TIME = "reboot_time"
 DEFAULT_REBOOT_TIME = "04:00"
 
-# PWM values on device are 0–1000
+# PWM values on device are 0-1000
 PWM_MAX = 1000
 
-# Mapping from pwm#X#color id → display name, sourced from sunriser_colors_config.js
+# Mapping from pwm#X#color id -> display name, sourced from sunriser_colors_config.js
 COLOR_NAMES: dict[str, str] = {
     "625nm": "RED 625nm",
     "3500k": "SUNSET 3500K",

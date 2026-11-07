@@ -30,8 +30,8 @@ async function mount(page) {
 
 test('daily and weekly curves remain visible without editing controls', async ({ page }) => {
   await mount(page);
-  const weekly = page.getByLabel('Royal Blue: Weekly planner — Moon weekdays', { exact: true });
-  await expect(weekly).toHaveAttribute('title', 'Royal Blue: Weekly planner — Moon weekdays');
+  const weekly = page.getByLabel('Royal Blue: Weekly planner - Moon weekdays', { exact: true });
+  await expect(weekly).toHaveAttribute('title', 'Royal Blue: Weekly planner - Moon weekdays');
   await expect(page.locator('svg path[fill="none"]')).toHaveCount(6);
   await expect(page.locator('svg path[fill="none"]').first()).toHaveAttribute('d', /1080,70/);
   await expect(page.locator('svg path[fill="none"]').nth(1)).toHaveAttribute('d', /720,20/);

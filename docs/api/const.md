@@ -15,7 +15,7 @@ Shared constants used across all platform modules.
 
 Maps `pwm#X#color` IDs returned by the device to human-readable English names. Used by `SunRiserCoordinator.pwm_name()` to label entities.
 
-Example entries: `"4500k" → "TROPIC 4500K"`, `"pump" → "Mini Pump"`.
+Example entries: `"4500k" -> "TROPIC 4500K"`, `"pump" -> "Mini Pump"`.
 
 ## `MANAGER_OPTIONS`
 
