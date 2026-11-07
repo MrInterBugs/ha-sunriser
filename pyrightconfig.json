@@ -2,8 +2,7 @@
   "include": [
     "custom_components",
     "tests",
-    "docs_macros.py",
-    "typings"
+    "docs_macros.py"
   ],
   "typeCheckingMode": "strict",
   "pythonVersion": "3.14",

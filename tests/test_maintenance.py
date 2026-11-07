@@ -13,7 +13,6 @@ from unittest.mock import AsyncMock, patch
 import aiohttp
 import msgpack
 import pytest
-from aioresponses import aioresponses
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry
@@ -34,6 +33,7 @@ from custom_components.sunriser.maintenance import (
 from custom_components.sunriser.switch import SunRiserMaintenanceSwitch
 from tests.conftest import FAKE_CONFIG
 from tests.typing import as_async_mock, collect_entities
+from tests.http_mock import controller_http
 
 FIXTURE: dict[str, Any] = json.loads(
     (Path(__file__).parent / "fixtures/maintenance_1006.json").read_text()
@@ -58,11 +58,11 @@ async def device(
 async def test_blackout_wire_contract(
     device: SunRiserCoordinator, enabled: bool
 ) -> None:
-    with aioresponses() as http:
+    with controller_http() as http:
         http.put(f"{device.base_url}/state", status=200)
         await device.async_set_blackout(enabled)
         request = http.requests[("PUT", URL(f"{device.base_url}/state"))][0]
-        payload = msgpack.unpackb(request.kwargs["data"], raw=False)
+        payload = msgpack.unpackb(request.data, raw=False)
         assert payload == {"blackout": int(enabled)}
         assert type(payload["blackout"]) is int
     as_async_mock(device.async_request_refresh).assert_awaited_once()
@@ -74,14 +74,14 @@ async def test_blackout_wire_contract(
 async def test_failed_write_is_not_retried_or_published(
     device: SunRiserCoordinator,
 ) -> None:
-    with aioresponses() as http:
+    with controller_http() as http:
         http.put(f"{device.base_url}/state", exception=TimeoutError())
         with pytest.raises(TimeoutError):
             await device.async_set_blackout(True)
         assert len(http.requests[("PUT", URL(f"{device.base_url}/state"))]) == 1
     as_async_mock(device.async_request_refresh).assert_not_awaited()
     assert device.operating_mode == "normal"
-    with aioresponses() as http:
+    with controller_http() as http:
         http.put(f"{device.base_url}/", status=500)
         with pytest.raises(aiohttp.ClientResponseError):
             await SunRiserMaintenanceNumber(device, 1).async_set_native_value(40)
@@ -106,11 +106,11 @@ async def test_maintenance_switch_stops_blackout(
     device: SunRiserCoordinator, mock_config_entry: MockConfigEntry
 ) -> None:
     device.data = dict(FIXTURE["states"]["blackout"])
-    with aioresponses() as http:
+    with controller_http() as http:
         http.put(f"{device.base_url}/state", status=200)
         await SunRiserMaintenanceSwitch(device, mock_config_entry).async_turn_off()
         payload = msgpack.unpackb(
-            http.requests[("PUT", URL(f"{device.base_url}/state"))][0].kwargs["data"],
+            http.requests[("PUT", URL(f"{device.base_url}/state"))][0].data,
             raw=False,
         )
         assert payload == {"service_mode": 0}
@@ -194,11 +194,11 @@ async def test_number_defaults_and_config_writes(device: SunRiserCoordinator) ->
     level = SunRiserMaintenanceNumber(device, 1)
     assert timeout.native_value == 30
     assert level.native_value == 65
-    with aioresponses() as http:
+    with controller_http() as http:
         http.put(f"{device.base_url}/", status=200)
         await level.async_set_native_value(0)
         payload = msgpack.unpackb(
-            http.requests[("PUT", URL(f"{device.base_url}/"))][0].kwargs["data"],
+            http.requests[("PUT", URL(f"{device.base_url}/"))][0].data,
             raw=False,
         )
         assert payload == {"pwm#1#service": 0, "save_version": "1.006"}

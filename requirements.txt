@@ -8,7 +8,6 @@ msgpack==1.2.4
 aiohttp==3.13.5
 aiodns==4.0.4
 pycares==5.2.1
-aioresponses==0.7.9
 pytest==9.0.3
 pytest-cov==7.1.0
 pytest-homeassistant-custom-component==0.13.340
