@@ -194,13 +194,16 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         if self._closed:
             raise HomeAssistantError("SunRiser coordinator is closed")
         if self._session is None or self._session.closed:
-            # The controller serves one WiFi connection at a time. Send
-            # "Connection: close" so each response frees it, and queue requests
-            # through a single connection instead of opening a second one.
-            self._session = aiohttp.ClientSession(
-                connector=aiohttp.TCPConnector(force_close=True, limit=1)
-            )
+            self._session = self._create_session()
         return self._session
+
+    def _create_session(self) -> aiohttp.ClientSession:
+        # The controller serves one WiFi connection at a time. Send
+        # "Connection: close" so each response frees it, and queue requests
+        # through a single connection instead of opening a second one.
+        return aiohttp.ClientSession(
+            connector=aiohttp.TCPConnector(force_close=True, limit=1)
+        )
 
     async def async_close(self) -> None:
         """Stop refreshes and prevent old commands reopening a session after unload."""

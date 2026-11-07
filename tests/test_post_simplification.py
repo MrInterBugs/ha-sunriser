@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, patch
 
 import aiohttp
 import pytest
-from aioresponses import aioresponses
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry, issue_registry
@@ -19,6 +18,7 @@ from custom_components.sunriser.number import SunRiserPWMFixedNumber
 from custom_components.sunriser.select import SunRiserPWMManagerSelect
 from tests.conftest import FAKE_CONFIG, FAKE_STATE
 from tests.typing import require_value
+from tests.http_mock import controller_http
 
 
 @pytest.fixture
@@ -73,7 +73,7 @@ async def test_successful_config_control_publishes_ha_state_immediately(
     )
     before = require_value(hass.states.get(require_value(eid))).state
     assert before != expected
-    with aioresponses() as http:
+    with controller_http() as http:
         http.put(f"{coord.base_url}/", status=200)
         await hass.services.async_call(
             platform, service, {"entity_id": eid, **value}, blocking=True
@@ -89,7 +89,7 @@ async def test_failed_config_control_keeps_published_value(
         "number", DOMAIN, f"{loaded_entry.entry_id}_pwm_1_fixed"
     )
     before = require_value(hass.states.get(require_value(eid))).state
-    with aioresponses() as http:
+    with controller_http() as http:
         http.put(f"{coord.base_url}/", status=500)
         with pytest.raises(aiohttp.ClientResponseError):
             await hass.services.async_call(
