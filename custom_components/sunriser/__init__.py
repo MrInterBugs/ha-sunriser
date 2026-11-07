@@ -9,9 +9,8 @@ from uuid import uuid4
 
 import aiohttp
 import msgpack
-import voluptuous as vol
 from homeassistant.components.frontend import add_extra_js_url
-from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.http import StaticPathConfig  # type: ignore[attr-defined]  # Not re-exported since HA 2026.10; kept for older releases.
 from homeassistant.components.lovelace.resources import ResourceStorageCollection
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
@@ -32,6 +31,7 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN, PLATFORMS
 from .coordinator import DayplannerMarker, SunRiserCoordinator
 from .responses import InvalidResponse
+from .schema import vol
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
     DOMAIN
@@ -115,7 +115,7 @@ _FACTORY_RESET_SCHEMA = vol.Schema(
         **_DEVICE_FIELDS,
         vol.Required("confirm"): vol.All(
             bool,
-            vol.IsTrue(),  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
+            vol.IsTrue(),
         ),
     }
 )
@@ -369,27 +369,27 @@ def _register_services(hass: HomeAssistant) -> None:
         result: _ContentResponse = {"content": content}
         return cast(ServiceResponse, result)
 
-    hass.services.async_register(
+    hass.services.async_register(  # pyright: ignore[reportUnknownMemberType]
         DOMAIN,
         _SERVICE_BACKUP,
         handle_backup,
         schema=_DEVICE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
-    hass.services.async_register(
+    hass.services.async_register(  # pyright: ignore[reportUnknownMemberType]
         DOMAIN,
         _SERVICE_RESTORE,
         handle_restore,
         schema=_RESTORE_SCHEMA,
     )
-    hass.services.async_register(
+    hass.services.async_register(  # pyright: ignore[reportUnknownMemberType]
         DOMAIN,
         _SERVICE_GET_ERRORS,
         handle_get_errors,
         schema=_DEVICE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
-    hass.services.async_register(
+    hass.services.async_register(  # pyright: ignore[reportUnknownMemberType]
         DOMAIN,
         _SERVICE_GET_LOG,
         handle_get_log,
@@ -422,14 +422,14 @@ def _register_services(hass: HomeAssistant) -> None:
                 translation_placeholders={"error": str(err)},
             ) from err
 
-    hass.services.async_register(
+    hass.services.async_register(  # pyright: ignore[reportUnknownMemberType]
         DOMAIN,
         _SERVICE_GET_DAYPLANNER,
         handle_get_dayplanner,
         schema=_GET_DAYPLANNER_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
-    hass.services.async_register(
+    hass.services.async_register(  # pyright: ignore[reportUnknownMemberType]
         DOMAIN,
         _SERVICE_SET_DAYPLANNER,
         handle_set_dayplanner,
@@ -468,14 +468,14 @@ def _register_services(hass: HomeAssistant) -> None:
                 translation_placeholders={"error": str(err)},
             ) from err
 
-    hass.services.async_register(
+    hass.services.async_register(  # pyright: ignore[reportUnknownMemberType]
         DOMAIN,
         _SERVICE_GET_WEEKPLANNER,
         handle_get_weekplanner,
         schema=_GET_WEEKPLANNER_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
-    hass.services.async_register(
+    hass.services.async_register(  # pyright: ignore[reportUnknownMemberType]
         DOMAIN,
         _SERVICE_SET_WEEKPLANNER,
         handle_set_weekplanner,
@@ -489,7 +489,7 @@ def _register_services(hass: HomeAssistant) -> None:
         except (aiohttp.ClientError, TimeoutError, InvalidResponse) as err:
             raise HomeAssistantError("Could not read controller schedules") from err
 
-    hass.services.async_register(
+    hass.services.async_register(  # pyright: ignore[reportUnknownMemberType]
         DOMAIN,
         "get_planning",
         handle_get_planning,
@@ -614,28 +614,28 @@ def _register_services(hass: HomeAssistant) -> None:
             ) from err
         _LOGGER.warning("SunRiser factory reset triggered - all config wiped")
 
-    hass.services.async_register(
+    hass.services.async_register(  # pyright: ignore[reportUnknownMemberType]
         DOMAIN,
         _SERVICE_FACTORY_BACKUP,
         handle_factory_backup,
         schema=_DEVICE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
-    hass.services.async_register(
+    hass.services.async_register(  # pyright: ignore[reportUnknownMemberType]
         DOMAIN,
         _SERVICE_FIRMWARE,
         handle_firmware,
         schema=_DEVICE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
-    hass.services.async_register(
+    hass.services.async_register(  # pyright: ignore[reportUnknownMemberType]
         DOMAIN,
         _SERVICE_BOOTLOAD,
         handle_bootload,
         schema=_DEVICE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
-    hass.services.async_register(
+    hass.services.async_register(  # pyright: ignore[reportUnknownMemberType]
         DOMAIN,
         _SERVICE_FACTORY_RESET,
         handle_factory_reset,

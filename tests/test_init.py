@@ -709,9 +709,9 @@ async def test_service_factory_reset_requires_confirm(
     hass: HomeAssistant, setup_entry: SunRiserCoordinator
 ) -> None:
     """factory_reset must be rejected if confirm is not True."""
-    import voluptuous
+    from custom_components.sunriser.schema import vol
 
-    with pytest.raises((voluptuous.MultipleInvalid, Exception)):
+    with pytest.raises((vol.MultipleInvalid, Exception)):
         await hass.services.async_call(
             DOMAIN, "factory_reset", {"confirm": False}, blocking=True
         )

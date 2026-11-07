@@ -53,9 +53,7 @@ async def session(socket_enabled: None) -> AsyncIterator[aiohttp.ClientSession]:
     # pytest-homeassistant-custom-component keeps a host allowlist active even
     # when sockets are enabled, so standalone LAN tests must opt the target host
     # in explicitly.
-    pytest_socket.socket_allow_hosts(  # pyright: ignore[reportUnknownMemberType]
-        [HOST, "127.0.0.1", "localhost"]
-    )
+    pytest_socket.socket_allow_hosts([HOST, "127.0.0.1", "localhost"])
     # force_close=True because the device closes the TCP connection after each
     # response without sending Connection: close - aiohttp would otherwise try
     # to reuse the socket and get a ConnectionResetError on the next request.

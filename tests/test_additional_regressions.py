@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, patch
 
 import aiohttp
 import pytest
-import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant, ServiceResponse
@@ -20,6 +19,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.sunriser import _SET_DAYPLANNER_SCHEMA
 from custom_components.sunriser.const import DOMAIN
 from custom_components.sunriser.coordinator import SunRiserCoordinator
+from custom_components.sunriser.schema import vol
 from custom_components.sunriser.sensor import (
     SunRiserTemperatureSensor,
 )

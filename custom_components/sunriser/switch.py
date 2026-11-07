@@ -4,7 +4,8 @@
 # pyright: reportIncompatibleVariableOverride=false
 from __future__ import annotations
 
-from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
+from homeassistant.components.switch import SwitchEntity
+from homeassistant.components.switch import SwitchDeviceClass  # type: ignore[attr-defined]  # Not re-exported since HA 2026.10; kept for older releases.
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_ON, EntityCategory
 from homeassistant.core import HomeAssistant, callback

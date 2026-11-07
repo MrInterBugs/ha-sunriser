@@ -6,7 +6,8 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from homeassistant.components.light import ATTR_BRIGHTNESS, LightEntity
+from homeassistant.components.light import LightEntity
+from homeassistant.components.light import ATTR_BRIGHTNESS  # type: ignore[attr-defined]  # Not re-exported since HA 2026.10; kept for older releases.
 from homeassistant.components.light.const import ColorMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
