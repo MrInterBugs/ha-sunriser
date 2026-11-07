@@ -685,13 +685,14 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         """Publish config and keep the firmware registry and DST helper current."""
         self.config.update(fresh)
         self._auxiliary_read_succeeded("configuration")
-        device = device_registry.async_get(self.hass).async_get_device(
-            identifiers={(DOMAIN, self.entry_id)}
-        )
+        registry = device_registry.async_get(self.hass)
+        identifier = (DOMAIN, self.entry_id)
+        if hasattr(registry, "async_get_device_by_identifier"):  # HA 2026.10+
+            device = registry.async_get_device_by_identifier(identifier, self.entry_id)
+        else:
+            device = registry.async_get_device(identifiers={identifier})
         if device is not None and device.sw_version != self.firmware_version:
-            device_registry.async_get(self.hass).async_update_device(
-                device.id, sw_version=self.firmware_version
-            )
+            registry.async_update_device(device.id, sw_version=self.firmware_version)
         if self.firmware_handles_dst:
             self.dst_auto_track = False
 

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Tests for the SunRiser light platform."""
 
-from homeassistant.components.light import ATTR_BRIGHTNESS
+from homeassistant.components.light.const import ATTR_BRIGHTNESS
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import Entity
 from pytest_homeassistant_custom_component.common import MockConfigEntry
