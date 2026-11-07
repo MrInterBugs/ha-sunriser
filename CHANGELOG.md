@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2.3.0-fix-planner-brightness-scale-beta.1] - 2026-11-07
 
 ### Changed
 
@@ -13,6 +13,12 @@
   saved a polling interval in the options keep their value.
 - The integration icon now matches the sun-over-horizon mark used by the
   modern web app.
+- Home Assistant 2026.10 support: the firmware version on the device page is
+  updated without the device lookup that HA 2026.10 deprecated (it stops
+  working in 2027.8), and schemas use probatio, HA's new validation library,
+  when it is available. Earlier HA releases keep using voluptuous.
+- The Day Planner card, service descriptions and documentation use plain
+  ASCII punctuation; a test keeps every text file ASCII.
 
 ### Upgrade
 
@@ -20,6 +26,23 @@
   percent: `brightness: 128` (50 %) previously sent a PWM value of 502 and now
   sends 38. Review brightness values in automations, scripts and scenes; to
   keep an output, pick the planner percent that matches it.
+
+### Install and validation
+
+- Enable beta versions in HACS, select this exact version, and restart Home
+  Assistant. Refresh the dashboard to load the updated Day Planner card.
+- The percent curve was measured on SunRiser 8 and SunRiser 10 with firmware
+  1.006 and 1.007; all four gave the same values. Readings from issue #17
+  (675, 13 and 2) convert to 94 %, 33 % and 6 %.
+- 559 mocked Python tests pass with 100% statement coverage on the Home
+  Assistant 2026.10.4 test harness, plus 8 frontend unit tests and two
+  Chromium browser tests. Strict types, formatting and the documentation
+  build pass. The tests now mock controller HTTP with Home Assistant's own
+  test helper instead of aioresponses, which does not support aiohttp 3.14.
+- No live Home Assistant or controller was changed. Hardware validation
+  remains outstanding: compare brightness with the controller's day planner,
+  and check fixed mode, the `oldfade` option and automations that set
+  brightness.
 
 ## [2.2.3] - 2026-10-13
 
