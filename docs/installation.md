@@ -2,22 +2,17 @@
 
 ## Requirements
 
-- Home Assistant with HACS installed. Automated integration tests target Home Assistant 2026.2.3; an older minimum version has not been verified.
+- Home Assistant 2026.11 or newer, which includes the Marketplace
 - SunRiser 8 or 10 reachable from Home Assistant on your local network
 - Controller firmware 1.006 for the current release; compatibility with older firmware is unverified.
 
-Install [HACS](https://hacs.xyz/) first if it is not already available.
+## Install from the Marketplace
 
-## Install via HACS
-
-SunRiser is included in the HACS default catalogue.
-
-1. Open **HACS** in your Home Assistant sidebar
+1. Go to **Settings > Marketplace**
 2. Search for **SunRiser** and open its page
-3. Click **Download** and select the latest stable release
-4. Restart Home Assistant
+3. Select **Install**; Home Assistant opens the SunRiser setup straight away
 
-After an update, restart Home Assistant and refresh the dashboard to load the current Day Planner card.
+Updates appear under **Settings > Updates**. After an update, restart Home Assistant and refresh the dashboard to load the current Day Planner card.
 
 ## Set up the integration
 
@@ -49,5 +44,5 @@ If your device's IP address changes, go to **Settings → Devices & Services →
 1. Go to **Settings → Devices & Services**
 2. Find the **SunRiser** integration and click the three-dot menu
 3. Select **Delete**
-4. If installed via HACS, open HACS, find **SunRiser**, and click **Remove**
+4. In **Settings > Marketplace**, open the **Installed** tab and uninstall **SunRiser**
 5. Restart Home Assistant

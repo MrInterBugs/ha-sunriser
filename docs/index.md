@@ -18,7 +18,7 @@ A community-made Home Assistant integration for the **SunRiser 8/10** LED aquari
 
 ## Get started
 
-1. [Install the integration](installation.md) through HACS and connect your controller.
+1. [Install the integration](installation.md) from the Marketplace and connect your controller.
 2. [Configure entities and the Day Planner card](configuration.md).
 3. Use [service actions](services.md) for backups and schedules.
 
