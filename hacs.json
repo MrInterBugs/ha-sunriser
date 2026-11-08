@@ -1,4 +1,6 @@
 {
   "name": "SunRiser",
+  "filename": "sunriser.zip",
+  "zip_release": true,
   "homeassistant": "2025.2.0"
 }
