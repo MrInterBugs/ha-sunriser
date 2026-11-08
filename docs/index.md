@@ -1,5 +1,7 @@
 # SunRiser HA Integration
 
+[![Active installs](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json&query=%24.sunriser.total&label=active%20installs&color=41BDF5&logo=home-assistant&logoColor=white&cacheSeconds=21600)](https://analytics.home-assistant.io/)
+
 A community-made Home Assistant integration for the **SunRiser 8/10** LED aquarium controller by [LEDaquaristik](https://ledaquaristik.de). It communicates with the controller over your local network and is not affiliated with or supported by LEDaquaristik.
 
 ## Features
