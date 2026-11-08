@@ -8,6 +8,8 @@
   saved a polling interval in the options keep their value.
 - The integration icon now matches the sun-over-horizon mark used by the
   modern web app.
+- Each release now has a `sunriser.zip` asset, which the Marketplace installs
+  instead of the source archive and counts as a download.
 
 ## [2.2.3] - 2026-10-13
 
