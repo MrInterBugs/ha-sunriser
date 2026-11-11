@@ -9,9 +9,9 @@ and sets brightness on the planner's percent scale.
 The planner curve below was measured: for every percent, the /state readback
 with a one-marker day plan at that percent, and a timed 0-12 % fade for the
 lowest levels (a planner value of 1 is not visible right after a configuration
-save). Measured on a SunRiser 10 with firmware 1.007. The original curve that
-the ``oldfade`` option selects is logarithmic, 1000 ** (percent / 100) rounded
-down, which matches its measured values at every percent.
+save). Measured on a SunRiser 10 with firmware 1.007. Both curves are
+logarithmic and are computed below; they match the measured values at every
+percent.
 
 The controller drives one step above the planner value (any value between 0
 and the channel maximum) unless the ``oldfade`` option selects the original
@@ -26,22 +26,31 @@ from bisect import bisect_right
 
 from .const import PWM_MAX
 
+# Planner curve: values 1 and 2 are held for shortened steps; value 2 begins
+# 5 352 028 ms and value 3 begins 9 734 104 ms into a day-long (86 400 000 ms)
+# fade. From value 3 the curve is logarithmic and reaches 999 at the end.
+_VALUE_2_FROM = 5_352_028 / 86_400_000
+_VALUE_3_FROM = 9_734_104 / 86_400_000
+
+
+def _planner_value(percent: int) -> int:
+    fraction = percent / 100
+    if percent <= 0:
+        return 0
+    if percent >= 100:
+        return PWM_MAX
+    if fraction < _VALUE_2_FROM:
+        return 1
+    if fraction < _VALUE_3_FROM:
+        return 2
+    exponent = (fraction - _VALUE_3_FROM) / (1 - _VALUE_3_FROM)
+    return math.floor(3 * math.pow(333, exponent))
+
+
 # Planner value at each percent (index = percent).
-# fmt: off
-PLANNER_CURVE: tuple[int, ...] = (
-    0, 1, 1, 1, 1, 1, 1, 2, 2, 2,  # 0 %
-    2, 2, 3, 3, 3, 3, 4, 4, 4, 4,  # 10 %
-    5, 5, 6, 6, 6, 7, 7, 8, 8, 9,  # 20 %
-    10, 10, 11, 12, 13, 14, 15, 16, 17, 18,  # 30 %
-    19, 21, 22, 23, 25, 27, 29, 31, 33, 35,  # 40 %
-    37, 40, 43, 46, 49, 52, 56, 59, 63, 68,  # 50 %
-    72, 77, 83, 88, 94, 101, 107, 115, 122, 131,  # 60 %
-    140, 149, 159, 170, 182, 194, 207, 221, 236, 252,  # 70 %
-    269, 288, 307, 328, 350, 374, 399, 426, 455, 486,  # 80 %
-    519, 554, 591, 631, 674, 720, 768, 820, 876, 935,  # 90 %
-    1000,  # 100 %
+PLANNER_CURVE: tuple[int, ...] = tuple(
+    _planner_value(percent) for percent in range(101)
 )
-# fmt: on
 
 # The original curve (``oldfade``): each percent multiplies the value by
 # 1000 ** (1 / 100), with no extra output step.
