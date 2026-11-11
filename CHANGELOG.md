@@ -15,6 +15,12 @@
   modern web app.
 - Each release now has a `sunriser.zip` asset, which the Marketplace installs
   instead of the source archive and counts as a download.
+- Home Assistant 2026.10 support: the firmware version on the device page is
+  updated without the device lookup that HA 2026.10 deprecated (it stops
+  working in 2027.8), and schemas use probatio, HA's new validation library,
+  when it is available. Earlier HA releases keep using voluptuous.
+- The Day Planner card, service descriptions and documentation use plain
+  ASCII punctuation; a test keeps every text file ASCII.
 
 ### Upgrade
 
