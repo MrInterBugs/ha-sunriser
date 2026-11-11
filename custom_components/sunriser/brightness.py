@@ -6,10 +6,12 @@ The day planner works in percent and dims along a fixed curve, so a planner
 percent is not a linear share of the 0-1000 PWM value. Home Assistant shows
 and sets brightness on the planner's percent scale.
 
-The curves below were measured: for every percent, the /state readback with a
-one-marker day plan at that percent, and a timed 0-12 % fade for the lowest
-levels (a planner value of 1 is not visible right after a configuration save).
-Measured on a SunRiser 10 with firmware 1.007.
+The planner curve below was measured: for every percent, the /state readback
+with a one-marker day plan at that percent, and a timed 0-12 % fade for the
+lowest levels (a planner value of 1 is not visible right after a configuration
+save). Measured on a SunRiser 10 with firmware 1.007. The original curve that
+the ``oldfade`` option selects is logarithmic, 1000 ** (percent / 100) rounded
+down, which matches its measured values at every percent.
 
 The controller drives one step above the planner value (any value between 0
 and the channel maximum) unless the ``oldfade`` option selects the original
@@ -19,6 +21,7 @@ is stored as the fixed value and gets the same one step.
 
 from __future__ import annotations
 
+import math
 from bisect import bisect_right
 
 from .const import PWM_MAX
@@ -38,22 +41,14 @@ PLANNER_CURVE: tuple[int, ...] = (
     519, 554, 591, 631, 674, 720, 768, 820, 876, 935,  # 90 %
     1000,  # 100 %
 )
-
-# The same with the ``oldfade`` option (original fade curve, no extra step).
-OLDFADE_CURVE: tuple[int, ...] = (
-    0, 1, 1, 1, 1, 1, 1, 1, 1, 1,  # 0 %
-    1, 2, 2, 2, 2, 2, 3, 3, 3, 3,  # 10 %
-    3, 4, 4, 4, 5, 5, 6, 6, 6, 7,  # 20 %
-    7, 8, 9, 9, 10, 11, 12, 12, 13, 14,  # 30 %
-    15, 16, 18, 19, 20, 22, 23, 25, 27, 29,  # 40 %
-    31, 33, 36, 38, 41, 44, 47, 51, 54, 58,  # 50 %
-    63, 67, 72, 77, 83, 89, 95, 102, 109, 117,  # 60 %
-    125, 134, 144, 154, 165, 177, 190, 204, 218, 234,  # 70 %
-    251, 269, 288, 309, 331, 354, 380, 407, 436, 467,  # 80 %
-    501, 537, 575, 616, 660, 707, 758, 812, 870, 933,  # 90 %
-    1000,  # 100 %
-)
 # fmt: on
+
+# The original curve (``oldfade``): each percent multiplies the value by
+# 1000 ** (1 / 100), with no extra output step.
+OLDFADE_CURVE: tuple[int, ...] = (
+    0,
+    *(math.floor(1000 ** (percent / 100)) for percent in range(1, 101)),
+)
 
 
 def _curve(oldfade: bool) -> tuple[int, ...]:
