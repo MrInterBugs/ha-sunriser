@@ -6,7 +6,6 @@ import logging
 from typing import Any
 
 import aiohttp
-import voluptuous as vol
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -26,6 +25,7 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
 )
+from .schema import vol
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -201,7 +201,7 @@ class SunRiserConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
             return self.async_abort(reason="already_configured")
 
-        # New device — test connectivity then confirm with user.
+        # New device - test connectivity then confirm with user.
         error = await _test_connection(discovery_info.ip, DEFAULT_PORT)
         if error:
             return self.async_abort(reason=error)

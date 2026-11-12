@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, patch
 import aiohttp
 import msgpack
 import pytest
-from aioresponses import aioresponses
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -16,6 +15,7 @@ from yarl import URL
 from custom_components.sunriser.coordinator import SunRiserCoordinator
 from tests.conftest import FAKE_CONFIG, FAKE_STATE
 from tests.typing import as_async_mock, require_value
+from tests.http_mock import controller_http
 
 
 def pack(value: Any) -> bytes:
@@ -32,7 +32,7 @@ async def test_setup_completes_all_reads_before_creating_entities(
     state = {**FAKE_STATE, "pwms": {str(i): 0 for i in range(1, 11)}}
     weather = [{"weather_program_id": 7}]
     config["weather#setup#7#name"] = "Summer"
-    with aioresponses() as http, patch.object(
+    with controller_http() as http, patch.object(
         hass.config_entries, "async_forward_entry_setups", new=AsyncMock()
     ) as forward:
         http.post(f"{base}/", body=pack(config))
@@ -47,8 +47,8 @@ async def test_setup_completes_all_reads_before_creating_entities(
         assert coord.weather_program_name(7) == "Summer"
         posts = http.requests[("POST", URL(f"{base}/"))]
         assert len(posts) == 2  # base identity, then one complete config request
-        keys = msgpack.unpackb(posts[1].kwargs["data"], raw=False)
-        assert len(posts[1].kwargs["data"]) > 250
+        keys = msgpack.unpackb(posts[1].data, raw=False)
+        assert len(posts[1].data) > 250
         assert "pwm#10#onoff" in keys
         assert "sensors#sensor#AABBCCDDEEFF#unitcomma" in keys
         assert "weather#setup#7#name" in keys
@@ -68,16 +68,20 @@ async def test_large_config_read_is_one_http_request(
         key: "channel" if key.endswith(("#color", "#name")) else 1 for key in keys
     }
     try:
-        with aioresponses() as http:
+        with controller_http() as http:
             http.post(f"{coordinator.base_url}/", body=pack(expected))
             assert await coordinator.async_get_config(keys) == expected
             requests = http.requests[("POST", URL(f"{coordinator.base_url}/"))]
             assert len(requests) == 1
-            assert msgpack.unpackb(requests[0].kwargs["data"], raw=False) == keys
-            assert len(requests[0].kwargs["data"]) > 250
-        connector = require_value(coordinator._get_session().connector)
-        assert connector.force_close
-        assert connector.limit == 1
+            assert msgpack.unpackb(requests[0].data, raw=False) == keys
+            assert len(requests[0].data) > 250
+        session = coordinator._create_session()  # the real one, outside the mock
+        try:
+            connector = require_value(session.connector)
+            assert connector.force_close
+            assert connector.limit == 1
+        finally:
+            await session.close()
     finally:
         await coordinator.async_close()
 
@@ -216,7 +220,7 @@ async def test_config_read_cannot_overwrite_concurrent_write(
         await coordinator.async_set_config({key: 3})
 
     try:
-        with aioresponses() as http:
+        with controller_http() as http:
             http.put(f"{coordinator.base_url}/", status=status)
             read_task = asyncio.create_task(
                 coordinator._async_refresh_config(FAKE_STATE)

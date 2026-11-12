@@ -1,6 +1,6 @@
 """Regression coverage for firmware upgrades and interrupted initialization."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import aiohttp
 import pytest
@@ -179,7 +179,9 @@ async def test_refresh_updates_registered_firmware(
     coordinator.async_get_config = AsyncMock(return_value={"factory_version": "1.006"})
     coordinator.dst_auto_track = True
     await coordinator._async_refresh_config(require_value(coordinator.data))
-    assert require_value(registry.async_get(device.id)).sw_version == "1.006"
+    entry = registry.async_get(device.id)
+    assert isinstance(entry, device_registry.DeviceEntry)
+    assert entry.sw_version == "1.006"
     assert not coordinator.dst_auto_track
 
 
@@ -191,6 +193,33 @@ async def test_refresh_reads_fade_curve_option(
     keys = as_async_mock(coordinator.async_get_config).await_args_list[0].args[0]
     assert "oldfade" in keys
     assert coordinator.oldfade is True
+
+
+async def test_refresh_updates_firmware_on_older_home_assistant(
+    hass: HomeAssistant,
+    coordinator: SunRiserCoordinator,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Before 2026.10 the registry has no per-entry identifier lookup."""
+    mock_config_entry.add_to_hass(hass)
+    registry = device_registry.async_get(hass)
+    device = registry.async_get_or_create(
+        config_entry_id=mock_config_entry.entry_id, **coordinator.device_info
+    )
+
+    class OlderRegistry:
+        async_get_device = registry.async_get_device
+        async_update_device = registry.async_update_device
+
+    coordinator.async_get_config = AsyncMock(return_value={"factory_version": "1.006"})
+    with patch(
+        "custom_components.sunriser.coordinator.device_registry.async_get",
+        return_value=OlderRegistry(),
+    ):
+        await coordinator._async_refresh_config(require_value(coordinator.data))
+    entry = registry.async_get(device.id)
+    assert isinstance(entry, device_registry.DeviceEntry)
+    assert entry.sw_version == "1.006"
 
 
 async def test_failed_poll_does_not_mutate_published_data(

@@ -41,7 +41,7 @@ async def async_setup_entry(
 
 
 class SunRiserPWMFixedNumber(CoordinatorEntity[SunRiserCoordinator], NumberEntity):
-    """Number entity for pwm#X#fixed — the value used when manager is set to 'fixed'."""
+    """Number entity for pwm#X#fixed - the value used when manager is set to 'fixed'."""
 
     _attr_has_entity_name = True
     _attr_translation_key = "fixed_value"

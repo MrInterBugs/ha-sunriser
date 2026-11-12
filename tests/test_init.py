@@ -380,7 +380,7 @@ async def test_service_get_log(
 
 
 # ---------------------------------------------------------------------------
-# async_setup — static path + Lovelace resource registration
+# async_setup - static path + Lovelace resource registration
 # ---------------------------------------------------------------------------
 
 
@@ -409,7 +409,7 @@ async def test_async_setup_registers_static_path_and_js_url(
 
 
 async def test_async_setup_lovelace_url_already_current(hass: HomeAssistant) -> None:
-    """Resource URL already matches the current version — no update is made."""
+    """Resource URL already matches the current version - no update is made."""
     from homeassistant.components.lovelace.resources import ResourceStorageCollection
 
     from custom_components.sunriser import _CARD_URL, _CARD_VERSION, async_setup
@@ -432,7 +432,7 @@ async def test_async_setup_lovelace_url_already_current(hass: HomeAssistant) -> 
 async def test_async_setup_lovelace_url_stale_updates_resource(
     hass: HomeAssistant,
 ) -> None:
-    """Resource URL is outdated — async_update_item is called with the new URL."""
+    """Resource URL is outdated - async_update_item is called with the new URL."""
     from homeassistant.components.lovelace.resources import ResourceStorageCollection
 
     from custom_components.sunriser import _CARD_URL, _CARD_VERSION, async_setup
@@ -456,7 +456,7 @@ async def test_async_setup_lovelace_url_stale_updates_resource(
 async def test_async_setup_lovelace_no_resource_creates_item(
     hass: HomeAssistant,
 ) -> None:
-    """No existing resource and storage-backed Lovelace — async_create_item is called."""
+    """No existing resource and storage-backed Lovelace - async_create_item is called."""
     from homeassistant.components.lovelace.resources import ResourceStorageCollection
 
     from custom_components.sunriser import _CARD_URL, _CARD_VERSION, async_setup
@@ -479,7 +479,7 @@ async def test_async_setup_lovelace_no_resource_creates_item(
 async def test_async_setup_lovelace_no_resource_not_storage_falls_back(
     hass: HomeAssistant,
 ) -> None:
-    """No existing resource and non-storage Lovelace — falls back to add_extra_js_url."""
+    """No existing resource and non-storage Lovelace - falls back to add_extra_js_url."""
     from custom_components.sunriser import _CARD_URL, _CARD_VERSION, async_setup
 
     url_versioned = f"{_CARD_URL}?v={_CARD_VERSION}"
@@ -622,7 +622,7 @@ async def test_service_set_weekplanner_schedule(
 
 
 # ---------------------------------------------------------------------------
-# Dev service handlers — factory backup, firmware, bootload, factory reset
+# Dev service handlers - factory backup, firmware, bootload, factory reset
 # ---------------------------------------------------------------------------
 
 
@@ -709,16 +709,16 @@ async def test_service_factory_reset_requires_confirm(
     hass: HomeAssistant, setup_entry: SunRiserCoordinator
 ) -> None:
     """factory_reset must be rejected if confirm is not True."""
-    import voluptuous
+    from custom_components.sunriser.schema import vol
 
-    with pytest.raises((voluptuous.MultipleInvalid, Exception)):
+    with pytest.raises((vol.MultipleInvalid, Exception)):
         await hass.services.async_call(
             DOMAIN, "factory_reset", {"confirm": False}, blocking=True
         )
 
 
 # ---------------------------------------------------------------------------
-# Error path tests — all service handlers must raise HomeAssistantError
+# Error path tests - all service handlers must raise HomeAssistantError
 # ---------------------------------------------------------------------------
 
 

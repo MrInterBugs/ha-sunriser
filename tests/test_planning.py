@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, patch
 
 import msgpack
 import pytest
-from aioresponses import aioresponses
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import Entity
@@ -25,6 +24,7 @@ from custom_components.sunriser.select import (
 )
 from tests.conftest import FAKE_CONFIG
 from tests.typing import collect_entities
+from tests.http_mock import controller_http
 
 
 @pytest.fixture
@@ -81,7 +81,7 @@ async def test_snapshot_uses_weekly_program_and_fallback(
     assert (await coord.async_get_planning())["channels"][-1]["markers"] == []
     config["tz"] = "Europe/Berlin"
     config["programs#web"] = None
-    with aioresponses() as http:
+    with controller_http() as http:
         snapshot = await coord.async_get_planning()
         assert snapshot["channels"][-1]["markers"] == []
         assert snapshot["channels"][0]["markers"][1]["percent"] == 60
@@ -99,11 +99,11 @@ async def test_weather_names_identity_and_external_removal(
     uid = entity.unique_id
     assert entity.options == ["None", "Clouds [1]", "Clouds [2]"]
     assert entity.current_option == "Clouds [1]"
-    with aioresponses() as http:
+    with controller_http() as http:
         http.put(f"{coord.base_url}/", status=200)
         await entity.async_select_option("Clouds [2]")
         payload = msgpack.unpackb(
-            http.requests[("PUT", URL(f"{coord.base_url}/"))][0].kwargs["data"],
+            http.requests[("PUT", URL(f"{coord.base_url}/"))][0].data,
             raw=False,
         )
         assert payload == {"pwm#1#weather": 2, "save_version": "1.006"}
@@ -118,7 +118,7 @@ async def test_weather_names_identity_and_external_removal(
     assert entity.options == ["None", "Unknown profile [2]"]
     with pytest.raises(HomeAssistantError, match="existing"):
         await entity.async_select_option("Unknown profile [2]")
-    with aioresponses() as http:
+    with controller_http() as http:
         http.put(f"{coord.base_url}/", status=200)
         await entity.async_select_option("None")
     assert entity.current_option == "None"

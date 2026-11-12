@@ -81,7 +81,7 @@ def decode_state(body: bytes) -> dict[str, Any]:
                 raise InvalidResponse("Duplicate PWM channel identifier")
             _number(value, f"pwms.{key}")
             # Firmware 1.006 can report 1024, observed on a running controller.
-            # Readback is distinct from the 0–1000 command/brightness scale.
+            # Readback is distinct from the 0-1000 command/brightness scale.
             if not 0 <= value <= 1024:
                 raise InvalidResponse("PWM readback must be between 0 and 1024")
             normalized[str(key)] = value

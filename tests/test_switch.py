@@ -20,7 +20,7 @@ from tests.conftest import ENTRY_ID, FAKE_STATE
 from tests.typing import as_async_mock, collect_entities
 
 # ---------------------------------------------------------------------------
-# async_setup_entry — entity creation
+# async_setup_entry - entity creation
 # ---------------------------------------------------------------------------
 
 
@@ -43,7 +43,7 @@ async def test_setup_creates_pwm_switch_for_onoff_channels(
     coordinator: SunRiserCoordinator,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """pwm2 has onoff=True → becomes a SunRiserSwitch."""
+    """pwm2 has onoff=True -> becomes a SunRiserSwitch."""
     mock_config_entry.runtime_data = coordinator
 
     added: list[Entity] = []
@@ -443,7 +443,7 @@ async def test_dst_skips_put_when_bridge_already_restored(
 ) -> None:
     """No PUT / when _dst_auto_track was already True from the hass.data bridge.
 
-    Regression test for options-change reload (e.g. 60 s → 30 s scan interval).
+    Regression test for options-change reload (e.g. 60 s -> 30 s scan interval).
     async_unload_entry saves _dst_auto_track to hass.data; the new coordinator
     restores it in __init__ before async_added_to_hass runs.  Without this guard
     the recorder path would fire a redundant PUT / immediately after init,
@@ -468,5 +468,5 @@ async def test_dst_skips_put_when_bridge_already_restored(
         ):
             await switch.async_added_to_hass()
 
-    # Bridge already restored the value — no HTTP PUT should be made.
+    # Bridge already restored the value - no HTTP PUT should be made.
     as_async_mock(coordinator.async_set_dst_auto_track).assert_not_awaited()

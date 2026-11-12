@@ -20,7 +20,7 @@ Interpreter** and choose this repository's `.venv`. Run **Python: Restart
 Language Server** if diagnostics have not refreshed.
 
 `pyrightconfig.json` enables strict checking for the integration, all Python
-tests (including the hardware tests), the documentation hook, and local stubs.
+tests (including the hardware tests) and the documentation hook.
 Pyright provides a command-line check using the type engine behind Pylance:
 
 ```sh
@@ -44,13 +44,15 @@ The configuration has these documented exceptions:
 - Individual calls with incomplete upstream annotations have narrow inline
   exceptions. Unnecessary inline exceptions are errors, so they can be removed
   when upstream annotations improve.
-- `typings/aioresponses/__init__.pyi` describes the HTTP mock API used by these
-  tests, including its request history. Review it when upgrading aioresponses.
+- `tests/http_mock.py` mocks controller HTTP with Home Assistant's
+  `AiohttpClientMocker`, so the tests follow the aiohttp version Home
+  Assistant ships. Each registered reply is used once, in order, and
+  `requests` records what was sent.
 
 ## Validation
 
 ```sh
-.venv/bin/black --check custom_components/ tests/ docs_macros.py typings/
+.venv/bin/black --check custom_components/ tests/ docs_macros.py
 .venv/bin/pyright
 .venv/bin/mypy --strict --ignore-missing-imports custom_components/sunriser/
 .venv/bin/pytest tests/ --ignore=tests/test_device.py --cov=custom_components/sunriser --cov-report=term-missing --cov-fail-under=100

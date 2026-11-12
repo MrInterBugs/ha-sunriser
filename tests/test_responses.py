@@ -6,7 +6,6 @@ from typing import Any
 
 import msgpack
 import pytest
-from aioresponses import aioresponses
 
 from custom_components.sunriser.coordinator import SunRiserCoordinator
 from custom_components.sunriser.responses import (
@@ -16,6 +15,7 @@ from custom_components.sunriser.responses import (
     decode_weather,
 )
 from tests.conftest import FAKE_CONFIG, FAKE_STATE
+from tests.http_mock import controller_http
 
 
 @pytest.mark.parametrize("decode", [decode_config, decode_state, decode_weather])
@@ -92,7 +92,7 @@ async def test_invalid_state_keeps_snapshot_then_recovers(
     coordinator: SunRiserCoordinator,
 ) -> None:
     before = dict(coordinator.data or {})
-    with aioresponses() as http:
+    with controller_http() as http:
         http.get(
             f"{coordinator.base_url}/state",
             body=msgpack.packb({"uptime": 99, "pwms": []}),
@@ -116,7 +116,7 @@ async def test_1024_readback_recovers_controller_availability(
         **FAKE_STATE,
         "pwms": {"1": 262, "2": 499, "5": 1024, "9": 1024},
     }
-    with aioresponses() as http:
+    with controller_http() as http:
         http.get(f"{coordinator.base_url}/state", body=msgpack.packb(state))
         http.get(f"{coordinator.base_url}/weather", body=msgpack.packb([]))
         http.post(f"{coordinator.base_url}/", body=msgpack.packb(FAKE_CONFIG))
@@ -133,7 +133,7 @@ async def test_invalid_config_is_not_partially_published(
     coordinator: SunRiserCoordinator,
 ) -> None:
     before = dict(coordinator.config)
-    with aioresponses() as http:
+    with controller_http() as http:
         http.post(
             f"{coordinator.base_url}/",
             body=msgpack.packb({"name": "bad snapshot", "pwm_count": 11}),
@@ -154,7 +154,7 @@ async def test_truncated_weather_keeps_snapshot_then_recovers(
     coordinator: SunRiserCoordinator,
 ) -> None:
     data = {"weather": [{"rainmins": 5}]}
-    with aioresponses() as http:
+    with controller_http() as http:
         http.get(f"{coordinator.base_url}/weather", body=b"\x91\x81")
         http.get(f"{coordinator.base_url}/weather", body=msgpack.packb([]))
         assert (await coordinator._async_refresh_weather(dict(data))) == data

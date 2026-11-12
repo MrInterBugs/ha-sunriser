@@ -82,7 +82,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         self._last_successful_read: dict[str, datetime] = {}
         self._auxiliary_failures = {"weather": 0, "configuration": 0}
 
-        # DST auto-tracking — when enabled the coordinator syncs the device's
+        # DST auto-tracking - when enabled the coordinator syncs the device's
         # summertime config key to the actual HA timezone DST state.
         #
         # Restored from hass.data bridge on same-session reloads (e.g. options
@@ -194,13 +194,16 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         if self._closed:
             raise HomeAssistantError("SunRiser coordinator is closed")
         if self._session is None or self._session.closed:
-            # The controller serves one WiFi connection at a time. Send
-            # "Connection: close" so each response frees it, and queue requests
-            # through a single connection instead of opening a second one.
-            self._session = aiohttp.ClientSession(
-                connector=aiohttp.TCPConnector(force_close=True, limit=1)
-            )
+            self._session = self._create_session()
         return self._session
+
+    def _create_session(self) -> aiohttp.ClientSession:
+        # The controller serves one WiFi connection at a time. Send
+        # "Connection: close" so each response frees it, and queue requests
+        # through a single connection instead of opening a second one.
+        return aiohttp.ClientSession(
+            connector=aiohttp.TCPConnector(force_close=True, limit=1)
+        )
 
     async def async_close(self) -> None:
         """Stop refreshes and prevent old commands reopening a session after unload."""
@@ -221,7 +224,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             hour, minute = (int(p) for p in time_str.split(":"))
         except (ValueError, AttributeError):
             _LOGGER.warning(
-                "SunRiser: invalid scheduled reboot time %r — skipping", time_str
+                "SunRiser: invalid scheduled reboot time %r - skipping", time_str
             )
             return
 
@@ -249,7 +252,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
     # ------------------------------------------------------------------
 
     async def async_get_config(self, keys: list[str]) -> dict[str, Any]:
-        """POST / — read config values for a single batch of keys."""
+        """POST / - read config values for a single batch of keys."""
         session = self._get_session()
         body = msgpack.packb(keys, use_bin_type=True)
         async with session.post(
@@ -262,7 +265,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             return decode_config(await resp.read())
 
     async def async_set_config(self, params: dict[str, Any]) -> None:
-        """PUT / — write config key/value pairs.
+        """PUT / - write config key/value pairs.
 
         The device requires save_version (set to factory_version) on every write
         so it can track the config lineage. See sunriser_network.js line 120.
@@ -383,7 +386,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         self.async_update_listeners()
 
     async def async_get_state(self) -> dict[str, Any]:
-        """GET /state — returns PWM values, sensor readings, uptime, etc."""
+        """GET /state - returns PWM values, sensor readings, uptime, etc."""
         session = self._get_session()
         async with session.get(
             f"{self.base_url}/state",
@@ -393,7 +396,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             return decode_state(await resp.read())
 
     async def async_get_weather(self) -> list[Any]:
-        """GET /weather — returns per-channel weather simulation state.
+        """GET /weather - returns per-channel weather simulation state.
 
         The response is a msgpack stream whose first object is a list with one
         entry per PWM channel.  Each entry is either None (no weather program
@@ -410,7 +413,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             return decode_weather(await resp.read())
 
     async def async_set_service_mode(self, enabled: bool) -> None:
-        """PUT /state — enable or disable maintenance mode.
+        """PUT /state - enable or disable maintenance mode.
 
         When enabled the device stores the current timestamp in service_mode
         and applies configured maintenance levels on firmware 1.006+
@@ -418,7 +421,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         When disabled it stores 0.
         """
         session = self._get_session()
-        # Device expects integer 1/0 — msgpack boolean True causes a 500.
+        # Device expects integer 1/0 - msgpack boolean True causes a 500.
         body = msgpack.packb({"service_mode": 1 if enabled else 0}, use_bin_type=True)
         async with session.put(
             f"{self.base_url}/state",
@@ -429,11 +432,11 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             resp.raise_for_status()
 
     async def async_set_timewarp(self, enabled: bool) -> None:
-        """PUT /state — activate or deactivate time-lapse (timewarp) mode.
+        """PUT /state - activate or deactivate time-lapse (timewarp) mode.
 
-        When active the device runs the day/week planner at ~1800× speed.
+        When active the device runs the day/week planner at ~1800x speed.
         Weather simulation is suspended while time-lapse is active.
-        Device expects integer 1/0 — msgpack boolean causes a 500.
+        Device expects integer 1/0 - msgpack boolean causes a 500.
         """
         session = self._get_session()
         body = msgpack.packb({"timewarp": 1 if enabled else 0}, use_bin_type=True)
@@ -469,9 +472,9 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             self._last_known_dst = is_dst
 
     async def async_set_pwms(self, pwm_values: dict[str, int]) -> None:
-        """PUT /state — set PWM channels immediately.
+        """PUT /state - set PWM channels immediately.
 
-        Values are 0–1000. Note: if a program is running, it will resume
+        Values are 0-1000. Note: if a program is running, it will resume
         control after ~1 minute. Use async_set_config with dayplanner keys
         for persistent changes.
         """
@@ -486,7 +489,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             resp.raise_for_status()
 
     async def async_check_ok(self) -> bool:
-        """GET /ok — returns True if device responds with 'OK'."""
+        """GET /ok - returns True if device responds with 'OK'."""
         session = self._get_session()
         try:
             async with session.get(
@@ -498,7 +501,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             return False
 
     async def async_reboot(self) -> None:
-        """GET /reboot — initiate a device reboot."""
+        """GET /reboot - initiate a device reboot."""
         session = self._get_session()
         async with session.get(
             f"{self.base_url}/reboot",
@@ -507,7 +510,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             resp.raise_for_status()
 
     async def async_get_factory_backup(self) -> bytes:
-        """GET /factorybackup — download configuration preserved by a factory reset."""
+        """GET /factorybackup - download configuration preserved by a factory reset."""
         session = self._get_session()
         async with session.get(
             f"{self.base_url}/factorybackup",
@@ -517,7 +520,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             return await resp.read()
 
     async def async_get_firmware(self) -> bytes:
-        """GET /firmware.mp — download firmware info as msgpack bytes."""
+        """GET /firmware.mp - download firmware info as msgpack bytes."""
         session = self._get_session()
         async with session.get(
             f"{self.base_url}/firmware.mp",
@@ -527,7 +530,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             return await resp.read()
 
     async def async_get_bootload(self) -> bytes:
-        """GET /bootload.mp — download bootloader info as msgpack bytes."""
+        """GET /bootload.mp - download bootloader info as msgpack bytes."""
         session = self._get_session()
         async with session.get(
             f"{self.base_url}/bootload.mp",
@@ -537,7 +540,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             return await resp.read()
 
     async def async_factory_reset(self) -> None:
-        """DELETE / — reset all device configuration to factory defaults."""
+        """DELETE / - reset all device configuration to factory defaults."""
         session = self._get_session()
         async with session.delete(
             f"{self.base_url}/",
@@ -546,7 +549,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             resp.raise_for_status()
 
     async def async_get_backup(self) -> bytes:
-        """GET /backup — download complete device configuration as msgpack bytes."""
+        """GET /backup - download complete device configuration as msgpack bytes."""
         session = self._get_session()
         async with session.get(
             f"{self.base_url}/backup",
@@ -556,7 +559,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             return await resp.read()
 
     async def async_restore(self, data: bytes) -> None:
-        """PUT /restore — restore device configuration from msgpack backup bytes.
+        """PUT /restore - restore device configuration from msgpack backup bytes.
 
         Unlike PUT /, this triggers a deeper device restart after applying config.
         """
@@ -570,7 +573,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             resp.raise_for_status()
 
     async def async_get_errors(self) -> str:
-        """GET /errors — retrieve the device error log."""
+        """GET /errors - retrieve the device error log."""
         session = self._get_session()
         async with session.get(
             f"{self.base_url}/errors",
@@ -580,7 +583,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
             return await resp.text()
 
     async def async_get_log(self) -> str:
-        """GET /log — retrieve the device diagnostic log."""
+        """GET /log - retrieve the device diagnostic log."""
         session = self._get_session()
         async with session.get(
             f"{self.base_url}/log",
@@ -649,7 +652,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
     ) -> None:
         """Write the dayplanner schedule for a PWM channel.
 
-        Each marker must have "time" (HH:MM) and "percent" (0–100).
+        Each marker must have "time" (HH:MM) and "percent" (0-100).
         The flat array sent to the device is [daymin, percent, daymin, percent, ...].
         """
         flat: list[int] = []
@@ -682,13 +685,14 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         """Publish config and keep the firmware registry and DST helper current."""
         self.config.update(fresh)
         self._auxiliary_read_succeeded("configuration")
-        device = device_registry.async_get(self.hass).async_get_device(
-            identifiers={(DOMAIN, self.entry_id)}
-        )
+        registry = device_registry.async_get(self.hass)
+        identifier = (DOMAIN, self.entry_id)
+        if hasattr(registry, "async_get_device_by_identifier"):  # HA 2026.10+
+            device = registry.async_get_device_by_identifier(identifier, self.entry_id)
+        else:
+            device = registry.async_get_device(identifiers={identifier})
         if device is not None and device.sw_version != self.firmware_version:
-            device_registry.async_get(self.hass).async_update_device(
-                device.id, sw_version=self.firmware_version
-            )
+            registry.async_update_device(device.id, sw_version=self.firmware_version)
         if self.firmware_handles_dst:
             self.dst_auto_track = False
 
@@ -866,7 +870,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         return bool(self.config.get(f"pwm#{pwm_num}#onoff", False))
 
     def pwm_manager(self, pwm_num: int) -> int:
-        """Return the manager integer for a PWM channel (0–3)."""
+        """Return the manager integer for a PWM channel (0-3)."""
         return self.config.get(f"pwm#{pwm_num}#manager") or 0
 
     def pwm_max(self, pwm_num: int) -> int:
@@ -882,7 +886,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
         return not (self.config.get(f"pwm#{pwm_num}#color") or "")
 
     def pwm_value(self, pwm_num: int) -> int:
-        """Current PWM value (0–1000) from latest state."""
+        """Current PWM value (0-1000) from latest state."""
         if self.data is None:
             return 0
         return self.data.get("pwms", {}).get(str(pwm_num)) or 0

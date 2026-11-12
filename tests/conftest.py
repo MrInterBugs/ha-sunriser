@@ -2,7 +2,7 @@
 """Shared fixtures for SunRiser HA integration unit tests."""
 
 import os
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -114,10 +114,13 @@ def mock_http_frontend(hass: HomeAssistant) -> Iterator[MagicMock]:
 
 
 @pytest.fixture
-def coordinator(
+async def coordinator(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry
-) -> SunRiserCoordinator:
-    """Real SunRiserCoordinator pre-populated with fake data; network calls mocked."""
+) -> AsyncIterator[SunRiserCoordinator]:
+    """Real SunRiserCoordinator pre-populated with fake data; network calls mocked.
+
+    Closed after the test so no polling timer outlives it.
+    """
     coord = SunRiserCoordinator(hass, mock_config_entry)
     coord.config = dict(FAKE_CONFIG)
     coord.data = dict(FAKE_STATE)
@@ -126,4 +129,5 @@ def coordinator(
     coord.async_set_service_mode = AsyncMock()
     coord.async_request_refresh = AsyncMock()
     coord.async_set_config = AsyncMock(side_effect=coord.update_config_cache)
-    return coord
+    yield coord
+    await coord.async_close()

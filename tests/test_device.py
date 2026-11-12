@@ -26,7 +26,7 @@ PORT = int(os.environ.get("SUNRISER_PORT", "80"))
 BASE_URL = f"http://{HOST}:{PORT}"
 TIMEOUT = aiohttp.ClientTimeout(total=10)
 
-# Allow real network connections for this file — pytest-socket (bundled with
+# Allow real network connections for this file - pytest-socket (bundled with
 # pytest-homeassistant-custom-component) blocks sockets by default.
 
 # Keys to read during the config test
@@ -53,11 +53,9 @@ async def session(socket_enabled: None) -> AsyncIterator[aiohttp.ClientSession]:
     # pytest-homeassistant-custom-component keeps a host allowlist active even
     # when sockets are enabled, so standalone LAN tests must opt the target host
     # in explicitly.
-    pytest_socket.socket_allow_hosts(  # pyright: ignore[reportUnknownMemberType]
-        [HOST, "127.0.0.1", "localhost"]
-    )
+    pytest_socket.socket_allow_hosts([HOST, "127.0.0.1", "localhost"])
     # force_close=True because the device closes the TCP connection after each
-    # response without sending Connection: close — aiohttp would otherwise try
+    # response without sending Connection: close - aiohttp would otherwise try
     # to reuse the socket and get a ConnectionResetError on the next request.
     connector = aiohttp.TCPConnector(force_close=True)
     async with aiohttp.ClientSession(connector=connector) as s:
@@ -73,7 +71,7 @@ async def session(socket_enabled: None) -> AsyncIterator[aiohttp.ClientSession]:
 async def test_ping(session: aiohttp.ClientSession) -> None:
     """GET /ok should return the text OK.
 
-    Retries once — the device occasionally resets the TCP connection on the
+    Retries once - the device occasionally resets the TCP connection on the
     very first request of a test run (cold-connection quirk).
     """
     for attempt in range(2):
@@ -188,7 +186,7 @@ async def test_read_pwm_config(session: aiohttp.ClientSession) -> None:
 
 @pytest.mark.asyncio
 async def test_read_pwm_manager(session: aiohttp.ClientSession) -> None:
-    """Read pwm#X#manager for all channels and verify values are 0–3 or None."""
+    """Read pwm#X#manager for all channels and verify values are 0-3 or None."""
     keys = ["pwm_count"] + [f"pwm#{i}#manager" for i in range(1, 11)]
     body = msgpack.packb(keys, use_bin_type=True)
     async with session.post(
@@ -209,7 +207,7 @@ async def test_read_pwm_manager(session: aiohttp.ClientSession) -> None:
         val = result.get(f"pwm#{i}#manager")
         assert (
             val is None or val in _MANAGER_NAMES
-        ), f"pwm#{i}#manager={val!r} is not a valid manager id (expected 0–3 or None)"
+        ), f"pwm#{i}#manager={val!r} is not a valid manager id (expected 0-3 or None)"
         label = _MANAGER_NAMES.get(val or 0, "none")
         print(f"  pwm#{i}: manager={val!r} ({label})")
 
@@ -319,12 +317,12 @@ async def test_read_weekplanner(session: aiohttp.ClientSession) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Dayplanner + week planner write (real device only — always restores original)
+# Dayplanner + week planner write (real device only - always restores original)
 # ---------------------------------------------------------------------------
 
 _REAL_ONLY = pytest.mark.skipif(
     PORT == 9000,
-    reason="Real device only — simulator does not persist config writes",
+    reason="Real device only - simulator does not persist config writes",
 )
 
 
@@ -360,7 +358,7 @@ async def _write_config(session: aiohttp.ClientSession, params: dict[str, Any]) 
 async def test_write_dayplanner(session: aiohttp.ClientSession) -> None:
     """Write a test schedule to pwm#1, verify it, then restore the original.
 
-    Uses pwm#1 — always restores via finally so the device is never left
+    Uses pwm#1 - always restores via finally so the device is never left
     in a modified state even if an assertion fails.
     """
     TEST_PWM = 1
@@ -401,9 +399,9 @@ async def test_write_dayplanner(session: aiohttp.ClientSession) -> None:
         await _write_config(session, restore_payload)
         print(f"Restored original markers: {original_flat!r}")
 
-        # The device reloads config after a PUT / and drops the TCP connection —
+        # The device reloads config after a PUT / and drops the TCP connection -
         # a 200 from the write is sufficient proof the restore succeeded.
-        print("Restore write returned 200 — OK")
+        print("Restore write returned 200 - OK")
 
 
 @_REAL_ONLY
@@ -411,7 +409,7 @@ async def test_write_dayplanner(session: aiohttp.ClientSession) -> None:
 async def test_write_weekplanner(session: aiohttp.ClientSession) -> None:
     """Write a test week schedule to pwm#1, verify it, then restore the original.
 
-    Uses pwm#1 regardless of its current manager setting — the key can be written
+    Uses pwm#1 regardless of its current manager setting - the key can be written
     independently of the manager. Always restores via finally.
     """
     TEST_PWM = 1
@@ -454,7 +452,7 @@ async def test_write_weekplanner(session: aiohttp.ClientSession) -> None:
 async def test_write_pwm_manager(session: aiohttp.ClientSession) -> None:
     """Write a different manager value to pwm#1, verify it, then restore the original.
 
-    Uses pwm#1 — always restores via finally so the device is never left
+    Uses pwm#1 - always restores via finally so the device is never left
     in a modified state even if an assertion fails.
     """
     TEST_PWM = 1
@@ -500,7 +498,7 @@ async def test_write_pwm_manager(session: aiohttp.ClientSession) -> None:
 async def _put_state(
     session: aiohttp.ClientSession, payload: dict[str, Any]
 ) -> tuple[int, dict[str, Any] | str]:
-    """PUT /state helper — returns (status_code, decoded_body)."""
+    """PUT /state helper - returns (status_code, decoded_body)."""
     body = msgpack.packb(payload, use_bin_type=True)
     async with session.put(
         f"{BASE_URL}/state",
@@ -535,7 +533,7 @@ async def test_maintenance_mode_integer(session: aiohttp.ClientSession) -> None:
     # Enable with integer 1
     await asyncio.sleep(2)
     status, body = await _put_state(session, {"service_mode": 1})
-    print(f"PUT service_mode=1 → {status} {body!r}")
+    print(f"PUT service_mode=1 -> {status} {body!r}")
     assert status == 200, f"Enable failed with {status}: {body}"
 
     await asyncio.sleep(2)
@@ -552,7 +550,7 @@ async def test_maintenance_mode_integer(session: aiohttp.ClientSession) -> None:
     # Disable with integer 0
     await asyncio.sleep(2)
     status, body = await _put_state(session, {"service_mode": 0})
-    print(f"PUT service_mode=0 → {status} {body!r}")
+    print(f"PUT service_mode=0 -> {status} {body!r}")
     assert status == 200, f"Disable failed with {status}: {body}"
 
     await asyncio.sleep(2)
@@ -567,22 +565,22 @@ async def test_maintenance_mode_integer(session: aiohttp.ClientSession) -> None:
 async def test_maintenance_mode_boolean(session: aiohttp.ClientSession) -> None:
     """Try enabling maintenance mode with msgpack boolean True.
 
-    This may return 500 on real firmware — if so, use integers instead.
+    This may return 500 on real firmware - if so, use integers instead.
     """
     await asyncio.sleep(2)
     status, body = await _put_state(session, {"service_mode": True})
-    print(f"\nPUT service_mode=True → {status} {body!r}")
+    print(f"\nPUT service_mode=True -> {status} {body!r}")
 
     if status == 500:
         # Device resets the TCP connection after a 500, so the cleanup call may
-        # also fail — ignore errors here and skip the test regardless.
+        # also fail - ignore errors here and skip the test regardless.
         try:
             await asyncio.sleep(2)
             await _put_state(session, {"service_mode": 0})
         except Exception:
             pass
         pytest.skip(
-            "Device returned 500 for boolean — use integers (see test_maintenance_mode_integer)"
+            "Device returned 500 for boolean - use integers (see test_maintenance_mode_integer)"
         )
 
     assert status == 200
@@ -690,11 +688,11 @@ async def test_get_factorybackup(session: aiohttp.ClientSession) -> None:
 
     result: dict[str, Any] = msgpack.unpackb(raw, raw=False, strict_map_key=False)
     assert isinstance(result, dict), f"Expected dict, got {type(result)}: {result!r}"
-    print(f"\nFactory backup: {len(result)} keys — {sorted(result.keys())[:10]}")
+    print(f"\nFactory backup: {len(result)} keys - {sorted(result.keys())[:10]}")
 
 
 # ---------------------------------------------------------------------------
-# Admin endpoints — SIMULATOR ONLY
+# Admin endpoints - SIMULATOR ONLY
 #
 # These tests only run when SUNRISER_PORT=9000 (the Docker simulator).
 # They MUST NOT run against the real device because:
@@ -708,7 +706,7 @@ async def test_get_factorybackup(session: aiohttp.ClientSession) -> None:
 
 _SIM_ONLY = pytest.mark.skipif(
     PORT != 9000,
-    reason="Simulator only — run with SUNRISER_HOST=127.0.0.1 SUNRISER_PORT=9000",
+    reason="Simulator only - run with SUNRISER_HOST=127.0.0.1 SUNRISER_PORT=9000",
 )
 
 
@@ -717,7 +715,7 @@ _SIM_ONLY = pytest.mark.skipif(
 async def test_get_firmware_mp(session: aiohttp.ClientSession) -> None:
     """GET /firmware.mp should return a msgpack dict with firmware metadata.
 
-    Simulator only — keep off the real device to avoid any risk of triggering
+    Simulator only - keep off the real device to avoid any risk of triggering
     an unintended firmware operation.
     """
     async with session.get(f"{BASE_URL}/firmware.mp", timeout=TIMEOUT) as resp:
@@ -738,7 +736,7 @@ async def test_get_firmware_mp(session: aiohttp.ClientSession) -> None:
 async def test_get_bootload_mp(session: aiohttp.ClientSession) -> None:
     """GET /bootload.mp should return a msgpack payload (dict or list).
 
-    Simulator only — keep off the real device to avoid any risk of triggering
+    Simulator only - keep off the real device to avoid any risk of triggering
     an unintended bootloader operation.
     """
     async with session.get(f"{BASE_URL}/bootload.mp", timeout=TIMEOUT) as resp:
@@ -798,7 +796,7 @@ async def test_restore(session: aiohttp.ClientSession) -> None:
     via PUT /restore. No config values change; this just verifies the endpoint
     accepts a valid msgpack payload and returns 200.
 
-    WARNING: triggers a deep simulator restart — keep this second-to-last.
+    WARNING: triggers a deep simulator restart - keep this second-to-last.
     NEVER RUN AGAINST THE REAL DEVICE.
     """
     async with session.get(f"{BASE_URL}/backup", timeout=TIMEOUT) as resp:
@@ -812,7 +810,7 @@ async def test_restore(session: aiohttp.ClientSession) -> None:
         headers={"Content-Type": "application/x-msgpack"},
         timeout=aiohttp.ClientTimeout(total=30),
     ) as resp:
-        print(f"\nPUT /restore → {resp.status}")
+        print(f"\nPUT /restore -> {resp.status}")
         assert resp.status == 200, f"Restore failed: {resp.status}"
 
 
@@ -821,10 +819,10 @@ async def test_restore(session: aiohttp.ClientSession) -> None:
 async def test_reboot(session: aiohttp.ClientSession) -> None:
     """GET /reboot should return 200 and initiate a simulator restart.
 
-    Intentionally last — the simulator restarts after this call so any test
+    Intentionally last - the simulator restarts after this call so any test
     that follows in the same run would face a cold connection.
     NEVER RUN AGAINST THE REAL DEVICE.
     """
     async with session.get(f"{BASE_URL}/reboot", timeout=TIMEOUT) as resp:
-        print(f"\nGET /reboot → {resp.status}")
+        print(f"\nGET /reboot -> {resp.status}")
         assert resp.status == 200, f"Expected 200, got {resp.status}"

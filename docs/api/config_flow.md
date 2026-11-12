@@ -6,17 +6,17 @@ UI-driven setup and options flow.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `host` | string | — | IP address or hostname of the SunRiser |
+| `host` | string | - | IP address or hostname of the SunRiser |
 | `port` | int | `{{ cfg.default_port }}` | HTTP port |
 
-The flow tests connectivity before completing — raises an error if the device is unreachable.
+The flow tests connectivity before completing - raises an error if the device is unreachable.
 
 ## Options parameters
 
 | Field | Type | Default | Range / Format | Description |
 |---|---|---|---|---|
-| `scan_interval` | int | `{{ cfg.default_scan_interval }}` | {{ cfg.scan_interval_min }}–{{ cfg.scan_interval_max }} | Poll interval in seconds |
-| `scheduled_reboot` | bool | `false` | — | Enable a daily automatic reboot |
+| `scan_interval` | int | `{{ cfg.default_scan_interval }}` | {{ cfg.scan_interval_min }}-{{ cfg.scan_interval_max }} | Poll interval in seconds |
+| `scheduled_reboot` | bool | `false` | - | Enable a daily automatic reboot |
 | `reboot_time` | string | `{{ cfg.default_reboot_time }}` | HH:MM | Time of day to reboot the controller |
 
 Changing options triggers a full config entry reload.

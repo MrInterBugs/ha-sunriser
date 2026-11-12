@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, patch
 
 import aiohttp
 import pytest
-import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant, ServiceResponse
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import issue_registry
@@ -19,6 +19,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.sunriser import _SET_DAYPLANNER_SCHEMA
 from custom_components.sunriser.const import DOMAIN
 from custom_components.sunriser.coordinator import SunRiserCoordinator
+from custom_components.sunriser.schema import vol
 from custom_components.sunriser.sensor import (
     SunRiserTemperatureSensor,
 )
@@ -163,7 +164,7 @@ async def test_new_temperature_is_not_published_without_scaling_metadata(
         if isinstance(e, SunRiserTemperatureSensor) and e._rom == "NEW_ROM"
     )
     assert new.native_value == 25.1
-    assert new.native_unit_of_measurement == "°C"
+    assert new.native_unit_of_measurement == UnitOfTemperature.CELSIUS
     assert new.name == "New probe"
 
 
@@ -179,6 +180,9 @@ async def test_one_controller_recovery_does_not_clear_other_controller_issue(
         for _ in range(3):
             await coord.async_refresh()
     first.async_get_state = AsyncMock(return_value={"uptime": 20})
+    # The recovered poll also reads weather and configuration; keep it offline.
+    first.async_get_weather = AsyncMock(return_value=[])
+    first.async_get_config = AsyncMock(return_value={})
     await first.async_refresh()
     assert second._consecutive_failures == 3
     issues = issue_registry.async_get(hass).issues

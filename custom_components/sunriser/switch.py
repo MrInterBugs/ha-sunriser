@@ -4,7 +4,8 @@
 # pyright: reportIncompatibleVariableOverride=false
 from __future__ import annotations
 
-from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
+from homeassistant.components.switch import SwitchEntity
+from homeassistant.components.switch import SwitchDeviceClass  # type: ignore[attr-defined]  # Not re-exported since HA 2026.10; kept for older releases.
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_ON, EntityCategory
 from homeassistant.core import HomeAssistant, callback
@@ -132,7 +133,7 @@ class SunRiserSwitch(CoordinatorEntity[SunRiserCoordinator], SwitchEntity):
 
 
 class SunRiserTimelapseSwitch(CoordinatorEntity[SunRiserCoordinator], SwitchEntity):
-    """Time-lapse (timewarp) mode — runs the day/week planner at ~1800× speed."""
+    """Time-lapse (timewarp) mode - runs the day/week planner at ~1800x speed."""
 
     _attr_has_entity_name = True
     _attr_translation_key = "timelapse"
@@ -160,7 +161,7 @@ class SunRiserTimelapseSwitch(CoordinatorEntity[SunRiserCoordinator], SwitchEnti
 class SunRiserDSTAutoSwitch(
     CoordinatorEntity[SunRiserCoordinator], SwitchEntity, RestoreEntity
 ):
-    """Automatic DST tracking — keeps the device summertime config in sync with the HA timezone."""
+    """Automatic DST tracking - keeps the device summertime config in sync with the HA timezone."""
 
     _attr_has_entity_name = True
     _attr_translation_key = "dst_auto_track"

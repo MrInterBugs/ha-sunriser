@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Unit tests for SunRiserCoordinator — HTTP calls mocked via aioresponses."""
+"""Unit tests for SunRiserCoordinator - HTTP calls mocked via tests.http_mock."""
 
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -10,7 +10,6 @@ from unittest.mock import AsyncMock, MagicMock
 import aiohttp
 import msgpack
 import pytest
-from aioresponses import aioresponses
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -20,6 +19,7 @@ from custom_components.sunriser.const import DEFAULT_PORT, DOMAIN
 from custom_components.sunriser.coordinator import DayplannerMarker, SunRiserCoordinator
 from tests.conftest import ENTRY_ID, FAKE_CONFIG, FAKE_STATE, HOST
 from tests.typing import as_async_mock, require_value
+from tests.http_mock import controller_http
 
 BASE = f"http://{HOST}:{DEFAULT_PORT}"
 
@@ -45,7 +45,7 @@ async def coord(
 
 
 # ---------------------------------------------------------------------------
-# hass.data bridge — DST auto-track survives same-session reloads
+# hass.data bridge - DST auto-track survives same-session reloads
 # ---------------------------------------------------------------------------
 
 
@@ -100,7 +100,7 @@ async def test_update_data_state_tick_resets_timewarp_when_absent(
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True, "weather": [], "timewarp": 1}
 
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(
             f"{BASE}/state", body=_pack(FAKE_STATE)
         )  # device omits timewarp when inactive
@@ -113,7 +113,7 @@ async def test_update_data_client_error_raises_update_failed(
     coord: SunRiserCoordinator,
 ) -> None:
 
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("down"))
         with pytest.raises(UpdateFailed, match="Error communicating"):
             await coord._async_update_data()
@@ -123,7 +123,7 @@ async def test_update_data_unexpected_error_is_not_a_communication_failure(
     coord: SunRiserCoordinator,
 ) -> None:
 
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/state", exception=ValueError("boom"))
         with pytest.raises(ValueError, match="boom"):
             await coord._async_update_data()
@@ -131,7 +131,7 @@ async def test_update_data_unexpected_error_is_not_a_communication_failure(
 
 
 # ---------------------------------------------------------------------------
-# Grace period — stale data returned for transient failures
+# Grace period - stale data returned for transient failures
 # ---------------------------------------------------------------------------
 
 
@@ -142,7 +142,7 @@ async def test_grace_period_returns_stale_data_on_first_failure(
 
     coord.data = dict(FAKE_STATE)
 
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("blip"))
         with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
             data = await coord._async_update_data()
@@ -160,7 +160,7 @@ async def test_grace_period_returns_stale_data_on_second_failure(
     coord.data = dict(FAKE_STATE)
     coord._consecutive_failures = 1
 
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("blip"))
         data = await coord._async_update_data()
 
@@ -174,7 +174,7 @@ async def test_grace_period_raises_on_third_failure(coord: SunRiserCoordinator) 
     coord.data = dict(FAKE_STATE)
     coord._consecutive_failures = 2
 
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("down"))
         with pytest.raises(UpdateFailed):
             await coord._async_update_data()
@@ -189,7 +189,7 @@ async def test_grace_period_raises_immediately_with_no_prior_data(
 
     assert coord.data is None
 
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("down"))
         with pytest.raises(UpdateFailed):
             await coord._async_update_data()
@@ -201,7 +201,7 @@ async def test_grace_period_resets_on_success(coord: SunRiserCoordinator) -> Non
     coord.config = dict(FAKE_CONFIG)
     coord._consecutive_failures = 2
 
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
         m.get(f"{BASE}/weather", body=_pack([]))
         m.post(f"{BASE}/", body=_pack(FAKE_CONFIG))
@@ -217,7 +217,7 @@ async def test_recovery_after_unavailable_logs_info(
     coord.config = dict(FAKE_CONFIG)
     coord._consecutive_failures = coord._FAILURE_GRACE
 
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
         with caplog.at_level(logging.INFO, logger="custom_components.sunriser"):
             await coord._async_refresh_state()
@@ -234,7 +234,7 @@ async def test_repair_issue_created_at_failure_grace(
     coord.data = dict(FAKE_STATE)
     coord._consecutive_failures = coord._FAILURE_GRACE - 1
 
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("down"))
         from unittest.mock import patch
 
@@ -258,7 +258,7 @@ async def test_repair_issue_not_created_before_grace(
     coord.data = dict(FAKE_STATE)
     coord._consecutive_failures = 0
 
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("blip"))
         from unittest.mock import patch
 
@@ -275,7 +275,7 @@ async def test_repair_issue_deleted_on_recovery(coord: SunRiserCoordinator) -> N
     coord.config = dict(FAKE_CONFIG)
     coord._consecutive_failures = coord._FAILURE_GRACE
 
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
         from unittest.mock import patch
 
@@ -295,7 +295,7 @@ async def test_successful_poll_also_clears_repairs_from_previous_coordinator(
     coord.config = dict(FAKE_CONFIG)
     coord._consecutive_failures = 1  # below FAILURE_GRACE
 
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
         from unittest.mock import patch
 
@@ -313,7 +313,7 @@ async def test_update_data_weather_failure_keeps_stale_weather(
 
     coord.data = {**FAKE_STATE, "weather": [{"weather_program_id": 3}]}
 
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/weather", exception=aiohttp.ClientConnectionError("down"))
         with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
             data = await coord._async_refresh_weather(dict(coord.data))
@@ -328,7 +328,7 @@ async def test_async_get_weather_returns_first_msgpack_object(
     weather = [None, {"weather_program_id": 3, "clouds_state": 0}]
     body = _pack(weather) + _pack({"ignored": True})
 
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/weather", body=body)
         result = await coord.async_get_weather()
 
@@ -338,7 +338,7 @@ async def test_async_get_weather_returns_first_msgpack_object(
 async def test_async_get_weather_rejects_empty_stream(
     coord: SunRiserCoordinator,
 ) -> None:
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/weather", body=b"")
         with pytest.raises(ValueError, match="Malformed MessagePack"):
             await coord.async_get_weather()
@@ -351,7 +351,7 @@ async def test_update_data_weather_client_error_logs_debug_and_returns_empty_wea
     coord.config = dict(FAKE_CONFIG)
     coord.data = {**FAKE_STATE, "ok": True, "weather": []}
 
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/weather", exception=aiohttp.ClientConnectionError("down"))
         with caplog.at_level(logging.DEBUG, logger="custom_components.sunriser"):
             data = await coord._async_refresh_weather(dict(coord.data))
@@ -379,51 +379,43 @@ async def test_unexpected_weather_error_propagates(
 async def test_async_set_config(coord: SunRiserCoordinator) -> None:
     """save_version must be injected into every config PUT (device requirement)."""
     coord.config["factory_version"] = "1.005"
-    with aioresponses() as m:
+    with controller_http() as m:
         m.put(f"{BASE}/", status=200)
         await coord.async_set_config({"pwm#1#color": "6500k"})
 
-    sent = msgpack.unpackb(
-        m.requests[("PUT", URL(f"{BASE}/"))][0].kwargs["data"], raw=False
-    )
+    sent = msgpack.unpackb(m.requests[("PUT", URL(f"{BASE}/"))][0].data, raw=False)
     assert sent["pwm#1#color"] == "6500k"
     assert sent["save_version"] == "1.005"
 
 
 async def test_async_set_service_mode_on(coord: SunRiserCoordinator) -> None:
-    """service_mode must be integer 1, not boolean True — device returns 500 for booleans."""
-    with aioresponses() as m:
+    """service_mode must be integer 1, not boolean True - device returns 500 for booleans."""
+    with controller_http() as m:
         m.put(f"{BASE}/state", status=200)
         await coord.async_set_service_mode(True)
 
-    sent = msgpack.unpackb(
-        m.requests[("PUT", URL(f"{BASE}/state"))][0].kwargs["data"], raw=False
-    )
+    sent = msgpack.unpackb(m.requests[("PUT", URL(f"{BASE}/state"))][0].data, raw=False)
     assert sent["service_mode"] == 1
     assert type(sent["service_mode"]) is int
 
 
 async def test_async_set_service_mode_off(coord: SunRiserCoordinator) -> None:
     """service_mode must be integer 0, not boolean False."""
-    with aioresponses() as m:
+    with controller_http() as m:
         m.put(f"{BASE}/state", status=200)
         await coord.async_set_service_mode(False)
 
-    sent = msgpack.unpackb(
-        m.requests[("PUT", URL(f"{BASE}/state"))][0].kwargs["data"], raw=False
-    )
+    sent = msgpack.unpackb(m.requests[("PUT", URL(f"{BASE}/state"))][0].data, raw=False)
     assert sent["service_mode"] == 0
     assert type(sent["service_mode"]) is int
 
 
 async def test_async_set_pwms(coord: SunRiserCoordinator) -> None:
-    with aioresponses() as m:
+    with controller_http() as m:
         m.put(f"{BASE}/state", status=200)
         await coord.async_set_pwms({"1": 750})
 
-    sent = msgpack.unpackb(
-        m.requests[("PUT", URL(f"{BASE}/state"))][0].kwargs["data"], raw=False
-    )
+    sent = msgpack.unpackb(m.requests[("PUT", URL(f"{BASE}/state"))][0].data, raw=False)
     assert sent["pwms"] == {"1": 750}
 
 
@@ -437,7 +429,7 @@ def test_pwm_name_uses_color(coordinator: SunRiserCoordinator) -> None:
 
 
 def test_pwm_name_falls_back_to_pwm_number(coordinator: SunRiserCoordinator) -> None:
-    # pwm#3 has empty color → no name in COLOR_NAMES
+    # pwm#3 has empty color -> no name in COLOR_NAMES
     coordinator.config["pwm#3#color"] = "nonexistent_id"
     assert "3" in coordinator.pwm_name(3)
 
@@ -547,27 +539,23 @@ def test_pwm_count_property(coordinator: SunRiserCoordinator) -> None:
 
 
 async def test_async_set_timewarp_on(coord: SunRiserCoordinator) -> None:
-    """timewarp=1 (integer) must be sent — boolean True would cause a 500."""
-    with aioresponses() as m:
+    """timewarp=1 (integer) must be sent - boolean True would cause a 500."""
+    with controller_http() as m:
         m.put(f"{BASE}/state", status=200)
         await coord.async_set_timewarp(True)
 
-    sent = msgpack.unpackb(
-        m.requests[("PUT", URL(f"{BASE}/state"))][0].kwargs["data"], raw=False
-    )
+    sent = msgpack.unpackb(m.requests[("PUT", URL(f"{BASE}/state"))][0].data, raw=False)
     assert sent["timewarp"] == 1
     assert type(sent["timewarp"]) is int
 
 
 async def test_async_set_timewarp_off(coord: SunRiserCoordinator) -> None:
-    """timewarp=0 (integer) must be sent — boolean False would cause a 500."""
-    with aioresponses() as m:
+    """timewarp=0 (integer) must be sent - boolean False would cause a 500."""
+    with controller_http() as m:
         m.put(f"{BASE}/state", status=200)
         await coord.async_set_timewarp(False)
 
-    sent = msgpack.unpackb(
-        m.requests[("PUT", URL(f"{BASE}/state"))][0].kwargs["data"], raw=False
-    )
+    sent = msgpack.unpackb(m.requests[("PUT", URL(f"{BASE}/state"))][0].data, raw=False)
     assert sent["timewarp"] == 0
     assert type(sent["timewarp"]) is int
 
@@ -625,7 +613,7 @@ async def test_async_set_dst_auto_track_false_does_not_sync(
 
 
 # ---------------------------------------------------------------------------
-# _async_update_data — DST sync pending branch
+# _async_update_data - DST sync pending branch
 # ---------------------------------------------------------------------------
 
 
@@ -640,7 +628,7 @@ def test_pwm_count_fallback(coordinator: SunRiserCoordinator) -> None:
 
 
 async def test_async_reboot(coord: SunRiserCoordinator) -> None:
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/reboot", status=200)
         await coord.async_reboot()
     assert ("GET", URL(f"{BASE}/reboot")) in m.requests
@@ -648,7 +636,7 @@ async def test_async_reboot(coord: SunRiserCoordinator) -> None:
 
 async def test_async_get_backup_returns_bytes(coord: SunRiserCoordinator) -> None:
     payload = b"\x82\xa4name\xa8SunRiser"
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/backup", body=payload)
         result = await coord.async_get_backup()
     assert result == payload
@@ -656,22 +644,22 @@ async def test_async_get_backup_returns_bytes(coord: SunRiserCoordinator) -> Non
 
 async def test_async_restore_sends_bytes(coord: SunRiserCoordinator) -> None:
     payload = b"\x82\xa4name\xa8SunRiser"
-    with aioresponses() as m:
+    with controller_http() as m:
         m.put(f"{BASE}/restore", status=200)
         await coord.async_restore(payload)
-    sent = m.requests[("PUT", URL(f"{BASE}/restore"))][0].kwargs["data"]
+    sent = m.requests[("PUT", URL(f"{BASE}/restore"))][0].data
     assert sent == payload
 
 
 async def test_async_get_errors_returns_text(coord: SunRiserCoordinator) -> None:
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/errors", body=b"error line 1\nerror line 2")
         result = await coord.async_get_errors()
     assert "error line 1" in result
 
 
 async def test_async_get_log_returns_text(coord: SunRiserCoordinator) -> None:
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/log", body=b"log entry 1\nlog entry 2")
         result = await coord.async_get_log()
     assert "log entry 1" in result
@@ -686,7 +674,7 @@ async def test_async_get_dayplanner_parses_flat_array(
     coord: SunRiserCoordinator,
 ) -> None:
     """Flat [daymin, percent, ...] array in config cache is converted to sorted marker dicts."""
-    # 08:00 → 480 mins, 20:30 → 1230 mins
+    # 08:00 -> 480 mins, 20:30 -> 1230 mins
     coord.config["dayplanner#marker#1"] = [1230, 75, 480, 50]
     result = await coord.async_get_dayplanner(1)
 
@@ -700,7 +688,7 @@ async def test_async_get_dayplanner_returns_empty_list_when_unset(
     coord: SunRiserCoordinator,
 ) -> None:
     """None or missing key returns an empty list."""
-    with aioresponses() as m:
+    with controller_http() as m:
         m.post(f"{BASE}/", body=_pack({"dayplanner#marker#2": None}))
         result = await coord.async_get_dayplanner(2)
 
@@ -726,13 +714,11 @@ async def test_async_set_dayplanner_sends_flat_array(
         {"time": "08:00", "percent": 50},
         {"time": "20:30", "percent": 75},
     ]
-    with aioresponses() as m:
+    with controller_http() as m:
         m.put(f"{BASE}/", status=200)
         await coord.async_set_dayplanner(1, markers)
 
-    sent = msgpack.unpackb(
-        m.requests[("PUT", URL(f"{BASE}/"))][0].kwargs["data"], raw=False
-    )
+    sent = msgpack.unpackb(m.requests[("PUT", URL(f"{BASE}/"))][0].data, raw=False)
     assert sent["dayplanner#marker#1"] == [480, 50, 1230, 75]
 
 
@@ -742,7 +728,7 @@ async def test_async_set_dayplanner_sends_flat_array(
 
 
 async def test_async_check_ok_returns_true(coord: SunRiserCoordinator) -> None:
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/ok", body=b"OK")
         result = await coord.async_check_ok()
     assert result is True
@@ -751,7 +737,7 @@ async def test_async_check_ok_returns_true(coord: SunRiserCoordinator) -> None:
 async def test_async_check_ok_returns_false_on_wrong_body(
     coord: SunRiserCoordinator,
 ) -> None:
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/ok", body=b"NOT OK")
         result = await coord.async_check_ok()
     assert result is False
@@ -760,7 +746,7 @@ async def test_async_check_ok_returns_false_on_wrong_body(
 async def test_async_check_ok_returns_false_on_error(
     coord: SunRiserCoordinator,
 ) -> None:
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/ok", exception=aiohttp.ClientConnectionError("down"))
         result = await coord.async_check_ok()
     assert result is False
@@ -770,7 +756,7 @@ async def test_update_data_includes_ok_true(coord: SunRiserCoordinator) -> None:
     """_async_update_data stores ok=True when state fetch succeeds."""
 
     coord.config = dict(FAKE_CONFIG)
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/state", body=_pack(FAKE_STATE))
         m.get(f"{BASE}/weather", body=_pack([]))
         m.post(f"{BASE}/", body=_pack(FAKE_CONFIG))
@@ -787,7 +773,7 @@ async def test_update_data_ok_false_when_state_fails_within_grace(
     coord.data = {**FAKE_STATE, "ok": True}
 
     coord._consecutive_failures = 1
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/state", exception=aiohttp.ClientConnectionError("down"))
         data = await coord._async_update_data()
     assert data["ok"] is False
@@ -802,7 +788,7 @@ async def test_async_get_factory_backup_returns_bytes(
     coord: SunRiserCoordinator,
 ) -> None:
     payload = b"\x82\xa4name\xa8SunRiser"
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/factorybackup", body=payload)
         result = await coord.async_get_factory_backup()
     assert result == payload
@@ -810,7 +796,7 @@ async def test_async_get_factory_backup_returns_bytes(
 
 async def test_async_get_firmware_returns_bytes(coord: SunRiserCoordinator) -> None:
     payload = b"\x81\xa8filename\xaafw_1.005"
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/firmware.mp", body=payload)
         result = await coord.async_get_firmware()
     assert result == payload
@@ -818,7 +804,7 @@ async def test_async_get_firmware_returns_bytes(coord: SunRiserCoordinator) -> N
 
 async def test_async_get_bootload_returns_bytes(coord: SunRiserCoordinator) -> None:
     payload = b"\x81\xa4boot\xa31.0"
-    with aioresponses() as m:
+    with controller_http() as m:
         m.get(f"{BASE}/bootload.mp", body=payload)
         result = await coord.async_get_bootload()
     assert result == payload
@@ -830,7 +816,7 @@ async def test_async_get_bootload_returns_bytes(coord: SunRiserCoordinator) -> N
 
 
 async def test_async_factory_reset_sends_delete(coord: SunRiserCoordinator) -> None:
-    with aioresponses() as m:
+    with controller_http() as m:
         m.delete(f"{BASE}/", status=200)
         await coord.async_factory_reset()
     assert ("DELETE", URL(f"{BASE}/")) in m.requests
@@ -845,7 +831,7 @@ async def test_async_get_weekplanner_parses_array(coord: SunRiserCoordinator) ->
     """8-element flat array is mapped to day-name dict."""
     # sun=2, mon..fri=1, sat=2, default=0
     flat = [2, 1, 1, 1, 1, 1, 2, 0]
-    with aioresponses() as m:
+    with controller_http() as m:
         m.post(f"{BASE}/", body=_pack({"weekplanner#programs#1": flat}))
         result = await coord.async_get_weekplanner(1)
     assert result == {
@@ -864,7 +850,7 @@ async def test_async_get_weekplanner_returns_none_for_unset(
     coord: SunRiserCoordinator,
 ) -> None:
     """None value (key never written) returns all-None dict."""
-    with aioresponses() as m:
+    with controller_http() as m:
         m.post(f"{BASE}/", body=_pack({"weekplanner#programs#1": None}))
         result = await coord.async_get_weekplanner(1)
     assert all(v is None for v in result.values())
@@ -894,13 +880,11 @@ async def test_async_set_weekplanner_sends_flat_array(
         "saturday": 2,
         "default": 0,
     }
-    with aioresponses() as m:
+    with controller_http() as m:
         m.put(f"{BASE}/", status=200)
         await coord.async_set_weekplanner(1, schedule)
 
-    sent = msgpack.unpackb(
-        m.requests[("PUT", URL(f"{BASE}/"))][0].kwargs["data"], raw=False
-    )
+    sent = msgpack.unpackb(m.requests[("PUT", URL(f"{BASE}/"))][0].data, raw=False)
     assert sent["weekplanner#programs#1"] == [2, 1, 1, 1, 1, 1, 2, 0]
 
 
@@ -909,13 +893,11 @@ async def test_async_set_weekplanner_missing_days_default_to_zero(
 ) -> None:
     """Days not in the schedule dict are written as 0."""
     coord.config["factory_version"] = "1.005"
-    with aioresponses() as m:
+    with controller_http() as m:
         m.put(f"{BASE}/", status=200)
         await coord.async_set_weekplanner(1, {"monday": 3})
 
-    sent = msgpack.unpackb(
-        m.requests[("PUT", URL(f"{BASE}/"))][0].kwargs["data"], raw=False
-    )
+    sent = msgpack.unpackb(m.requests[("PUT", URL(f"{BASE}/"))][0].data, raw=False)
     assert sent["weekplanner#programs#1"] == [0, 3, 0, 0, 0, 0, 0, 0]
 
 
@@ -1117,7 +1099,8 @@ async def test_async_close_cancels_scheduled_reboot(hass: HomeAssistant) -> None
     coord = SunRiserCoordinator(hass, entry)
     assert coord._scheduled_reboot_cancel is not None
 
-    cancel_mock = MagicMock()
+    # Wrap the real cancel so the scheduled timer is still removed.
+    cancel_mock = MagicMock(side_effect=coord._scheduled_reboot_cancel)
     coord._scheduled_reboot_cancel = cancel_mock
 
     await coord.async_close()

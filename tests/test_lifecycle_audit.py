@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, Mock
 
 import aiohttp
 import pytest
-from aioresponses import aioresponses
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry
@@ -22,6 +21,7 @@ from custom_components.sunriser.maintenance import (
 )
 from tests.conftest import DOMAIN, FAKE_CONFIG, FAKE_STATE
 from tests.typing import collect_entities
+from tests.http_mock import controller_http
 
 
 @pytest.fixture
@@ -119,7 +119,7 @@ async def test_failed_dst_enable_does_not_enable_tracking(
 ) -> None:
     device.config["factory_version"] = "1.005"
     before = dict(device.config)
-    with aioresponses() as http:
+    with controller_http() as http:
         if failure == "http":
             http.put(f"{device.base_url}/", status=500)
         else:
@@ -149,7 +149,7 @@ async def test_queued_write_cannot_reopen_closed_coordinator(
         started.set()
         await device.async_set_config({"pwm#1#fixed": 999})
 
-    with aioresponses() as http:
+    with controller_http() as http:
         http.put(f"{device.base_url}/", status=200)
         async with device._config_lock:
             task = asyncio.create_task(write())
@@ -184,7 +184,7 @@ async def test_rejected_writes_keep_cached_state(
     }
     url = f"{device.base_url}/" + ("" if command == "config" else "state")
     try:
-        with aioresponses() as http:
+        with controller_http() as http:
             if failure == "http":
                 http.put(url, status=500)
             else:

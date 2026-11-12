@@ -4,20 +4,20 @@
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| Host | IP address or hostname of the SunRiser device | — |
+| Host | IP address or hostname of the SunRiser device | - |
 | Port | HTTP port the device listens on | `{{ cfg.default_port }}` |
 
 ## Options
 
-After setup, go to **Settings → Devices & Services → SunRiser → Configure** to adjust:
+After setup, go to **Settings -> Devices & Services -> SunRiser -> Configure** to adjust:
 
 | Option | Description | Range / Format | Default |
 |--------|-------------|----------------|---------|
-| Poll interval | How often HA refreshes state, weather, and configuration | {{ cfg.scan_interval_min }}–{{ cfg.scan_interval_max }} s | {{ cfg.default_scan_interval }} s |
+| Poll interval | How often HA refreshes state, weather, and configuration | {{ cfg.scan_interval_min }}-{{ cfg.scan_interval_max }} s | {{ cfg.default_scan_interval }} s |
 | Scheduled daily reboot | Optionally reboot the controller once a day | on / off | off |
 | Scheduled reboot time | Time of day to reboot (24-hour format) | HH:MM | {{ cfg.default_reboot_time }} |
 
-Changing any option reloads the integration automatically — no restart required. Reboot times use Home Assistant's configured timezone. Existing explicit reboot settings are preserved when upgrading.
+Changing any option reloads the integration automatically - no restart required. Reboot times use Home Assistant's configured timezone. Existing explicit reboot settings are preserved when upgrading.
 
 ## How polling works
 
@@ -31,13 +31,13 @@ The Day Planner card requests a fresh read-only schedule snapshot on each card r
 |---|---|---|
 | `light` | PWM channel with `pwm#X#onoff = false` (dimmable) | |
 | `switch` | PWM channel with `pwm#X#onoff = true` (on/off only) | Also creates Maintenance Mode and Time Lapse Mode; DST Auto-Track is only created for firmware older than 1.006 |
-| `select` | Every active channel — controls the manager (`none` / `dayplanner` / `weekplanner` / `fixed`); firmware 1.006+ also provides existing weather-profile assignment | Disabled by default; enable in entity settings |
-| `number` | Every active channel — sets the fixed brightness (0–{{ cfg.pwm_max }}) | Disabled by default; enable in entity settings |
+| `select` | Every active channel - controls the manager (`none` / `dayplanner` / `weekplanner` / `fixed`); firmware 1.006+ also provides existing weather-profile assignment | Disabled by default; enable in entity settings |
+| `number` | Every active channel - sets the fixed brightness (0-{{ cfg.pwm_max }}) | Disabled by default; enable in entity settings |
 | `sensor` | Uptime, Firmware Version, and Hostname are always created; probes and weather channels are discovered from device data | Uptime is disabled by default; weather states are `clear`, `cloudy`, `rain`, `thunder`, or `moon` |
-| `binary_sensor` | Always — device connectivity (derived from last state poll) | |
-| `button` | Always — Reboot | |
+| `binary_sensor` | Always - device connectivity (derived from last state poll) | |
+| `button` | Always - Reboot | |
 
-Channels where `pwm#X#color` is empty are unused and produce no entities. To activate a channel, log into the SunRiser web UI and assign a colour to it — the integration will pick it up automatically on the next poll.
+Channels where `pwm#X#color` is empty are unused and produce no entities. To activate a channel, log into the SunRiser web UI and assign a colour to it - the integration will pick it up automatically on the next poll.
 
 ## Day Planner card
 
@@ -66,7 +66,7 @@ channels:
   2: Blue LEDs
 ```
 
-To find the device ID, select the controller in **Developer Tools → Actions** for a SunRiser action and switch to YAML to copy `data.device_id`.
+To find the device ID, select the controller in **Developer Tools -> Actions** for a SunRiser action and switch to YAML to copy `data.device_id`.
 
 The card is a compact, read-only graph of the selected daily/weekly schedules.
 See [Schedule graph](#schedule-graph) below for details. Program details are read
@@ -84,8 +84,8 @@ assume that blackout switches every output off.
 | Existing Maintenance Mode switch | Start/end a maintenance session; remains **on during blackout** for compatibility |
 | Operating Mode sensor | Distinguishes normal, maintenance, blackout and time-lapse; missing state is unknown |
 | Maintenance Ends At sensor | Disabled by default; estimated expiry from the latest firmware countdown; unknown when inactive, indefinite, or not reported |
-| Maintenance Timeout number | Persistent timeout for both modes, 0–10,080 minutes; **0 means never** |
-| Per-channel Maintenance Level number | Dimmable channel's configured maintenance percentage, 0–100 |
+| Maintenance Timeout number | Persistent timeout for both modes, 0-10,080 minutes; **0 means never** |
+| Per-channel Maintenance Level number | Dimmable channel's configured maintenance percentage, 0-100 |
 | Per-channel Maintenance Output switch | On/off channel's configured maintenance state, not its immediate output |
 | Per-channel Maintenance Excluded switch | Leave this channel outside maintenance/blackout control |
 

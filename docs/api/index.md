@@ -6,7 +6,7 @@ This section documents the public Python API of the `custom_components.sunriser`
 
 | Module | Purpose |
 |---|---|
-| [coordinator](coordinator.md) | `SunRiserCoordinator` — polls the device, holds config, exposes helper methods |
+| [coordinator](coordinator.md) | `SunRiserCoordinator` - polls the device, holds config, exposes helper methods |
 | [config_flow](config_flow.md) | UI config flow and options flow |
 | [const](const.md) | Domain constants, `COLOR_NAMES`, `MANAGER_OPTIONS`, `PWM_MAX` |
 | [light](light.md) | `LightEntity` per dimmable PWM channel |
@@ -22,13 +22,13 @@ This section documents the public Python API of the `custom_components.sunriser`
 ## Protocol overview
 
 ```
-POST /          msgpack([key, ...])       → msgpack({key: value, ...})   # read config
-PUT  /          msgpack({key: value, ...}) → success                     # write config
-GET  /state     →  msgpack({pwms, sensors, uptime, ...})                  # live state
-PUT  /state     msgpack({pwms: {...}})    → success                     # set PWM values
-GET  /weather   →  msgpack stream, first object is list per channel
-GET  /reboot    →  reboots device
-DELETE /        →  factory reset
+POST /          msgpack([key, ...])       -> msgpack({key: value, ...})   # read config
+PUT  /          msgpack({key: value, ...}) -> success                     # write config
+GET  /state     ->  msgpack({pwms, sensors, uptime, ...})                  # live state
+PUT  /state     msgpack({pwms: {...}})    -> success                     # set PWM values
+GET  /weather   ->  msgpack stream, first object is list per channel
+GET  /reboot    ->  reboots device
+DELETE /        ->  factory reset
 ```
 
 MessagePack request bodies use `Content-Type: application/x-msgpack`. Write methods accept successful HTTP status codes and raise on HTTP errors. The HTTP session uses normal connection reuse.
@@ -49,11 +49,11 @@ new fields. No vendor code is copied into the integration.
 | Start/end blackout | `PUT /state`, integer `blackout: 1/0` |
 | Read modes | `GET /state`: nonzero `service_mode` means active session; `blackout` distinguishes blackout |
 | Countdown | Optional `service_left`, seconds remaining; missing/nonpositive means no expiry estimate |
-| Timeout | Configuration `service_timeout`, integer minutes 0–10080, default 1440; zero is indefinite |
-| Dimmable level | Configuration `pwm#X#service`, integer percent 0–100 |
+| Timeout | Configuration `service_timeout`, integer minutes 0-10080, default 1440; zero is indefinite |
+| Dimmable level | Configuration `pwm#X#service`, integer percent 0-100 |
 | On/off level | Same field, 0 or 100; absent value displayed as off by the vendor UI |
 | Exclusion | Configuration `pwm#X#nomaint`, boolean, default false |
-| Legacy level fallback | If dimmable channel level is unset, floor `service_value / 10`, clamped to 0–100; otherwise default 100 |
+| Legacy level fallback | If dimmable channel level is unset, floor `service_value / 10`, clamped to 0-100; otherwise default 100 |
 
 Configuration reads use the existing `POST /` key list. Writes use `PUT /` with
 only changed keys and the existing `save_version` metadata. All new fields share
