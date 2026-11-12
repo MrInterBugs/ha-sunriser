@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2.3.0] - 2026-11-12
 
 ### Changed
 
@@ -28,6 +28,11 @@
   percent: `brightness: 128` (50 %) previously sent a PWM value of 502 and now
   sends 38. Review brightness values in automations, scripts and scenes; to
   keep an output, pick the planner percent that matches it.
+- Update from **Settings > Updates** and restart Home Assistant, then refresh
+  the dashboard to load the updated Day Planner card. Home Assistant 2025.2 or
+  newer is required.
+- The brightness conversion matches the readings reported from a SunRiser 10
+  in #17. The release has not otherwise been validated on a live controller.
 
 ## [2.2.3] - 2026-10-13
 
