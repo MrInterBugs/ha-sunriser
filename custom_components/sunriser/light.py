@@ -13,27 +13,17 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import PWM_MAX
+from .brightness import (
+    brightness_to_percent,
+    percent_to_brightness,
+    percent_to_command,
+    readback_to_percent,
+)
+from .const import MANAGER_FIXED
 from .coordinator import SunRiserCoordinator
 from .discovery import pwm_entity_reconciler
 
 PARALLEL_UPDATES = 1
-
-
-# Linear scale: device 0–1000 ↔ HA 0–255
-# Readback at/above 1000 maps to HA 255; HA 255 writes the command maximum 1000.
-def _to_ha_brightness(pwm_value: int) -> int:
-    if pwm_value <= 0:
-        return 0
-    if pwm_value >= PWM_MAX:
-        return 255
-    return max(1, min(254, round(pwm_value * 255 / PWM_MAX)))
-
-
-def _to_device_brightness(brightness: int) -> int:
-    if brightness >= 255:
-        return PWM_MAX
-    return round(brightness * PWM_MAX / 255)
 
 
 async def async_setup_entry(
@@ -82,11 +72,25 @@ class SunRiserLight(CoordinatorEntity[SunRiserCoordinator], LightEntity):
 
     @property
     def brightness(self) -> int:
-        return _to_ha_brightness(self.coordinator.pwm_value(self._pwm_num))
+        """Brightness on the day planner's percent scale."""
+        percent = readback_to_percent(
+            self.coordinator.pwm_value(self._pwm_num),
+            oldfade=self.coordinator.oldfade,
+            channel_max=self.coordinator.pwm_max(self._pwm_num),
+        )
+        return percent_to_brightness(percent)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"raw_value": self.coordinator.pwm_value(self._pwm_num)}
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         brightness: int = cast(int, kwargs.get(ATTR_BRIGHTNESS, 255))
-        device_value = _to_device_brightness(brightness)
+        device_value = percent_to_command(
+            brightness_to_percent(brightness),
+            oldfade=self.coordinator.oldfade,
+            fixed=self.coordinator.pwm_manager(self._pwm_num) == MANAGER_FIXED,
+        )
         await self.coordinator.async_set_pwms({str(self._pwm_num): device_value})
         await self.coordinator.async_request_refresh()
 

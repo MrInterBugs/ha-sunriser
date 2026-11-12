@@ -38,6 +38,7 @@ from .const import (
     DEFAULT_REBOOT_TIME,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    PWM_MAX,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -694,7 +695,7 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
     async def _async_refresh_config(self, data: dict[str, Any]) -> None:
         """Read channel and sensor metadata in one request, then publish it."""
         pwm_count = self.config.get("pwm_count") or len(data.get("pwms", {})) or 8
-        keys = list(self._BASE_CONFIG_KEYS)
+        keys = [*self._BASE_CONFIG_KEYS, "oldfade"]
         if self.supports_maintenance_config:
             keys.extend(("service_timeout", "service_value", "weather#web"))
         for channel in range(1, pwm_count + 1):
@@ -867,6 +868,15 @@ class SunRiserCoordinator(DataUpdateCoordinator[dict[str, Any] | None]):
     def pwm_manager(self, pwm_num: int) -> int:
         """Return the manager integer for a PWM channel (0–3)."""
         return self.config.get(f"pwm#{pwm_num}#manager") or 0
+
+    def pwm_max(self, pwm_num: int) -> int:
+        """Channel maximum; 0 or unset means the full PWM range."""
+        return self.config.get(f"pwm#{pwm_num}#max") or PWM_MAX
+
+    @property
+    def oldfade(self) -> bool:
+        """The controller dims along its original fade curve."""
+        return bool(self.config.get("oldfade"))
 
     def pwm_is_unused(self, pwm_num: int) -> bool:
         return not (self.config.get(f"pwm#{pwm_num}#color") or "")

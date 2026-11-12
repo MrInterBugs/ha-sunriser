@@ -183,6 +183,16 @@ async def test_refresh_updates_registered_firmware(
     assert not coordinator.dst_auto_track
 
 
+async def test_refresh_reads_fade_curve_option(
+    coordinator: SunRiserCoordinator,
+) -> None:
+    coordinator.async_get_config = AsyncMock(return_value={"oldfade": True})
+    await coordinator._async_refresh_config(require_value(coordinator.data))
+    keys = as_async_mock(coordinator.async_get_config).await_args_list[0].args[0]
+    assert "oldfade" in keys
+    assert coordinator.oldfade is True
+
+
 async def test_failed_poll_does_not_mutate_published_data(
     coordinator: SunRiserCoordinator,
 ) -> None:
